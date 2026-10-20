@@ -55,11 +55,12 @@ function fieldEditControl(field, row, { basePath, entitySetPath, valueListOption
 
   if (field.valueList && !field.fixedValues) {
     return html`
-      <div class="hf-input-group">
-        <input type="text" class="fd-input" ${raw(common)} value="${value ?? ''}" readonly>
+      <div class="hf-input-group hf-vh-field">
+        <input type="text" class="fd-input" ${raw(common)} value="${value ?? ''}" autocomplete="off" role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="false" data-hf-vh-input>
         <span class="hf-input-group__addon">
           ${raw(valueHelpButton(field, { basePath, entitySetPath }).value)}
         </span>
+        <div class="hf-suggest" hidden></div>
       </div>`
   }
   if (field.fixedValues && valueListOptions) {

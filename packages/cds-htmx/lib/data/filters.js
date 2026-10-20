@@ -48,14 +48,46 @@ function parseFilters(query, layout) {
     const [, path, op = 'eq'] = m
     const field = byPath.get(path)
     if (!field) continue // whitelist: not a rendered filter-bar field -> ignore
-    const values = (Array.isArray(raw) ? raw : [raw]).filter(v => v !== '').map(coerce)
-    if (!values.length) continue
+    const rawValues = (Array.isArray(raw) ? raw : [raw]).filter(v => typeof v === 'string' && v !== '')
+    if (!rawValues.length) continue
+    if (op === 'eq' && rawValues.some(isCondition)) {
+      const where = conditionsToWhere(field, rawValues.flatMap(v => v.split(';')).filter(v => v !== ''))
+      if (where.length) { if (clauses.length) clauses.push('and'); clauses.push(...where) }
+      continue
+    }
+    const values = rawValues.map(coerce)
     if (clauses.length) clauses.push('and')
     if (op === 'eq' && values.length > 1) clauses.push(ref(field.cqlPath), 'in', { list: values.map(val) })
     else clauses.push(ref(field.cqlPath), OPS[op], val(values[0]))
   }
 
   return clauses
+}
+
+/** The "Define Conditions" dialog and typing write FE's condition syntax into the field: `a;b` (any of),
+ *  `*a*` contains, `a*` starts with, `*a` ends with, `!a` not equal. A plain value stays a plain equality. */
+const isCondition = v => /[;*]/.test(v) || v.startsWith('!')
+
+function conditionsToWhere(field, tokens) {
+  const column = ref(field.cqlPath)
+  const included = []
+  const excluded = []
+  for (const token of tokens) {
+    if (token.startsWith('!')) { excluded.push(token.slice(1)); continue }
+    const starts = token.startsWith('*')
+    const ends = token.endsWith('*') && token.length > 1
+    const text = token.replace(/^\*/, '').replace(/\*$/, '')
+    if (starts && ends) included.push([{ func: 'contains', args: [column, val(text)] }])
+    else if (ends) included.push([{ func: 'startswith', args: [column, val(text)] }])
+    else if (starts) included.push([{ func: 'endswith', args: [column, val(text)] }])
+    else included.push([column, '=', val(coerce(text))])
+  }
+  const where = []
+  const add = part => { if (where.length) where.push('and'); where.push(...part) }
+  if (included.length === 1) add(included[0])
+  else if (included.length) add([{ xpr: included.flatMap((part, i) => i ? ['or', ...part] : part) }])
+  for (const text of excluded) add([column, '!=', val(coerce(text))])
+  return where
 }
 
 /** `$search` is passed through as-is to `.search()` (parameterized by the CQL builder, not string

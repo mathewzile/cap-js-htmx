@@ -1,5 +1,27 @@
 document.addEventListener('htmx:error', e => console.error('htmx error', e.detail))
 
+// ---------- the event stream is opened only while the page shown asks for it ----------
+// Every page carries `#hf-live` (data-hf-live=1 when the entity has Common.SideEffects). Pages without such
+// side effects hold no connection (browsers allow only ~6 per origin on HTTP/1.1, and each one costs the server a socket).
+function hfSyncStream() {
+  const wanted = document.getElementById('hf-live')?.dataset.hfLive === '1'
+  const open = document.getElementById('sse')
+  if (!wanted && open) open.remove() // the extension closes the EventSource when the element is cleaned up
+  if (wanted && !open) {
+    let url
+    try { url = JSON.parse(document.getElementById('hf-sse')?.textContent || 'null')?.url } catch { /* no stream info */ }
+    if (!url) return
+    const el = document.createElement('div')
+    el.id = 'sse'
+    el.setAttribute('hx-sse:connect', url)
+    el.setAttribute('hx-swap', 'none')
+    document.body.append(el)
+    htmx.process(el)
+  }
+}
+document.addEventListener('DOMContentLoaded', hfSyncStream)
+document.addEventListener('htmx:after:swap', hfSyncStream)
+
 document.addEventListener('click', e => {
   const toggle = e.target.closest('[data-hf-toggle-header]')
   if (toggle) {
@@ -245,10 +267,114 @@ function hfPickValue(row) {
   const input = path && document.querySelector(`[data-hf-field="${CSS.escape(path)}"] input[name="${CSS.escape(path)}"]`)
   hfCloseDialog()
   if (!input) return
-  input.value = row.dataset.value
-  input.dispatchEvent(new Event('change', { bubbles: true }))
+  hfSetFieldValue(input, row.dataset.value)
   input.focus()
 }
 
+/** Sets an input from a pick (dialog row, suggestion) and commits it once. The browser would fire its own
+ *  `change` again when the field is left (the value differs from the one at focus), which would send the same
+ *  PATCH a second time, so that echo is swallowed. */
+function hfSetFieldValue(input, value) {
+  input.value = value
+  input._hfCommitted = value
+  input.dispatchEvent(new Event('change', { bubbles: true }))
+}
+document.addEventListener('change', e => {
+  const input = e.target
+  if (e.isTrusted && input._hfCommitted !== undefined && input.value === input._hfCommitted) { e.stopImmediatePropagation(); input._hfCommitted = undefined }
+}, true)
+
+// ---------- value help field: type-ahead under the input ----------
+const hfSuggestBox = input => input.closest('.hf-vh-field')?.querySelector('.hf-suggest')
+function hfCloseSuggest(box) {
+  if (!box) return
+  box.hidden = true
+  box.closest('.hf-vh-field')?.querySelector('[data-hf-vh-input]')?.setAttribute('aria-expanded', 'false')
+}
+let hfSuggestTimer
+document.addEventListener('input', e => {
+  const input = e.target.closest?.('[data-hf-vh-input]')
+  if (!input) return
+  clearTimeout(hfSuggestTimer)
+  const box = hfSuggestBox(input)
+  const text = input.value.trim()
+  if (!text) return hfCloseSuggest(box)
+  hfSuggestTimer = setTimeout(() => {
+    const url = input.closest('.hf-vh-field').querySelector('.hf-vh-open').dataset.hfSuggestUrl
+    htmx.ajax('GET', `${url}?mode=suggest&$search=${encodeURIComponent(text)}`, { target: box, swap: 'innerHTML', source: input })
+  }, 250)
+})
+document.addEventListener('htmx:after:swap', e => {
+  const box = e.target?.closest?.('.hf-suggest') || (e.detail?.ctx?.target?.classList?.contains('hf-suggest') ? e.detail.ctx.target : null)
+  if (!box) return
+  box.hidden = false
+  box.closest('.hf-vh-field')?.querySelector('[data-hf-vh-input]')?.setAttribute('aria-expanded', 'true')
+})
+// clicking in the popup must not take the focus away from the input (that would close it before the click lands)
+document.addEventListener('mousedown', e => { if (e.target.closest('.hf-suggest')) e.preventDefault() })
+document.addEventListener('click', e => {
+  const row = e.target.closest('.hf-suggest-row')
+  if (row) {
+    const input = row.closest('.hf-vh-field').querySelector('[data-hf-vh-input]')
+    hfCloseSuggest(row.closest('.hf-suggest'))
+    hfSetFieldValue(input, row.dataset.value)
+    return
+  }
+  const all = e.target.closest('[data-hf-show-all]')
+  if (all) {
+    const field = all.closest('.hf-vh-field')
+    const input = field.querySelector('[data-hf-vh-input]')
+    hfCloseSuggest(all.closest('.hf-suggest'))
+    htmx.ajax('GET', `${field.querySelector('.hf-vh-open').dataset.hfSuggestUrl}?$search=${encodeURIComponent(input.value.trim())}`, { target: '#dialogs', swap: 'innerHTML', source: input })
+  }
+})
+document.addEventListener('focusout', e => {
+  const input = e.target.closest?.('[data-hf-vh-input]')
+  if (input) hfCloseSuggest(hfSuggestBox(input))
+})
+document.addEventListener('keydown', e => {
+  const input = e.target.closest?.('[data-hf-vh-input]')
+  const box = input && hfSuggestBox(input)
+  if (!box || box.hidden) return
+  const rows = [...box.querySelectorAll('.hf-suggest-row')]
+  const current = rows.findIndex(r => r.classList.contains('is-active'))
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault()
+    const next = e.key === 'ArrowDown' ? Math.min(current + 1, rows.length - 1) : Math.max(current - 1, 0)
+    rows.forEach((r, i) => r.classList.toggle('is-active', i === next))
+  } else if (e.key === 'Enter' && current >= 0) {
+    e.preventDefault()
+    hfCloseSuggest(box)
+    hfSetFieldValue(input, rows[current].dataset.value)
+  } else if (e.key === 'Escape') {
+    e.stopPropagation()
+    hfCloseSuggest(box)
+  }
+}, true)
+
 // a freshly opened dialog puts the cursor in its search field
 document.addEventListener('htmx:after:swap', () => document.querySelector('.hf-overlay[data-hf-dialog] [data-hf-autofocus]')?.focus())
+
+// ---------- edits are sent in order ----------
+// A field is PATCHed when the user leaves it, which is also when they click Save or Discard. Without care the
+// Save can overtake a slow PATCH and activate the draft without that edit (Fiori elements queues these too).
+// PATCHes therefore run one after another, and every other write (and every page navigation) waits for the
+// PATCHes that are still on their way.
+let hfLastPatch = Promise.resolve()
+document.addEventListener('htmx:config:request', e => {
+  const ctx = e.detail?.ctx
+  const request = ctx?.request
+  if (!request) return
+  const method = String(request.method || 'GET').toUpperCase()
+  const navigates = ctx.target?.id === 'app'
+  if (method !== 'PATCH' && method === 'GET' && !navigates) return
+  const send = ctx.fetch ?? window.fetch.bind(window)
+  ctx.fetch = (url, init) => {
+    if (method === 'PATCH') {
+      const done = hfLastPatch.then(() => send(url, init), () => send(url, init))
+      hfLastPatch = done.then(() => {}, () => {})
+      return done
+    }
+    return hfLastPatch.then(() => send(url, init))
+  }
+})

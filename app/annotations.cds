@@ -1,6 +1,7 @@
 using CatalogService as service from '../srv/cat-service';
 
 annotate service.Books with @(
+  Common.SemanticKey : [title],
   Common.SideEffects #Stock : {
     SourceProperties : [stock],
     TargetProperties : ['stockStatus', 'stockCriticality']

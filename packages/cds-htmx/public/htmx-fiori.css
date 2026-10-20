@@ -361,6 +361,13 @@ body {
 
 .htmx-fiori .hf-table .hf-cell--end { text-align: end; }
 
+/* The List Report's table is as wide as its columns (FE gives each column a width from its type and
+ * leaves the rest of the card empty) instead of stretching to the page. Section tables fill their section. */
+.htmx-fiori .hf-page--lr .hf-table-card { background: transparent; }
+.htmx-fiori .hf-page--lr .hf-table { width: auto; min-width: 0; }
+.htmx-fiori .hf-page--lr .hf-table thead .hf-th { min-width: 12rem; }
+.htmx-fiori .hf-page--lr .hf-table thead .hf-th.hf-cell--end { min-width: 7rem; }
+
 .htmx-fiori .hf-table .hf-col-nav {
   width: 2.75rem;
   text-align: center;
@@ -713,26 +720,7 @@ body {
 .hf-msg-item__text { display: block; font-weight: 700; color: var(--sapLinkColor, #0064d9); }
 .hf-msg-item__label { display: block; font-size: .875rem; color: var(--sapContent_LabelColor, #556b82); margin-top: .125rem; }
 
-/* ---------- modal dialog (value help) ---------- */
-.hf-dialog {
-  display: flex;
-  flex-direction: column;
-  width: min(48rem, calc(100vw - 2rem));
-  max-height: calc(100vh - 4rem);
-  background: var(--sapBackgroundColor, #fff);
-  border-radius: var(--sapElement_BorderCornerRadius, .75rem);
-  box-shadow: var(--sapContent_Shadow3, 0 0 .125rem rgba(34, 53, 72, .2), 0 .625rem 1.875rem rgba(34, 53, 72, .25));
-  overflow: hidden;
-}
-.hf-dialog__header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--sapGroup_TitleBorderColor, #d9d9d9); }
-.hf-dialog__body { padding: 1rem 1.5rem; overflow: auto; }
-.hf-dialog__footer { display: flex; justify-content: flex-end; padding: .625rem 1rem; border-top: 1px solid var(--sapGroup_TitleBorderColor, #d9d9d9); }
-.hf-vh__search { display: flex; gap: .75rem; align-items: center; margin-bottom: 1rem; }
-.hf-vh__search .hf-input-group { flex: 1 1 auto; }
-.hf-vh__count { margin: 0 0 .5rem; }
-.hf-vh__scroll { max-height: 22rem; overflow: auto; }
-.hf-vh-row { cursor: pointer; }
-.hf-vh-row:focus-visible { outline: 2px solid var(--sapContent_FocusColor, #0032a5); outline-offset: -2px; }
+/* Dialogs (value help, view settings, adapt filters, saved views): see htmx-dialogs.css */
 
 /* ---------- inline-editable table cells ---------- */
 .hf-table td .fd-input { width: 100%; box-sizing: border-box; }
@@ -748,12 +736,6 @@ body {
 .hf-variant__remove { background: none; border: 0; padding: .5rem; cursor: pointer; color: var(--sapContent_IconColor, #1d2d3e); }
 .hf-variant--save { border-top: 1px solid var(--sapGroup_ContentBorderColor, #d9d9d9); margin-top: .25rem; }
 
-.hf-dialog__tabs { display: flex; gap: 1.5rem; padding: 0 1.5rem; border-bottom: 1px solid var(--sapGroup_TitleBorderColor, #d9d9d9); margin: -1rem -1.5rem 1rem; }
-.hf-dialog__tab { background: none; border: 0; padding: .75rem 0; font: inherit; font-weight: 700; cursor: pointer; border-bottom: 3px solid transparent; color: var(--sapTextColor, #1d2d3e); }
-.hf-dialog__tab.is-selected { color: var(--sapSelectedColor, #0064d9); border-bottom-color: var(--sapSelectedColor, #0064d9); }
-.hf-dialog__row { display: flex; align-items: center; gap: .75rem; padding: .5rem 0; border-bottom: 1px solid var(--sapList_BorderColor, #e5e5e5); cursor: pointer; }
-.hf-dialog__form { display: flex; flex-direction: column; gap: .5rem; }
-.hf-dialog__panels { min-height: 12rem; max-height: 22rem; overflow: auto; }
 
 .hf-section-search { width: 14rem; }
 .hf-table-toolbar--section .hf-section-search { margin-right: .5rem; }

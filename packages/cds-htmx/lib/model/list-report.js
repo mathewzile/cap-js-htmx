@@ -116,6 +116,9 @@ function buildListReport(store, entityType, { pageSettings } = {}) {
     },
     variantManagement: pageSettings?.variantManagement || feDefaults.listReport.variantManagement,
     initialLoad: pageSettings?.initialLoad ?? feDefaults.listReport.initialLoad,
+    // The draft indicator ("Draft", "Locked", ...) sits under the semantic key column(s) only; without a
+    // `Common.SemanticKey` FE shows none
+    semanticKey: (bag['@Common.SemanticKey'] || []).map(k => typeof k === 'string' ? k : k.$PropertyPath ?? k.$Path).filter(Boolean),
     capabilities: buildCapabilities(store, entityType),
     edit: require('./edit-capabilities').editCapabilities(store, entityType)
   }

@@ -127,7 +127,7 @@ function editCell(col, row, { rowPath, rowKey, cls, numeric }) {
   </td>`
 }
 
-function dataCell(col, row, { bundle, t, isFirst, numeric, index, edit, rowKey } = {}) {
+function dataCell(col, row, { bundle, t, isSemanticKey, numeric, index, edit, rowKey } = {}) {
   const cls = `fd-table__cell hf-col-${index}${numeric ? ' hf-cell--end' : ''}`
   if (col.hidden && evaluate(col.hidden, row) === true) return html`<td class="${cls}"></td>`
   if (col.kind === 'UI.DataFieldForAction' || col.kind === 'UI.DataFieldForAnnotation') {
@@ -138,7 +138,7 @@ function dataCell(col, row, { bundle, t, isFirst, numeric, index, edit, rowKey }
     if (!isReadOnly(col.field, row, 'draft')) return editCell(col, row, { rowPath: edit.rowPath(row), rowKey, cls, numeric })
   }
   const text = cellText(col, row)
-  const badge = isFirst ? draftStatusBadge(row, bundle, t) : html``
+  const badge = isSemanticKey ? draftStatusBadge(row, bundle, t) : html``
   const crit = col.criticality ? criticalityClass(evaluate(col.criticality, row)) : ''
   return html`<td class="${cls}">${objectStatus(crit, text)}${raw(badge.value)}</td>`
 }
@@ -155,7 +155,9 @@ function draftStatusBadge(row, bundle, t) {
     return html`<div class="hf-draft-indicator"><span class="fd-object-status fd-object-status--informative">${t(bundle, 'Draft')}</span></div>`
   }
   if (row.HasDraftEntity === true) {
-    return html`<div class="hf-draft-indicator"><span class="fd-object-status fd-object-status--informative">${t(bundle, 'LockedByAnotherUser')}</span></div>`
+    // your own draft is "Draft" (the active row stands in for it), somebody else's locks the object
+    const own = row._draftOwn === true
+    return html`<div class="hf-draft-indicator"><span class="fd-object-status fd-object-status--informative">${t(bundle, own ? 'Draft' : 'LockedByAnotherUser')}</span></div>`
   }
   return html``
 }
@@ -174,7 +176,7 @@ function rowMarkup(layout, row, { basePath, entitySetPath, keyNames, bundle, t, 
         hx-get="${href}" hx-trigger="click[!event.target.closest('.fd-table__cell--checkbox, input, select, textarea, button, a')]"
         hx-target="#app" hx-push-url="true" hx-swap="innerHTML show:window:top">
       ${selectable ? html`<td class="fd-table__cell fd-table__cell--checkbox">${checkbox('Select row', { name: 'keys', value: formatKeys(keyValues(keyNames, row)) })}</td>` : html``}
-      ${layout.table.columns.map((col, i) => dataCell(col, row, { bundle, t, isFirst: i === 0, numeric: numeric[i], index: i, edit, rowKey }))}
+      ${layout.table.columns.map((col, i) => dataCell(col, row, { bundle, t, isSemanticKey: !!layout.semanticKey?.includes(col.field?.path), numeric: numeric[i], index: i, edit, rowKey }))}
       <td class="fd-table__cell hf-col-nav">
         <i class="sap-icon--slim-arrow-right" aria-hidden="true"></i>
       </td>

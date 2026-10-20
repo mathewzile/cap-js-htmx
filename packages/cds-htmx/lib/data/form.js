@@ -48,4 +48,15 @@ function formValues(model, entityType, layout, body, { editMode, row = {} } = {}
   return values
 }
 
-module.exports = { formValues, coerce, InputError }
+/** Value-help fields whose typed key is not in the value list (messages for the page script). */
+async function invalidValueListKeys(tx, layout, values, text) {
+  const { keyExists } = require('./value-list')
+  const invalid = []
+  for (const field of collectFormFields([...(layout.headerFacets || []), ...(layout.sections || [])])) {
+    if (!field.valueList || field.fixedValues || !(field.cqlPath in values)) continue
+    if (!(await keyExists(tx, field.valueList, values[field.cqlPath]))) invalid.push({ path: field.path, text, severity: 'error' })
+  }
+  return invalid
+}
+
+module.exports = { formValues, coerce, InputError, invalidValueListKeys }

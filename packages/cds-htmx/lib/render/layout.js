@@ -9,6 +9,7 @@ function headAssets(theme, base = '') {
     <link rel="stylesheet" href="${base}/htmx/-/common-css/common-css.css">
     <link rel="stylesheet" href="${base}/htmx/-/fundamental-styles/fundamental-styles.css">
     <link rel="stylesheet" href="${base}/htmx/-/public/htmx-fiori.css">
+    <link rel="stylesheet" href="${base}/htmx/-/public/htmx-dialogs.css">
     <script src="${base}/htmx/-/htmx.org/htmx.min.js"></script>
     <script src="${base}/htmx/-/htmx.org/ext/hx-sse.min.js"></script>
     <script src="${base}/htmx/-/public/htmx-fiori.js" defer></script>
@@ -35,7 +36,7 @@ function page({ title, clientId, basePath, assetBase = '', body, texts = {} }) {
   <div id="toast"></div>
   <div id="dialogs"></div>
   <script type="application/json" id="hf-texts">${raw(asScriptJson(texts))}</script>
-  ${clientId ? raw(`<div id="sse" hx-sse:connect="${basePath}/$events?client=${clientId}" hx-swap="none"></div>`) : ''}
+  ${clientId ? raw(`<script type="application/json" id="hf-sse">${JSON.stringify({ url: `${basePath}/$events?client=${clientId}` })}</script>`) : ''}
 </body>
 </html>`
 }

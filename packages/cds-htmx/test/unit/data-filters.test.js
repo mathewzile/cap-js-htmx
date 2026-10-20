@@ -24,6 +24,15 @@ test('parseFilters() builds an `in` clause for repeated values on the same field
   assert.deepEqual(parseFilters({ 'f.genre_ID': ['A', 'B'] }, layout), [R('genre_ID'), 'in', { list: [V('A'), V('B')] }])
 })
 
+test('parseFilters() understands the condition syntax of the Define Conditions dialog', () => {
+  assert.deepEqual(parseFilters({ 'f.genre_ID': '*Low*' }, layout), [{ func: 'contains', args: [R('genre_ID'), V('Low')] }])
+  assert.deepEqual(parseFilters({ 'f.genre_ID': 'Lo*' }, layout), [{ func: 'startswith', args: [R('genre_ID'), V('Lo')] }])
+  assert.deepEqual(parseFilters({ 'f.genre_ID': '*ck' }, layout), [{ func: 'endswith', args: [R('genre_ID'), V('ck')] }])
+  assert.deepEqual(parseFilters({ 'f.genre_ID': '!A' }, layout), [R('genre_ID'), '!=', V('A')])
+  assert.deepEqual(parseFilters({ 'f.genre_ID': 'A;B*' }, layout), [{ xpr: [R('genre_ID'), '=', V('A'), 'or', { func: 'startswith', args: [R('genre_ID'), V('B')] }].flat() }])
+  assert.deepEqual(parseFilters({ 'f.genre_ID': 'plain' }, layout), [R('genre_ID'), '=', V('plain')])
+})
+
 test('parseFilters() supports range-operator suffixes (.ge/.le/.gt/.lt/.ne)', () => {
   assert.deepEqual(parseFilters({ 'f.stock.ge': '5' }, layout), [R('stock'), '>=', V(5)])
   assert.deepEqual(parseFilters({ 'f.stock.le': '20' }, layout), [R('stock'), '<=', V(20)])

@@ -27,7 +27,7 @@ const { cellText } = require('./render/table')
 const objectPageRender = require('./render/object-page')
 const valueHelpRender = require('./render/value-help')
 const { loadObjectPage } = require('./data/page')
-const { formValues, InputError } = require('./data/form')
+const { formValues, InputError, invalidValueListKeys } = require('./data/form')
 const { editCapabilities, canCreate, canEdit, canDelete } = require('./model/edit-capabilities')
 const engine = require('./sse/side-effects-engine')
 
@@ -170,7 +170,9 @@ class HtmxAdapter extends HttpAdapter {
     req.hfView = this.viewOf(req, view)
     const clientId = req.headers['x-htmx-client']
     if (!clientId) return
-    channels.setView(clientId, this.viewOf(req, view))
+    // The stream may not be open yet (pages that want one open it after the swap): it picks the view up then
+    if (channels.get(clientId)) channels.setView(clientId, this.viewOf(req, view))
+    else channels.rememberView(clientId, this.viewOf(req, view))
   }
 
   entitySet(name) {
@@ -388,9 +390,9 @@ class HtmxAdapter extends HttpAdapter {
       await draftLib.edit(tx, entity.name, { ...plainKeys, IsActiveEntity: true })
     } catch (err) {
       if ((err.status ?? err.statusCode ?? err.code) !== 409) throw err
-      const lock = await tx.run(SELECT.one.from(entity.name).columns('DraftAdministrativeData.InProcessByUser as user').where({ ...plainKeys, IsActiveEntity: false })).catch(() => null)
-      if (lock && lock.user !== cds.context.user.id) {
-        return this.reject(req, res, 409, 'LockedBy', lock.user)
+      const lockedBy = await queryLib.draftLockUser(tx, entity.name, { ...plainKeys, IsActiveEntity: false })
+      if (lockedBy && lockedBy !== cds.context.user.id) {
+        return this.reject(req, res, 409, 'LockedBy', lockedBy)
       }
       // your own draft: resume it
     }
@@ -413,6 +415,11 @@ class HtmxAdapter extends HttpAdapter {
     const keys = keysLib.parseKeys(raw)
     const path = req.params.path
     const value = req.body?.[path]
+    // A key typed into a value-help field has to exist in its value list (the draft is not changed otherwise)
+    const field = require('./model/fields').buildField(cache.storeFor(cds.model, this.service.name, this.odataServicePath(), this.appOpts(req)), entity.name, path)
+    if (field?.valueList && !field.fixedValues && !(await valueListLib.keyExists(tx, field.valueList, value))) {
+      return this.validationFailed(req, res, entity.name, [{ path, text: this.text(req, 'InvalidValue'), severity: 'error' }], { status: 422, contextPath: `/${set}` })
+    }
     try {
       await draftLib.patch(tx, entity.name, keys, { [path]: value })
     } catch (err) {
@@ -565,11 +572,23 @@ class HtmxAdapter extends HttpAdapter {
     const bundle = cache.bundleFor(this.appOpts(req))
     const labelOf = label => i18n.resolveText(label, bundle) // labels are still {i18n>Key} placeholders here
     const columns = props.map(prop => ({ prop, label: labelOf(fieldsLib.buildField(store, collectionType, prop)?.label ?? prop) }))
+    const suggest = req.query.mode === 'suggest'
     let q = SELECT.from(collectionPath).columns(props)
     if (search && searchSupported) q = q.search(search)
-    const rows = await tx.run(q.limit(200))
+    const limit = suggest ? 8 : 200
+    let rows = await tx.run(q.limit(limit))
+    if (search && searchSupported) {
+      // `$search` only covers the text columns; what is typed is often the key itself (a UUID is not searched)
+      try {
+        const byKey = await tx.run(SELECT.from(collectionPath).columns(props).where(`${valueProp} like`, `%${search}%`).limit(limit))
+        const seen = new Set(rows.map(r => r[valueProp]))
+        rows = [...rows, ...byKey.filter(r => !seen.has(r[valueProp]))].slice(0, limit)
+      } catch { /* key type not comparable with text: the search result stands */ }
+    }
 
     const t = key => i18n.t(bundle, key)
+    // Type-ahead under the input while typing: the best matches only
+    if (suggest) return res.type('html').send(String(valueHelpRender.valueHelpSuggest(columns, rows, { valueProp, t })))
     // Searching only replaces the results, opening sends the whole dialog (into #dialogs)
     if (req.headers['hx-target'] === 'div#vh-results') {
       return res.type('html').send(String(valueHelpRender.valueHelpResults(columns, rows, { valueProp, t })))
@@ -640,6 +659,8 @@ class HtmxAdapter extends HttpAdapter {
     let values = {}
     try {
       values = formValues(cds.model, entity.name, layout, req.body, { editMode, row: current || {} })
+      const badKeys = await invalidValueListKeys(tx, layout, values, this.text(req, 'InvalidValue'))
+      if (badKeys.length) return this.validationFailed(req, res, entity.name, badKeys, { status: 422, contextPath })
       if (creating) {
         // keys the service would otherwise generate are needed to show the new object
         for (const key of keyElements(entityDef(cds.model, entity.name))) {
@@ -764,6 +785,7 @@ class HtmxAdapter extends HttpAdapter {
     const [rows, countResult] = await Promise.all([tx.run(q), tx.run(countQ)])
     const hasMore = rows.length > threshold
     const pageRows = hasMore ? rows.slice(0, threshold) : rows
+    await queryLib.markDraftOwners(tx, entityType, lrLayout, pageRows, cds.context.user.id)
     const orderBy = orderByFromTerms(orderByTerms)
 
     const filterOptions = {}
@@ -853,6 +875,7 @@ class HtmxAdapter extends HttpAdapter {
     const [rows, countResult] = await Promise.all([tx.run(q), tx.run(countQ)])
     const hasMore = rows.length > threshold
     const pageRows = hasMore ? rows.slice(0, threshold) : rows
+    await queryLib.markDraftOwners(tx, entityType, lrLayout, pageRows, cds.context.user.id)
     const orderBy = orderByFromTerms(orderByTerms)
 
     const body = listReportRender.tablePartial(lrLayout, pageRows, {
@@ -882,6 +905,10 @@ class HtmxAdapter extends HttpAdapter {
   /** Every page replaces `#app`; the message strips live outside it, so a page without messages of its own
    *  clears the previous page's (`keepMessages`: the page brings its own). */
   render(req, res, { title, body, keepMessages }) {
+    // The page says whether it wants the event stream (`#hf-live`); the page script opens or closes it (§4.1)
+    const view = req.hfView
+    const live = !!view && engine.needsStream(cache.storeFor(cds.model, view.service, view.servicePath, this.appOpts(req)), view.entityType, { list: !!view.list })
+    body = html`${body}<span id="hf-live" hidden data-hf-live="${live ? '1' : '0'}"></span>`
     if (this.isFragmentRequest(req) || req.htmxApp) {
       const clear = keepMessages ? '' : this.messagesPartial([])
       res.set('Content-Type', 'text/html').send(String(layout.fragment({ title, body: html`${rawHtml(clear)}${body}` })))

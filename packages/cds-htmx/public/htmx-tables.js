@@ -26,42 +26,59 @@
     return node
   }
 
-  /** A modal dialog (same look as the value help): header, body, footer buttons. */
-  function openDialog({ title, body, buttons, tabs }) {
+  /** A modal dialog in the FE look: header (title, optional "Reset" at the right), optional tabs, body, footer
+   *  (the first button is the emphasized one). `tabs` is [{label, content}]; without it `body` is the content.
+   *  `reset.action(api)` runs on "Reset", which is enabled once anything in the dialog changed. */
+  function openDialog({ title, body, tabs, buttons, reset }) {
     document.querySelectorAll('.hf-overlay[data-hf-dialog]').forEach(o => o.remove())
+    const resetButton = reset ? el('button', { type: 'button', class: 'hf-dialog__link', text: reset.label, disabled: true }) : null
     const footer = el('footer', { class: 'hf-dialog__footer' })
+    let tabBar = null
+    let content = body
+    if (tabs) {
+      tabBar = el('div', { class: 'hf-dialog__tabs', role: 'tablist' })
+      content = el('div', { class: 'hf-dialog__panels' })
+      tabs.forEach((tab, i) => {
+        const button = el('button', { type: 'button', class: `hf-dialog__tab${i === 0 ? ' is-selected' : ''}`, role: 'tab', 'aria-selected': i === 0, text: tab.label })
+        tab.content.classList.add('hf-dialog__panel')
+        tab.content.hidden = i !== 0
+        button.addEventListener('click', () => {
+          tabBar.querySelectorAll('.hf-dialog__tab').forEach(t => { t.classList.toggle('is-selected', t === button); t.setAttribute('aria-selected', t === button) })
+          tabs.forEach(t => { t.content.hidden = t !== tab })
+        })
+        tabBar.append(button)
+        content.append(tab.content)
+      })
+    }
     const dialog = el('div', { class: 'hf-dialog', role: 'dialog', 'aria-modal': 'true' },
-      el('header', { class: 'hf-dialog__header' }, el('h2', { class: 'fd-title fd-title--h5', text: title })),
-      tabs ? el('div', { class: 'hf-dialog__tabs', role: 'tablist' }) : null,
-      el('div', { class: 'hf-dialog__body' }, body),
+      el('header', { class: 'hf-dialog__header' }, el('h2', { text: title }), resetButton),
+      tabBar,
+      tabs ? content : el('div', { class: 'hf-dialog__body' }, body),
       footer)
     const overlay = el('div', { class: 'hf-overlay', 'data-hf-dialog': true }, dialog)
     const close = () => overlay.remove()
-    for (const b of buttons) {
-      const button = el('button', { type: 'button', class: `fd-button ${b.emphasized ? 'fd-button--emphasized' : 'fd-button--transparent'}`, text: b.label })
-      button.addEventListener('click', () => { if (b.action?.() !== false) close() })
-      footer.append(button)
+    const api = { overlay, dialog, close, markChanged: () => { if (resetButton) resetButton.disabled = false } }
+    if (resetButton) {
+      resetButton.addEventListener('click', () => { reset.action(api); resetButton.disabled = true })
+      dialog.addEventListener('input', () => api.markChanged())
+      dialog.addEventListener('change', () => api.markChanged())
     }
+    buttons.forEach((b, i) => {
+      const button = el('button', { type: 'button', class: `fd-button ${i === 0 ? 'fd-button--emphasized' : 'fd-button--transparent'}`, text: b.label })
+      button.addEventListener('click', () => { if (b.action?.(api) !== false) close() })
+      footer.append(button)
+    })
     ;(document.getElementById('dialogs') || document.body).append(overlay)
-    overlay.querySelector('input, button.fd-button--emphasized')?.focus()
-    return { overlay, dialog, close }
+    overlay.querySelector('input:not([type=checkbox]), .fd-button--emphasized')?.focus()
+    return api
   }
 
-  /** Tabs inside a dialog body: [{label, content}] -> switchable panels. */
-  function tabbed(panels) {
-    const bar = el('div', { class: 'hf-dialog__tabs', role: 'tablist' })
-    const body = el('div', { class: 'hf-dialog__panels' })
-    panels.forEach((panel, i) => {
-      const tab = el('button', { type: 'button', class: `hf-dialog__tab${i === 0 ? ' is-selected' : ''}`, role: 'tab', text: panel.label })
-      panel.content.hidden = i !== 0
-      tab.addEventListener('click', () => {
-        bar.querySelectorAll('.hf-dialog__tab').forEach(t => t.classList.toggle('is-selected', t === tab))
-        panels.forEach(p => { p.content.hidden = p !== panel })
-      })
-      bar.append(tab)
-      body.append(panel.content)
-    })
-    return el('div', {}, bar, body)
+  /** One row of a checkbox list (FE's selected rows are tinted and outlined). */
+  function checkRow(text, checked, attrs = {}) {
+    const box = el('input', { type: 'checkbox', checked, ...attrs })
+    const row = el('li', { class: `hf-dialog__row${checked ? ' is-selected' : ''}` }, el('label', { class: 'hf-dialog__row-label' }, box, el('span', { class: 'hf-dialog__row-text', text })))
+    box.addEventListener('change', () => row.classList.toggle('is-selected', box.checked))
+    return { row, box }
   }
 
   // ---------------------------------------------------------------- column visibility (view settings)
@@ -87,39 +104,75 @@
     const table = tableOf(container)
     const hidden = new Set(hiddenCols(container))
     const headers = [...table.querySelectorAll('thead th.hf-th')].filter(th => colIndex(th) != null)
-    const checks = headers.map(th => {
-      const box = el('input', { type: 'checkbox', checked: !hidden.has(colIndex(th)), 'data-col': colIndex(th) })
-      return el('label', { class: 'hf-dialog__row' }, box, el('span', { text: th.querySelector('.hf-th__text')?.textContent.trim() || '' }))
-    })
-    const panels = [{ label: T('Columns'), content: el('div', {}, checks) }]
+    const items = headers.map(th => checkRow(th.querySelector('.hf-th__text')?.textContent.trim() || '', !hidden.has(colIndex(th)), { 'data-col': colIndex(th) }))
 
-    // Sort: only the List Report sorts on the server
+    // Columns tab: search, "Hide (All) Unselected", the master row "Columns (shown/all)" and one row per column
+    const search = el('input', { type: 'search', class: 'fd-input', placeholder: T('Search'), 'aria-label': T('Search') })
+    const hideUnselected = el('input', { type: 'checkbox', class: 'hf-switch', role: 'switch' })
+    const master = el('input', { type: 'checkbox' })
+    const masterLabel = el('span', { class: 'hf-dialog__row-text' })
+    const list = el('ul', { class: 'hf-dialog__list' }, el('li', { class: 'hf-dialog__row hf-dialog__row--head' }, el('label', { class: 'hf-dialog__row-label' }, master, masterLabel)), items.map(i => i.row))
+    const refresh = () => {
+      const shown = items.filter(i => i.box.checked).length
+      masterLabel.textContent = `${T('Columns')} (${shown}/${items.length})`
+      master.checked = shown === items.length
+      master.indeterminate = shown > 0 && shown < items.length
+      const q = search.value.trim().toLowerCase()
+      for (const { row, box } of items) row.hidden = (q && !row.textContent.toLowerCase().includes(q)) || (hideUnselected.checked && !box.checked)
+    }
+    for (const { box } of items) box.addEventListener('change', refresh)
+    search.addEventListener('input', refresh)
+    hideUnselected.addEventListener('change', refresh)
+    master.addEventListener('change', () => { for (const { row, box } of items) { box.checked = master.checked; row.classList.toggle('is-selected', box.checked) } refresh() })
+    refresh()
+    const columnsPanel = el('div', {},
+      el('div', { class: 'hf-dialog__bar' },
+        el('div', { class: 'hf-input-group' }, search, el('span', { class: 'hf-input-group__addon' }, el('span', { class: 'hf-input-icon' }, el('i', { class: 'sap-icon--search', 'aria-hidden': 'true' })))),
+        el('label', { class: 'hf-switch-label' }, el('span', { text: T('HideUnselected') }), hideUnselected)),
+      list)
+    const tabs = [{ label: T('Columns'), content: columnsPanel }]
+
+    // Sort tab: only the List Report sorts on the server
     const lr = container.closest('.hf-page--lr')
     const sortable = [...table.querySelectorAll('thead th[data-hf-sort]')]
-    let sortSelect, sortDir
+    let sortSelect
+    let direction = 'asc'
     if (lr && sortable.length) {
       const current = table.querySelector('thead th[aria-sort]')
-      sortSelect = el('select', { class: 'fd-select' }, el('option', { value: '', text: T('NoSort') }),
+      if (current?.getAttribute('aria-sort') === 'descending') direction = 'desc'
+      sortSelect = el('select', { class: 'fd-select', 'aria-label': T('SortBy') }, el('option', { value: '', text: T('SortBy') }),
         sortable.map(th => el('option', { value: th.dataset.hfSort, text: th.dataset.hfLabel || th.textContent.trim(), selected: th === current })))
-      sortDir = el('select', { class: 'fd-select' },
-        el('option', { value: 'asc', text: T('Ascending') }), el('option', { value: 'desc', text: T('Descending'), selected: current?.getAttribute('aria-sort') === 'descending' }))
-      panels.push({ label: T('Sort'), content: el('div', { class: 'hf-dialog__form' }, el('label', { text: T('SortBy') }), sortSelect, sortDir) })
+      const dirLabel = el('span', { text: direction === 'desc' ? T('Descending') : T('Ascending') })
+      const asc = el('button', { type: 'button', class: 'is-selected', title: T('Ascending'), 'aria-label': T('Ascending') }, el('i', { class: 'sap-icon--sort-ascending', 'aria-hidden': 'true' }))
+      const desc = el('button', { type: 'button', title: T('Descending'), 'aria-label': T('Descending') }, el('i', { class: 'sap-icon--sort-descending', 'aria-hidden': 'true' }))
+      const setDirection = value => { direction = value; asc.classList.toggle('is-selected', value === 'asc'); desc.classList.toggle('is-selected', value === 'desc'); dirLabel.textContent = value === 'desc' ? T('Descending') : T('Ascending') }
+      asc.addEventListener('click', () => { setDirection('asc'); sortSelect.dispatchEvent(new Event('change', { bubbles: true })) })
+      desc.addEventListener('click', () => { setDirection('desc'); sortSelect.dispatchEvent(new Event('change', { bubbles: true })) })
+      setDirection(direction)
+      tabs.push({ label: T('Sort'), content: el('div', {}, el('div', { class: 'hf-dialog__sort' }, sortSelect, el('span', { class: 'hf-segmented' }, asc, desc), dirLabel)) })
     }
-    openDialog({
+    const current = () => table.querySelector('thead th[aria-sort]')
+    const dialog = openDialog({
       title: T('ViewSettings'),
-      body: tabbed(panels),
+      tabs,
+      reset: { label: T('Reset'), action() {
+        for (const { row, box } of items) { box.checked = true; row.classList.add('is-selected') }
+        refresh()
+        if (sortSelect) sortSelect.value = ''
+      } },
       buttons: [
-        { label: T('OK'), emphasized: true, action() {
-          const off = checks.map(label => label.querySelector('input')).filter(box => !box.checked).map(box => Number(box.dataset.col))
-          store.set('view:' + container.dataset.hfView, { hidden: off })
+        { label: T('OK'), action() {
+          const off = items.filter(i => !i.box.checked).map(i => Number(i.box.dataset.col))
+          if (off.length) store.set('view:' + container.dataset.hfView, { hidden: off }); else store.remove('view:' + container.dataset.hfView)
           applyView(container)
-          if (sortSelect && sortSelect.value && sortSelect.value !== (table.querySelector('thead th[aria-sort]')?.dataset.hfSort ?? '')) sortList(lr, `${sortSelect.value}${sortDir.value === 'desc' ? ' desc' : ''}`)
-          else if (sortSelect && sortSelect.value && sortDir.value !== (table.querySelector('thead th[aria-sort]')?.getAttribute('aria-sort') === 'descending' ? 'desc' : 'asc')) sortList(lr, `${sortSelect.value}${sortDir.value === 'desc' ? ' desc' : ''}`)
+          if (!sortSelect || !sortSelect.value) return
+          const same = sortSelect.value === (current()?.dataset.hfSort ?? '') && direction === (current()?.getAttribute('aria-sort') === 'descending' ? 'desc' : 'asc')
+          if (!same) sortList(lr, `${sortSelect.value}${direction === 'desc' ? ' desc' : ''}`)
         } },
-        { label: T('Reset'), action() { store.remove('view:' + container.dataset.hfView); applyView(container) } },
         { label: T('Cancel') }
       ]
     })
+    if (hidden.size) dialog.markChanged() // something differs from the defaults, so "Reset" is useful
   }
 
   /** The List Report's own `$table` request (same URL the column headers use), with the filter form's values. */
@@ -214,21 +267,23 @@
   function openAdaptFilters(lr) {
     const set = lr.dataset.hfSet
     const hidden = new Set(store.get(filtersKey(set)) ?? [])
-    const rows = filterItems(lr).map(item => el('label', { class: 'hf-dialog__row' },
-      el('input', { type: 'checkbox', checked: !hidden.has(item.dataset.hfFilter), 'data-path': item.dataset.hfFilter }),
-      el('span', { text: item.dataset.hfLabel })))
-    openDialog({
+    const items = filterItems(lr).map(item => checkRow(item.dataset.hfLabel, !hidden.has(item.dataset.hfFilter), { 'data-path': item.dataset.hfFilter }))
+    const dialog = openDialog({
       title: T('AdaptFilters'),
-      body: el('div', {}, el('h3', { class: 'fd-title fd-title--h5', text: T('FilterValuesAndVisibility') }), rows),
+      body: el('div', { class: 'hf-dialog__panel' },
+        el('h3', { class: 'hf-dialog__subheader', text: T('FilterValuesAndVisibility') }),
+        el('ul', { class: 'hf-dialog__list' }, items.map(i => i.row))),
+      reset: { label: T('Reset'), action() { for (const { row, box } of items) { box.checked = true; row.classList.add('is-selected') } } },
       buttons: [
-        { label: T('OK'), emphasized: true, action() {
-          store.set(filtersKey(set), rows.map(r => r.querySelector('input')).filter(b => !b.checked).map(b => b.dataset.path))
+        { label: T('OK'), action() {
+          const off = items.filter(i => !i.box.checked).map(i => i.box.dataset.path)
+          if (off.length) store.set(filtersKey(set), off); else store.remove(filtersKey(set))
           applyFilters()
         } },
-        { label: T('Reset'), action() { store.remove(filtersKey(set)); applyFilters() } },
         { label: T('Cancel') }
       ]
     })
+    if (hidden.size) dialog.markChanged()
   }
 
   // ---------------------------------------------------------------- saved views ("Standard" menu)
@@ -294,7 +349,7 @@
       openDialog({
         title: T('SaveAs'), body: el('div', { class: 'hf-dialog__form' }, el('label', { text: T('VariantName') }), input),
         buttons: [
-          { label: T('OK'), emphasized: true, action() {
+          { label: T('OK'), action() {
             const name = input.value.trim()
             if (!name) { input.focus(); return false }
             store.set(viewsKey(set), [...saved.filter(v => v.name !== name), { name, state: currentViewState(lr) }])
@@ -308,12 +363,58 @@
     list.append(saveAs)
   }
 
+  // ---------------------------------------------------------------- Define Conditions (free-text filter fields)
+  // The field holds FE's condition syntax: `a;b` any of, `*a*` contains, `a*` starts with, `*a` ends with, `!a` not equal.
+  const OPERATORS = [['eq', 'EqualTo'], ['ne', 'NotEqualTo'], ['co', 'Contains'], ['sw', 'StartsWith'], ['ew', 'EndsWith']]
+  function parseConditions(text) {
+    return text.split(';').filter(Boolean).map(token => {
+      if (token.startsWith('!')) return { op: 'ne', value: token.slice(1) }
+      const starts = token.startsWith('*'), ends = token.length > 1 && token.endsWith('*')
+      const value = token.replace(/^\*/, '').replace(/\*$/, '')
+      return { op: starts && ends ? 'co' : ends ? 'sw' : starts ? 'ew' : 'eq', value }
+    })
+  }
+  const formatCondition = ({ op, value }) => ({ eq: value, ne: `!${value}`, co: `*${value}*`, sw: `${value}*`, ew: `*${value}` })[op]
+
+  function openConditions(button) {
+    const filter = button.closest('[data-hf-filter]')
+    const input = filter.querySelector('input')
+    const rows = el('div', { class: 'hf-conditions' })
+    const summary = el('div', { class: 'hf-conditions__summary' })
+    const sync = () => {
+      const entered = [...rows.children].map(r => ({ op: r.querySelector('select').value, value: r.querySelector('input').value.trim() })).filter(c => c.value)
+      summary.textContent = entered.length ? entered.map(formatCondition).join('; ') : ''
+      return entered
+    }
+    const addRow = (condition = { op: 'eq', value: '' }) => {
+      const select = el('select', { class: 'fd-select' }, OPERATORS.map(([op, key]) => el('option', { value: op, text: T(key), selected: op === condition.op })))
+      const value = el('input', { type: 'text', class: 'fd-input', placeholder: T('Value'), value: condition.value })
+      const remove = el('button', { type: 'button', class: 'fd-button fd-button--compact fd-button--transparent', 'aria-label': T('Delete') }, el('i', { class: 'sap-icon--decline', 'aria-hidden': 'true' }))
+      const row = el('div', { class: 'hf-conditions__row' }, select, value, remove)
+      remove.addEventListener('click', () => { row.remove(); if (!rows.children.length) addRow(); sync() })
+      row.addEventListener('input', sync)
+      rows.append(row)
+    }
+    const existing = parseConditions(input.value)
+    for (const c of existing.length ? existing : [undefined]) addRow(c)
+    const add = el('button', { type: 'button', class: 'fd-button fd-button--compact', text: T('AddCondition') })
+    add.addEventListener('click', () => { addRow(); rows.lastChild.querySelector('input').focus() })
+    sync()
+    openDialog({
+      title: `${T('DefineConditions')}: ${filter.dataset.hfLabel}`,
+      body: el('div', { class: 'hf-dialog__form hf-conditions-form' }, rows, el('div', { class: 'hf-conditions__add' }, add),
+        el('h3', { class: 'hf-conditions__title', text: T('Conditions') }), summary),
+      buttons: [{ label: T('OK'), action() { input.value = sync().map(formatCondition).join(';'); input.dispatchEvent(new Event('change', { bubbles: true })) } }, { label: T('Cancel') }]
+    }).dialog.classList.add('hf-dialog--value-help')
+  }
+
   // ---------------------------------------------------------------- wiring
   document.addEventListener('click', e => {
     const button = e.target.closest('[data-hf-action]')
     if (!button) return
     const container = button.closest('[data-hf-view]')
     switch (button.dataset.hfAction) {
+      case 'conditions': openConditions(button); break
       case 'settings': if (container) openViewSettings(container); break
       case 'export': exportList(button); break
       case 'export-dom': exportSection(button); break

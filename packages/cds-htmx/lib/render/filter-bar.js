@@ -26,7 +26,7 @@ function filterField(field, query, options, ctx) {
         <span class="hf-input-group__addon">${field.valueList && ctx?.basePath ? html`
           <button type="button" class="fd-button fd-button--compact fd-button--transparent hf-vh-open" aria-haspopup="dialog" aria-label="Value Help"
             hx-get="${ctx.basePath}/${ctx.entitySetPath}/$vh/${field.path}?target=${encodeURIComponent(name)}" hx-target="#dialogs" hx-swap="innerHTML" hx-push-url="false"><i class="sap-icon--value-help" aria-hidden="true"></i></button>` : html`
-          <span class="hf-input-icon"><i class="sap-icon--value-help" aria-hidden="true"></i></span>`}</span>
+          <button type="button" class="fd-button fd-button--compact fd-button--transparent" data-hf-action="conditions" aria-haspopup="dialog" aria-label="Define Conditions"><i class="sap-icon--value-help" aria-hidden="true"></i></button>`}</span>
       </div>`
   }
   return html`

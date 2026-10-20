@@ -190,6 +190,20 @@ describe('FE parity: capabilities, direct editing, history, confirmations (round
       expect(savedVersion.data).not.to.match(/aria-label="Edit"/) // a draft exists
     })
 
+    test('the List Report shows the draft indicator under the Common.SemanticKey column only', async () => {
+      const { GET, expect } = api
+      const res = await GET('/htmx/catalog/Books', { headers: HX })
+      const cells = res.data.match(/<td class="[^"]*hf-col-\d+[^"]*">(?:(?!<\/td>)[\s\S])*hf-draft-indicator(?:(?!<\/td>)[\s\S])*<\/td>/g) || []
+      expect(cells.length).to.be.greaterThan(0)
+      for (const cell of cells) expect(cell).to.match(/hf-col-0\b/) // title is the semantic key and the first column
+      const { rowMarkup } = require('../../lib/render/table')
+      const row = { ID: 'x', title: 'T', IsActiveEntity: false, HasDraftEntity: false }
+      const layout = { table: { columns: [{ kind: 'UI.DataField', field: { path: 'title', cqlPath: 'title' } }] }, semanticKey: [] }
+      const render = semanticKey => String(rowMarkup({ ...layout, semanticKey }, row, { basePath: '/htmx/catalog', entitySetPath: 'Books', keyNames: ['ID'], bundle: {}, t: () => 'Draft', numeric: [false], selectable: true }))
+      expect(render([])).not.to.include('hf-draft-indicator') // no semantic key: FE shows no indicator
+      expect(render(['title'])).to.include('hf-draft-indicator')
+    })
+
     test('Edit on an object that already has your own draft resumes it', async () => {
       const { POST, expect } = api
       const res = await POST(`/htmx/catalog/Books(${BOOK})/$edit`, {}, { headers: HX })
@@ -241,11 +255,21 @@ describe('FE parity: capabilities, direct editing, history, confirmations (round
       assert.equal(res.status, 200)
       assert.match(res.data, /class="hf-overlay" data-hf-dialog/)
       assert.match(res.data, /Select: [^<]+/)
-      assert.match(res.data, /<span class="hf-th__text">ID<\/span>/)
-      assert.match(res.data, /<span class="hf-th__text">Name<\/span>/)
+      assert.match(res.data, /<th role="columnheader">ID<\/th>/)
+      assert.match(res.data, /<th role="columnheader">Name<\/th>/)
       assert.equal((res.data.match(/class="[^"]*hf-vh-row/g) || []).length, 4)
       assert.match(res.data, /Items \(4\)/)
       assert.match(res.data, /data-hf-dialog-close/)
+    })
+
+    test('type-ahead mode returns the popup with the key in brackets and "Show All Items"', async () => {
+      const res = await open('/htmx/catalog/Books/$vh/author_ID?mode=suggest&$search=Poe')
+      assert.equal(res.status, 200)
+      assert.doesNotMatch(res.data, /hf-overlay/)
+      assert.match(res.data, /<th>\[ID\]<\/th>/)
+      assert.match(res.data, /Edgar Allan Poe/)
+      assert.doesNotMatch(res.data, /Emily/)
+      assert.match(res.data, /data-hf-show-all/)
     })
 
     test('searching only replaces the results (the table), never the whole dialog', async () => {
