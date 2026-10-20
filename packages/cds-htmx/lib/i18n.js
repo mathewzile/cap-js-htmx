@@ -93,4 +93,4 @@ function translate(value, bundle) {
   return resolveText(value, bundle)
 }
 
-module.exports = { bundleFor, t, resolveText, translate, PLUGIN_I18N_DIR }
+module.exports = { bundleFor, t, resolveText, translate, parseProperties, PLUGIN_I18N_DIR }

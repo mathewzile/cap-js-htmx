@@ -1,0 +1,12 @@
+{
+  "sap.app": {
+    "id": "fixture.beta",
+    "type": "application",
+    "i18n": "i18n/i18n.properties",
+    "applicationVersion": { "version": "1.2.0" },
+    "dataSources": {
+      "mainService": { "uri": "/odata/v4/catalog/", "type": "OData", "settings": { "annotations": ["annotation"], "odataVersion": "4.0" } },
+      "annotation": { "type": "ODataAnnotation", "uri": "annotations/annotation.xml", "settings": { "localUri": "annotations/annotation.xml" } }
+    }
+  }
+}

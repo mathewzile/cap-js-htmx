@@ -133,10 +133,16 @@ function draftStatusBadge(row, bundle, t) {
   return html``
 }
 
+/** Stable DOM id of a List Report row, from its key values (`ids.js`), so a pushed side effect
+ *  can address exactly one row. */
+function rowId(keyNames, row) {
+  return ids.lrRow(keyNames.map(name => row[name]).join('-'))
+}
+
 function rowMarkup(layout, row, { basePath, entitySetPath, keyNames, bundle, t, numeric, selectable }) {
   const href = rowHref(basePath, entitySetPath, keyNames, row)
   return html`
-    <tr class="fd-table__row fd-table__row--activable fd-table__row--hoverable"
+    <tr id="${rowId(keyNames, row)}" class="fd-table__row fd-table__row--activable fd-table__row--hoverable"
         hx-get="${href}" hx-trigger="click[!event.target.closest('.fd-table__cell--checkbox')]">
       ${selectable ? html`<td class="fd-table__cell fd-table__cell--checkbox">${checkbox('Select row')}</td>` : html``}
       ${layout.table.columns.map((col, i) => dataCell(col, row, { bundle, t, isFirst: i === 0, numeric: numeric[i], index: i }))}
@@ -197,4 +203,4 @@ function table(layout, rows, ctx) {
   `
 }
 
-module.exports = { table, tableHead, rowsHtml, cellText, rowHref, keyValues, objectStatus, columnBreakpoints, columnVisibilityStyle }
+module.exports = { table, tableHead, rowsHtml, rowMarkup, rowId, isNumericColumn, cellText, rowHref, keyValues, objectStatus, columnBreakpoints, columnVisibilityStyle }

@@ -36,10 +36,11 @@ export default cds.service.impl(async function () {
 
   this.on('simulateDelivery', async req => {
     const { book, qty } = req.data
-    const active = await SELECT.one.from(Books).where({ ID: book, IsActiveEntity: true })
+    // plain queries on the draft-enabled entity address the active data; IsActiveEntity is virtual here
+    const active = await SELECT.one.from(Books).where({ ID: book })
     if (!active) return req.error(404, `Book ${book} not found`)
     const stock = active.stock + qty
-    await UPDATE(Books).set({ stock, ...computeStockFields(stock) }).where({ ID: book, IsActiveEntity: true })
+    await UPDATE(Books).set({ stock, ...computeStockFields(stock) }).where({ ID: book })
     await this.emit('StockChanged', { ID: book })
   })
 })

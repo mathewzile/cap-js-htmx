@@ -1,6 +1,6 @@
 const { html, raw } = require('./html')
 const ids = require('./ids')
-const { evaluate } = require('../annotations/expressions')
+const { evaluate, paths: pathsOf } = require('../annotations/expressions')
 const { formField, fieldLabel } = require('./field')
 const { rowsHtml, tableHead, columnVisibilityStyle } = require('./table')
 const { criticalityClass } = require('../data/format')
@@ -107,6 +107,17 @@ function tableBlock(facet, ctx) {
     </table>`
 }
 
+/** The single label/value block of a dataPoint / contact / address facet. Its `id` is what the
+ *  side-effects engine targets when one of the facet's source properties changes. */
+function valueBlock(facet, row, id) {
+  const content = facet.content
+  if (content.kind === 'dataPoint') return dataPointBlock(facet.label, content.dataPoint, row, id)
+  if (content.kind === 'contact') return contactBlock(facet.label, content.contact, row, id)
+  const address = content.address || {}
+  const text = ['street', 'code', 'locality'].map(k => evaluate(address[k], row)).filter(Boolean).join(', ')
+  return html`<div class="fd-form-item hf-field" id="${id}">${fieldLabel(facet.label)}<span class="hf-field__value">${text || '–'}</span></div>`
+}
+
 /** One facet's content, dispatched by kind (§3.2 Facets row). `identification`/`chart`/`unknown`
  *  content kinds are listed in the term coverage report as partial/ignored and render nothing here. */
 function facetContent(facet, row, ctx) {
@@ -119,14 +130,9 @@ function facetContent(facet, row, ctx) {
         facetId: facet.id, isDraft: ctx.isDraft, basePath: ctx.basePath, entitySetPath: ctx.entitySetPath, valueLists: ctx.valueLists
       })).filter(f => f.value.trim()))
     case 'dataPoint':
-      return formLayout([dataPointBlock(facet.label, content.dataPoint, row, id)])
     case 'contact':
-      return formLayout([contactBlock(facet.label, content.contact, row, id)])
-    case 'address': {
-      const address = content.address || {}
-      const text = ['street', 'code', 'locality'].map(k => evaluate(address[k], row)).filter(Boolean).join(', ')
-      return formLayout([html`<div class="fd-form-item hf-field" id="${id}">${fieldLabel(facet.label)}<span class="hf-field__value">${text || '–'}</span></div>`])
-    }
+    case 'address':
+      return formLayout([valueBlock(facet, row, id)])
     case 'table':
       return tableBlock(facet, ctx)
     default:
@@ -219,6 +225,14 @@ function headerAvatar(header, row) {
   return html``
 }
 
+/** Heading + subtitle (`HeaderInfo.Title`/`Description`); own id so a side effect can refresh just the title. */
+function titleText(title, description) {
+  return html`<div id="${ids.opTitle()}" class="hf-op-title__text">
+            <h1 class="hf-op-title__heading">${title}</h1>
+            ${description ? html`<div class="hf-op-title__subtitle">${description}</div>` : html``}
+          </div>`
+}
+
 /** Composes the full Object Page (§3.4): breadcrumb, title, header facets, anchor bar, and the
  *  sections themselves (form/dataPoint/contact/address/table content). Draft state (`row.IsActiveEntity
  *  === false`) decides Edit/Delete vs. the floating Save/Discard footer and (via `ctx.isDraft`,
@@ -232,15 +246,12 @@ function objectPageFragment(layout, row, ctx) {
   const headerFacets = layout.headerFacets || []
   return html`
     ${ctx.successMessage ? raw(`<hx-partial hx-target="#${ids.toast()}" hx-swap="innerHTML">${toast(ctx.successMessage).value}</hx-partial>`) : html``}
-    <div class="hf-page hf-page--op${isDraft ? ' hf-page--edit' : ''}" data-entity-type="${layout.entityType}">
+    <div id="${ids.opPage()}" class="hf-page hf-page--op${isDraft ? ' hf-page--edit' : ''}" data-entity-type="${layout.entityType}">
       <header class="hf-page__header hf-op-header" id="${ids.opHeader()}">
         ${breadcrumbs(ctx.trail, ctx.basePath)}
         <div class="hf-op-title">
           ${headerAvatar(layout.header, row)}
-          <div class="hf-op-title__text">
-            <h1 class="hf-op-title__heading">${title}</h1>
-            ${description ? html`<div class="hf-op-title__subtitle">${description}</div>` : html``}
-          </div>
+          ${titleText(title, description)}
           ${isDraft ? html`<span class="hf-op-title__draft" title="${ctx.t(ctx.bundle, 'DraftSaved')}">${ctx.t(ctx.bundle, 'Draft')} <i class="sap-icon--slim-arrow-down" aria-hidden="true"></i></span>` : html``}
           <div class="hf-spacer"></div>
           ${headerActions(layout.headerActions || [], ctx.bundle, ctx.t, { basePath: ctx.basePath, entitySetPath: ctx.entitySetPath, isDraft })}
@@ -255,4 +266,54 @@ function objectPageFragment(layout, row, ctx) {
     </div>`
 }
 
-module.exports = { objectPageFragment, breadcrumbs, facetBlock, facetContent, footerBar }
+/** Visits every leaf (non-`CollectionFacet`) facet of the header and body, in render order. */
+function eachLeaf(facets, fn) {
+  for (const facet of facets || []) {
+    if (facet.kind === 'CollectionFacet') eachLeaf(facet.facets, fn)
+    else fn(facet)
+  }
+}
+
+/** The DOM updates a `Common.SideEffects` target list asks for (§4.2.1): one `{target, html, swap}`
+ *  per rendered occurrence of a target property (a form field, a dataPoint/contact/address block, the
+ *  title), one per targeted table section, or the whole page for the `''`/`'*'` wildcard. The engine
+ *  wraps each as an `<hx-partial>`. `properties` hold OData paths, `entities` navigation names. */
+function sideEffectParts(layout, row, ctx, { properties = [], entities = [], all = false } = {}) {
+  const isDraft = row.IsActiveEntity === false
+  const fullCtx = { ...ctx, isDraft }
+  if (all) return [{ target: '#' + ids.opPage(), html: objectPageFragment(layout, row, ctx), swap: 'outerMorph' }]
+
+  const props = new Set(properties)
+  const parts = []
+  const header = layout.header || {}
+  if ([header.title, header.description].some(expr => pathsOf(expr).some(p => props.has(p)))) {
+    const title = evaluate(header.title?.Value, row) ?? header.typeName ?? ''
+    parts.push({ target: '#' + ids.opTitle(), html: titleText(title, evaluate(header.description?.Value, row)), swap: 'outerMorph' })
+  }
+  eachLeaf([...(layout.headerFacets || []), ...(layout.sections || [])], facet => {
+    if (facet.hidden && evaluate(facet.hidden, row) === true) return
+    const content = facet.content
+    if (!content) return
+    if (content.kind === 'form') {
+      for (const col of content.fields) {
+        const field = col.field
+        if (!field || !(props.has(field.path) || pathsOf(col).some(p => props.has(p)))) continue
+        parts.push({
+          target: '#' + ids.opField(facet.id, field.path), swap: 'outerMorph',
+          html: formField(col, row, { facetId: facet.id, isDraft, basePath: ctx.basePath, entitySetPath: ctx.entitySetPath, valueLists: ctx.valueLists })
+        })
+      }
+    } else if (content.kind === 'dataPoint' || content.kind === 'contact' || content.kind === 'address') {
+      const expr = content.dataPoint || content.contact || content.address
+      if (pathsOf(expr).some(p => props.has(p))) {
+        const id = ids.opField(facet.id, 'content')
+        parts.push({ target: '#' + id, html: valueBlock(facet, row, id), swap: 'outerMorph' })
+      }
+    } else if (content.kind === 'table' && entities.includes(content.nav)) {
+      parts.push({ target: '#' + ids.opSection(facet.id), html: facetBlock(facet, row, fullCtx, { asSection: true }), swap: 'outerMorph' })
+    }
+  })
+  return parts
+}
+
+module.exports = { objectPageFragment, breadcrumbs, facetBlock, facetContent, footerBar, sideEffectParts }

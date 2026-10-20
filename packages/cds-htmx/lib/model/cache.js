@@ -4,15 +4,28 @@ const { buildListReport } = require('./list-report')
 const { buildObjectPage } = require('./object-page')
 const i18n = require('../i18n')
 
-/** Per-`cds.model` cache of the layered `AnnotationStore` and the `LRLayout`/`OPLayout` built
- *  from it (§3.1/§3.2: "cache per `cds.model` instance and invalidate on `cds watch` reload").
- *  Keying on the model object itself means a `cds watch` reload -- a brand-new model instance --
- *  invalidates everything for free, with no explicit eviction logic needed. */
-const storeCache = new WeakMap() // model -> Map(`${service}:${locale}` -> AnnotationStore)
+/** Caches for the layered `AnnotationStore` and the `LRLayout`/`OPLayout` built from it
+ *  (§3.1/§3.2: "cache per `cds.model` instance and invalidate on `cds watch` reload"). Keying on
+ *  the model object itself means a `cds watch` reload -- a brand-new model instance --
+ *  invalidates everything for free, with no explicit eviction logic needed.
+ *
+ *  Requests without an app share one set of caches (the `app/` folder scan). A request for a
+ *  pulled app (design doc §2) uses caches that live ON that `App` instance, so a new app version
+ *  starts clean and an evicted one takes its caches with it. */
+const sharedCaches = new WeakMap() // model -> { stores, layouts }
 const manifestCache = new Map() // `${appRoot}:${servicePath}` -> scanService() result
-const layoutCache = new WeakMap() // model -> Map(`${kind}:${entityType}:${locale}` -> layout)
 
-function manifestScanFor(appRoot, servicePath) {
+function cachesFor(model, app) {
+  const holder = app ? app.caches : sharedCaches
+  let caches = holder.get(model)
+  if (!caches) holder.set(model, caches = { stores: new Map(), layouts: new Map() })
+  return caches
+}
+
+/** Page settings (`ListReport`/`ObjectPage` routing-target settings) for a service: from the app
+ *  when one is given, otherwise from every FE manifest in the `app/` folder. */
+function manifestScanFor(appRoot, servicePath, app) {
+  if (app) return app.scanFor(servicePath)
   if (!appRoot) return { annotationFiles: [], listReports: {}, objectPages: {} }
   const key = `${appRoot}:${servicePath}`
   let scan = manifestCache.get(key)
@@ -20,49 +33,53 @@ function manifestScanFor(appRoot, servicePath) {
   return scan
 }
 
-function storeFor(model, service, servicePath, { appRoot, locale } = {}) {
-  let perModel = storeCache.get(model)
-  if (!perModel) storeCache.set(model, perModel = new Map())
+function storeFor(model, service, servicePath, { appRoot, locale, app } = {}) {
+  const { stores } = cachesFor(model, app)
   const key = `${service}:${locale || ''}`
-  let store = perModel.get(key)
-  if (!store) perModel.set(key, store = build(model, service, servicePath, { appRoot, locale }))
+  let store = stores.get(key)
+  if (!store) stores.set(key, store = build(model, service, servicePath, { appRoot, locale, app }))
   return store
 }
 
-function layoutsFor(model) {
-  let perModel = layoutCache.get(model)
-  if (!perModel) layoutCache.set(model, perModel = new Map())
-  return perModel
+/** UI texts for a request: the plugin chrome and the CDS model's bundle, with the app's own
+ *  texts (if any) on top. */
+function bundleFor({ appRoot, locale, app } = {}) {
+  const base = i18n.bundleFor(appRoot, locale)
+  if (!app) return base
+  const key = locale || ''
+  let merged = app.mergedBundles.get(key)
+  if (!merged) app.mergedBundles.set(key, merged = { ...base, ...app.bundle(locale) })
+  return merged
 }
 
 /** `entityType` is the full `$Annotations`-style type (`CatalogService.Books`); `contextPath`
  *  is the FE-manifest-style lookup key for that entity's page settings (`/Books`, `/Books/chapters`). */
-function listReportFor(model, service, servicePath, entityType, contextPath, { appRoot, locale } = {}) {
-  const layouts = layoutsFor(model)
+function listReportFor(model, service, servicePath, entityType, contextPath, { appRoot, locale, app } = {}) {
+  const { layouts } = cachesFor(model, app)
   const key = `LR:${entityType}:${locale || ''}`
   let layout = layouts.get(key)
   if (!layout) {
-    const store = storeFor(model, service, servicePath, { appRoot, locale })
-    const scan = manifestScanFor(appRoot, servicePath)
+    const store = storeFor(model, service, servicePath, { appRoot, locale, app })
+    const scan = manifestScanFor(appRoot, servicePath, app)
     const built = buildListReport(store, entityType, { pageSettings: scan.listReports[contextPath] })
-    layout = i18n.translate(built, i18n.bundleFor(appRoot, locale))
+    layout = i18n.translate(built, bundleFor({ appRoot, locale, app }))
     layouts.set(key, layout)
   }
   return layout
 }
 
-function objectPageFor(model, service, servicePath, entityType, contextPath, { appRoot, locale } = {}) {
-  const layouts = layoutsFor(model)
+function objectPageFor(model, service, servicePath, entityType, contextPath, { appRoot, locale, app } = {}) {
+  const { layouts } = cachesFor(model, app)
   const key = `OP:${entityType}:${locale || ''}`
   let layout = layouts.get(key)
   if (!layout) {
-    const store = storeFor(model, service, servicePath, { appRoot, locale })
-    const scan = manifestScanFor(appRoot, servicePath)
+    const store = storeFor(model, service, servicePath, { appRoot, locale, app })
+    const scan = manifestScanFor(appRoot, servicePath, app)
     const built = buildObjectPage(model, store, entityType, { pageSettings: scan.objectPages[contextPath] })
-    layout = i18n.translate(built, i18n.bundleFor(appRoot, locale))
+    layout = i18n.translate(built, bundleFor({ appRoot, locale, app }))
     layouts.set(key, layout)
   }
   return layout
 }
 
-module.exports = { storeFor, manifestScanFor, listReportFor, objectPageFor }
+module.exports = { storeFor, manifestScanFor, listReportFor, objectPageFor, bundleFor }

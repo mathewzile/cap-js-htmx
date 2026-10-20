@@ -9,11 +9,13 @@ const DEFAULTS = {
   assets: 'local',
   sse: { heartbeat: 15000 },
   liveListReport: true,
-  requireHxRequestForMutations: true
+  requireHxRequestForMutations: true,
+  apps: { sources: [{ kind: 'local' }], allow: ['*'], ttl: 60000, refetchInterval: 5000, localRecheck: 1000, maxApps: 50, maxBundleBytes: 2097152, fetchTimeout: 5000 }
 }
 
 function config() {
-  return { ...DEFAULTS, ...cds.env.htmx, sse: { ...DEFAULTS.sse, ...cds.env.htmx?.sse } }
+  const env = cds.env.htmx
+  return { ...DEFAULTS, ...env, sse: { ...DEFAULTS.sse, ...env?.sse }, apps: { ...DEFAULTS.apps, ...env?.apps } }
 }
 
 /** The project's `app/` folder (manifest.json / annotation.xml / `_i18n` live here, §3.1/§3.2b),
