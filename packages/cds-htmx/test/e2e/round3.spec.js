@@ -125,6 +125,53 @@ test.describe('List Report', () => {
   })
 })
 
+test.describe('table details', () => {
+  test('the semantic key column is bold and section tables keep their column widths', async ({ page }) => {
+    await page.setViewportSize({ width: 1800, height: 900 })
+    await page.goto('/htmx/catalog/Books')
+    const weight = await page.locator('#lr-table-body tr').first().locator('td.hf-col-0').evaluate(td => getComputedStyle(td).fontWeight)
+    expect(Number(weight)).toBeGreaterThanOrEqual(600)
+    const other = await page.locator('#lr-table-body tr').first().locator('td.hf-col-2').evaluate(td => getComputedStyle(td).fontWeight)
+    expect(Number(other)).toBeLessThan(600)
+    await page.goto(ACTIVE)
+    const section = page.locator('.hf-section--table').first()
+    const table = await section.locator('table.hf-table').boundingBox()
+    const sectionBox = await section.boundingBox()
+    expect(table.width).toBeLessThan(sectionBox.width - 100)
+  })
+
+  test('View Settings can group the List Report by a column', async ({ page }) => {
+    await page.goto('/htmx/catalog/Books')
+    await page.locator('[data-hf-action=settings]').click()
+    await page.locator('.hf-dialog__tab', { hasText: 'Group' }).click()
+    await page.locator('.hf-dialog__panel:not([hidden]) select').selectOption({ label: 'Author' })
+    await page.getByRole('button', { name: 'OK' }).click()
+    await expect(page.locator('tr.hf-group-row')).toHaveCount(4) // 4 authors in 5 books
+    await expect(page.locator('tr.hf-group-row').first()).toContainText('Author: ')
+    await page.reload()
+    await expect(page.locator('tr.hf-group-row')).toHaveCount(4)
+    await page.locator('[data-hf-action=settings]').click()
+    await page.getByRole('button', { name: 'Reset' }).click()
+    await page.getByRole('button', { name: 'OK' }).click()
+    await expect(page.locator('tr.hf-group-row')).toHaveCount(0)
+  })
+
+  test('Define Conditions offers between/comparison and the value help can show column filters', async ({ page }) => {
+    await page.goto('/htmx/catalog/Books')
+    await page.locator('[data-hf-filter=stockStatus] [data-hf-action=conditions]').click()
+    await expect(page.locator('.hf-dialog select option')).toHaveCount(10)
+    await page.getByRole('button', { name: 'Cancel' }).click()
+
+    await page.locator('[data-hf-filter=author_ID] .hf-vh-open').click()
+    const dialog = page.locator('.hf-dialog--value-help')
+    await expect(dialog.locator('.hf-vh-row')).toHaveCount(4)
+    await dialog.getByRole('button', { name: 'Show Filters' }).click()
+    await dialog.locator('input[name="c.name"]').fill('Poe')
+    await dialog.getByRole('button', { name: 'Go', exact: true }).first().click()
+    await expect(dialog.locator('.hf-vh-row')).toHaveCount(1)
+  })
+})
+
 test.describe('the event stream is opened on demand', () => {
   const streams = page => page.evaluate(() => !!document.getElementById('sse'))
 

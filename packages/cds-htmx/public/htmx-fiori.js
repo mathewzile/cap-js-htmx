@@ -352,6 +352,24 @@ document.addEventListener('keydown', e => {
   }
 }, true)
 
+// "Show Filters" in the value help reveals one filter input per column
+document.addEventListener('click', e => {
+  const toggle = e.target.closest('[data-hf-vh-filters]')
+  if (!toggle) return
+  const filters = toggle.closest('form').querySelector('.hf-vh__filters')
+  filters.hidden = !filters.hidden
+  toggle.textContent = filters.hidden ? toggle.dataset.show : toggle.dataset.hide
+  toggle.setAttribute('aria-expanded', String(!filters.hidden))
+})
+
+// a suggestion popup that would run off the right edge opens towards the left instead
+document.addEventListener('htmx:after:swap', () => {
+  for (const box of document.querySelectorAll('.hf-suggest:not([hidden])')) {
+    box.style.left = ''; box.style.right = ''
+    if (box.getBoundingClientRect().right > window.innerWidth - 8) { box.style.left = 'auto'; box.style.right = '0' }
+  }
+})
+
 // a freshly opened dialog puts the cursor in its search field
 document.addEventListener('htmx:after:swap', () => document.querySelector('.hf-overlay[data-hf-dialog] [data-hf-autofocus]')?.focus())
 

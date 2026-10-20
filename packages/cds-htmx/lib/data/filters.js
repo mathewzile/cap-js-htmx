@@ -66,7 +66,9 @@ function parseFilters(query, layout) {
 
 /** The "Define Conditions" dialog and typing write FE's condition syntax into the field: `a;b` (any of),
  *  `*a*` contains, `a*` starts with, `*a` ends with, `!a` not equal. A plain value stays a plain equality. */
-const isCondition = v => /[;*]/.test(v) || v.startsWith('!')
+const isCondition = v => /[;*<>]|\.\.\./.test(v) || v.startsWith('!')
+const COMPARE = /^(<=|>=|<|>)(.+)$/
+const COMPARE_OP = { '<': '<', '<=': '<=', '>': '>', '>=': '>=' }
 
 function conditionsToWhere(field, tokens) {
   const column = ref(field.cqlPath)
@@ -74,6 +76,10 @@ function conditionsToWhere(field, tokens) {
   const excluded = []
   for (const token of tokens) {
     if (token.startsWith('!')) { excluded.push(token.slice(1)); continue }
+    const compare = COMPARE.exec(token)
+    if (compare) { included.push([column, COMPARE_OP[compare[1]], val(coerce(compare[2]))]); continue }
+    const between = /^(.+)\.\.\.(.+)$/.exec(token) // `a...b`
+    if (between) { included.push([{ xpr: [column, '>=', val(coerce(between[1])), 'and', column, '<=', val(coerce(between[2]))] }]); continue }
     const starts = token.startsWith('*')
     const ends = token.endsWith('*') && token.length > 1
     const text = token.replace(/^\*/, '').replace(/\*$/, '')

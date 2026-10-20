@@ -53,7 +53,7 @@ function valueHelpSuggest(columns, rows, { valueProp, t }) {
     <button type="button" class="hf-suggest__more" data-hf-show-all>${t('ShowAllItems')}</button>`
 }
 
-function valueHelpDialog(field, columns, rows, { basePath, entitySetPath, valueProp, search, searchSupported, t, target }) {
+function valueHelpDialog(field, columns, rows, { basePath, entitySetPath, valueProp, search, searchSupported, t, target, filters }) {
   const url = `${basePath}/${entitySetPath}/$vh/${field.path}?target=${encodeURIComponent(target ?? field.path)}`
   return html`
     <div class="hf-overlay" data-hf-dialog>
@@ -67,6 +67,9 @@ function valueHelpDialog(field, columns, rows, { basePath, entitySetPath, valueP
               <span class="hf-input-group__addon"><button type="submit" class="fd-button fd-button--compact fd-button--transparent" aria-label="${t('Go')}"><i class="sap-icon--search" aria-hidden="true"></i></button></span>
             </div>
             <button type="submit" class="fd-button fd-button--compact">${t('Go')}</button>
+            <button type="button" class="hf-dialog__link" data-hf-vh-filters data-show="${t('ShowFilters')}" data-hide="${t('HideFilters')}" aria-expanded="false">${t('ShowFilters')}</button>
+            <div class="hf-vh__filters" hidden>${columns.map(col => html`
+              <label class="fd-form-label">${col.label}<input type="text" name="c.${col.prop}" class="fd-input" value="${filters?.[col.prop] ?? ''}" autocomplete="off"></label>`)}</div>
           </form>` : html``}
           <div id="vh-results" class="hf-vh__results" data-value-prop="${valueProp}">${valueHelpResults(columns, rows, { valueProp, t })}</div>
         </div>

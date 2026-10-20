@@ -576,8 +576,14 @@ class HtmxAdapter extends HttpAdapter {
     let q = SELECT.from(collectionPath).columns(props)
     if (search && searchSupported) q = q.search(search)
     const limit = suggest ? 8 : 200
+    // per-column filters of the dialog ("Show Filters"): `c.<column>` contains, columns whitelisted from the value list
+    const columnFilters = {}
+    for (const prop of props) {
+      const v = req.query[`c.${prop}`]
+      if (typeof v === 'string' && v.trim()) { columnFilters[prop] = v.trim(); q = q.where(`${prop} like`, `%${v.trim()}%`) }
+    }
     let rows = await tx.run(q.limit(limit))
-    if (search && searchSupported) {
+    if (search && searchSupported && !Object.keys(columnFilters).length) {
       // `$search` only covers the text columns; what is typed is often the key itself (a UUID is not searched)
       try {
         const byKey = await tx.run(SELECT.from(collectionPath).columns(props).where(`${valueProp} like`, `%${search}%`).limit(limit))
@@ -594,7 +600,7 @@ class HtmxAdapter extends HttpAdapter {
       return res.type('html').send(String(valueHelpRender.valueHelpResults(columns, rows, { valueProp, t })))
     }
     const entitySetPath = keyRaw ? `${set}(${keyRaw})` : set
-    res.type('html').send(String(valueHelpRender.valueHelpDialog({ ...field, label: labelOf(field.label) }, columns, rows, { basePath: this.basePath(req), entitySetPath, valueProp, search, searchSupported, t, target })))
+    res.type('html').send(String(valueHelpRender.valueHelpDialog({ ...field, label: labelOf(field.label) }, columns, rows, { basePath: this.basePath(req), entitySetPath, valueProp, search, searchSupported, t, target, filters: columnFilters })))
   }
 
   /** `POST /:Set/$action/:name` (§routes Phase 5d): Invoke a bound action and re-render the OP with the result. */

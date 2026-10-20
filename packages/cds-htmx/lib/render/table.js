@@ -128,7 +128,7 @@ function editCell(col, row, { rowPath, rowKey, cls, numeric }) {
 }
 
 function dataCell(col, row, { bundle, t, isSemanticKey, numeric, index, edit, rowKey } = {}) {
-  const cls = `fd-table__cell hf-col-${index}${numeric ? ' hf-cell--end' : ''}`
+  const cls = `fd-table__cell hf-col-${index}${numeric ? ' hf-cell--end' : ''}${isSemanticKey ? ' hf-semantic-key' : ''}`
   if (col.hidden && evaluate(col.hidden, row) === true) return html`<td class="${cls}"></td>`
   if (col.kind === 'UI.DataFieldForAction' || col.kind === 'UI.DataFieldForAnnotation') {
     return html`<td class="${cls}"></td>` // toolbar/inline actions and DataPoint/Chart cells: Phase 4+ (object page) territory for the rendering, revisited for inline table use later

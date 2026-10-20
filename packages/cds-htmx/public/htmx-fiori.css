@@ -363,6 +363,10 @@ body {
 
 /* The List Report's table is as wide as its columns (FE gives each column a width from its type and
  * leaves the rest of the card empty) instead of stretching to the page. Section tables fill their section. */
+.htmx-fiori .hf-table td.hf-semantic-key { font-family: var(--sapFontBoldFamily, '72-Bold', '72', Arial, sans-serif); font-weight: 700; }
+.htmx-fiori .hf-section--table .hf-table { width: auto; min-width: 0; }
+.htmx-fiori .hf-section--table .hf-table thead .hf-th { min-width: 12rem; }
+.htmx-fiori .hf-section--table .hf-table thead .hf-th.hf-cell--end { min-width: 7rem; }
 .htmx-fiori .hf-page--lr .hf-table-card { background: transparent; }
 .htmx-fiori .hf-page--lr .hf-table { width: auto; min-width: 0; }
 .htmx-fiori .hf-page--lr .hf-table thead .hf-th { min-width: 12rem; }

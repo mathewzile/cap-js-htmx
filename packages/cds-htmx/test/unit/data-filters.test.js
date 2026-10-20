@@ -33,6 +33,12 @@ test('parseFilters() understands the condition syntax of the Define Conditions d
   assert.deepEqual(parseFilters({ 'f.genre_ID': 'plain' }, layout), [R('genre_ID'), '=', V('plain')])
 })
 
+test('parseFilters() understands comparison and between conditions', () => {
+  assert.deepEqual(parseFilters({ 'f.stock': '>=5' }, layout), [R('stock'), '>=', V(5)])
+  assert.deepEqual(parseFilters({ 'f.stock': '<10' }, layout), [R('stock'), '<', V(10)])
+  assert.deepEqual(parseFilters({ 'f.stock': '5...10' }, layout), [{ xpr: [R('stock'), '>=', V(5), 'and', R('stock'), '<=', V(10)] }])
+})
+
 test('parseFilters() supports range-operator suffixes (.ge/.le/.gt/.lt/.ne)', () => {
   assert.deepEqual(parseFilters({ 'f.stock.ge': '5' }, layout), [R('stock'), '>=', V(5)])
   assert.deepEqual(parseFilters({ 'f.stock.le': '20' }, layout), [R('stock'), '<=', V(20)])

@@ -86,11 +86,32 @@
   const tableOf = container => container.querySelector('table.hf-table')
   const hiddenCols = container => store.get('view:' + container.dataset.hfView)?.hidden ?? []
 
+  const groupOf = container => store.get('view:' + container.dataset.hfView)?.group ?? null
+
   function applyView(container) {
     const hidden = new Set(hiddenCols(container))
     for (const cell of container.querySelectorAll('th, td')) {
       const i = colIndex(cell)
       if (i != null) cell.hidden = hidden.has(i)
+    }
+    applyGroups(container)
+  }
+
+  /** A header row ("<column>: <value>") before each run of rows with the same value in the grouping column. */
+  function applyGroups(container) {
+    const body = container.querySelector('tbody')
+    if (!body) return
+    body.querySelectorAll('tr.hf-group-row').forEach(r => r.remove())
+    const group = groupOf(container)
+    if (group == null) return
+    const label = container.querySelector(`thead th.hf-col-${group}`)?.dataset.hfLabel ?? ''
+    let last
+    for (const row of [...body.querySelectorAll(':scope > tr:not(.hf-table__nodata)')]) {
+      const value = row.querySelector(`td.hf-col-${group}`)?.textContent.replace(/\s+/g, ' ').trim() ?? ''
+      if (value === last) continue
+      last = value
+      const header = el('tr', { class: 'hf-group-row' }, el('td', { colspan: row.children.length, text: `${label}: ${value || '–'}` }))
+      row.before(header)
     }
   }
   const applyViews = () => document.querySelectorAll('[data-hf-view]').forEach(applyView)
@@ -151,6 +172,14 @@
       setDirection(direction)
       tabs.push({ label: T('Sort'), content: el('div', {}, el('div', { class: 'hf-dialog__sort' }, sortSelect, el('span', { class: 'hf-segmented' }, asc, desc), dirLabel)) })
     }
+    // Group tab: rows are ordered by the column and get a header row per value (List Report)
+    let groupSelect
+    const group = groupOf(container)
+    if (lr && sortable.length) {
+      groupSelect = el('select', { class: 'fd-select', 'aria-label': T('GroupBy') }, el('option', { value: '', text: T('NoGrouping') }),
+        sortable.map(th => el('option', { value: colIndex(th), text: th.dataset.hfLabel || th.textContent.trim(), selected: colIndex(th) === group })))
+      tabs.push({ label: T('Group'), content: el('div', {}, el('div', { class: 'hf-dialog__sort' }, el('label', { text: T('GroupBy') }), groupSelect)) })
+    }
     const current = () => table.querySelector('thead th[aria-sort]')
     const dialog = openDialog({
       title: T('ViewSettings'),
@@ -159,20 +188,28 @@
         for (const { row, box } of items) { box.checked = true; row.classList.add('is-selected') }
         refresh()
         if (sortSelect) sortSelect.value = ''
+        if (groupSelect) groupSelect.value = ''
       } },
       buttons: [
         { label: T('OK'), action() {
           const off = items.filter(i => !i.box.checked).map(i => Number(i.box.dataset.col))
-          if (off.length) store.set('view:' + container.dataset.hfView, { hidden: off }); else store.remove('view:' + container.dataset.hfView)
+          const groupIndex = groupSelect && groupSelect.value !== '' ? Number(groupSelect.value) : null
+          const state = {}
+          if (off.length) state.hidden = off
+          if (groupIndex != null) state.group = groupIndex
+          if (Object.keys(state).length) store.set('view:' + container.dataset.hfView, state); else store.remove('view:' + container.dataset.hfView)
           applyView(container)
-          if (!sortSelect || !sortSelect.value) return
-          const same = sortSelect.value === (current()?.dataset.hfSort ?? '') && direction === (current()?.getAttribute('aria-sort') === 'descending' ? 'desc' : 'asc')
-          if (!same) sortList(lr, `${sortSelect.value}${direction === 'desc' ? ' desc' : ''}`)
+          const groupTh = groupIndex != null ? sortable.find(th => colIndex(th) === groupIndex) : null
+          const sortTerm = sortSelect?.value ? `${sortSelect.value}${direction === 'desc' ? ' desc' : ''}` : ''
+          const terms = [groupTh?.dataset.hfSort, sortTerm].filter(Boolean)
+          if (!terms.length) return
+          const same = !groupTh && sortSelect.value === (current()?.dataset.hfSort ?? '') && direction === (current()?.getAttribute('aria-sort') === 'descending' ? 'desc' : 'asc')
+          if (!same && (groupTh || group != null || sortSelect?.value)) sortList(lr, terms.join(','))
         } },
         { label: T('Cancel') }
       ]
     })
-    if (hidden.size) dialog.markChanged() // something differs from the defaults, so "Reset" is useful
+    if (hidden.size || group != null) dialog.markChanged() // something differs from the defaults, so "Reset" is useful
   }
 
   /** The List Report's own `$table` request (same URL the column headers use), with the filter form's values. */
@@ -365,16 +402,20 @@
 
   // ---------------------------------------------------------------- Define Conditions (free-text filter fields)
   // The field holds FE's condition syntax: `a;b` any of, `*a*` contains, `a*` starts with, `*a` ends with, `!a` not equal.
-  const OPERATORS = [['eq', 'EqualTo'], ['ne', 'NotEqualTo'], ['co', 'Contains'], ['sw', 'StartsWith'], ['ew', 'EndsWith']]
+  const OPERATORS = [['eq', 'EqualTo'], ['ne', 'NotEqualTo'], ['co', 'Contains'], ['sw', 'StartsWith'], ['ew', 'EndsWith'],
+    ['bt', 'Between'], ['gt', 'GreaterThan'], ['ge', 'GreaterOrEqual'], ['lt', 'LessThan'], ['le', 'LessOrEqual']]
   function parseConditions(text) {
     return text.split(';').filter(Boolean).map(token => {
       if (token.startsWith('!')) return { op: 'ne', value: token.slice(1) }
+      const compare = /^(<=|>=|<|>)(.+)$/.exec(token)
+      if (compare) return { op: { '<': 'lt', '<=': 'le', '>': 'gt', '>=': 'ge' }[compare[1]], value: compare[2] }
+      if (token.includes('...')) return { op: 'bt', value: token }
       const starts = token.startsWith('*'), ends = token.length > 1 && token.endsWith('*')
       const value = token.replace(/^\*/, '').replace(/\*$/, '')
       return { op: starts && ends ? 'co' : ends ? 'sw' : starts ? 'ew' : 'eq', value }
     })
   }
-  const formatCondition = ({ op, value }) => ({ eq: value, ne: `!${value}`, co: `*${value}*`, sw: `${value}*`, ew: `*${value}` })[op]
+  const formatCondition = ({ op, value }) => ({ eq: value, ne: `!${value}`, co: `*${value}*`, sw: `${value}*`, ew: `*${value}`, bt: value, gt: `>${value}`, ge: `>=${value}`, lt: `<${value}`, le: `<=${value}` })[op]
 
   function openConditions(button) {
     const filter = button.closest('[data-hf-filter]')

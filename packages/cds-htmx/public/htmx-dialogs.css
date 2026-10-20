@@ -112,7 +112,10 @@
 .hf-dialog--value-help .hf-dialog__body { padding: 1.1875rem 2rem 0; overflow: hidden; }
 .hf-vh__search { display: flex; align-items: center; gap: .625rem; flex: 0 0 auto; margin-bottom: 1.25rem; }
 .hf-vh__search .hf-input-group { flex: 0 1 31.75rem; }
-.hf-vh__search { flex-wrap: nowrap; }
+.hf-vh__search { flex-wrap: wrap; }
+.hf-vh__filters { flex: 0 0 100%; display: flex; gap: 1rem; flex-wrap: wrap; }
+.hf-vh__filters[hidden] { display: none; }
+.hf-vh__filters label { display: flex; flex-direction: column; gap: .25rem; flex: 1 1 10rem; }
 .hf-vh__results { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .hf-vh__count { display: flex; align-items: center; justify-content: space-between; flex: 0 0 auto; height: 2.25rem; margin: 0; font-family: var(--sapFontBoldFamily, '72-Bold', '72', Arial, sans-serif); font-size: .875rem; font-weight: 700; }
 /* The table keeps its natural width and the area below it is ruled like empty rows, as in FE */
@@ -130,6 +133,9 @@
 .hf-vh-row { cursor: pointer; }
 .hf-vh-row:hover { background: var(--sapList_Hover_Background, #eaecee); }
 .hf-vh-row:focus-visible { outline: 2px solid var(--sapContent_FocusColor, #0032a5); outline-offset: -2px; }
+
+/* group header rows in the table */
+.hf-table tr.hf-group-row td { height: 2rem; padding: 0 1rem; background: var(--sapList_GroupHeaderBackground, #f5f6f7); border-bottom: 1px solid var(--sapList_BorderColor, #e5e5e5); font-family: var(--sapFontBoldFamily, '72-Bold', '72', Arial, sans-serif); font-weight: 700; }
 
 /* ---------- Define Conditions ---------- */
 .hf-conditions-form { flex: 1 1 auto; padding: 1.1875rem 2rem 1rem; gap: .5rem; }
