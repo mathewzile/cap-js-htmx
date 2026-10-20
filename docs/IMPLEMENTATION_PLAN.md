@@ -392,7 +392,7 @@ Side effects are read from the AnnotationStore. That includes CAP-generated ones
 
 ## 9. Config (`cds.htmx`, defaults in the plugin package.json)
 `theme: "sap_horizon"`, `shell: true`, `appTitle: null` (TypeNamePlural), `growingThreshold: 20`, `assets: "local" | "cdn"`, `sse: { heartbeat: 15000 }`, `liveListReport: true`, `requireHxRequestForMutations: true`.
-From Phase 7: `apps: { sources: [{ kind: "local" }], allow: ["*"], ttl: 60000, maxBundleBytes: 2097152, fetchTimeout: 5000 }`, `extensions: []`, `assetsVersioned: true`, `stickySessions: true` (see design doc §9).
+From Phase 7: `apps: { sources: [{ kind: "local" }], allow: ["*"], ttl: 60000, refetchInterval: 5000, localRecheck: 1000, maxApps: 50, maxBundleBytes: 2097152, fetchTimeout: 5000 }`, `extensions: []`, `assetsVersioned: true`, `stickySessions: true` (see design doc §9).
 
 ## Verification (end-to-end)
 1. `npm install` (root, workspaces) → `npm run watch` (`cds watch`).

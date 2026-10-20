@@ -73,9 +73,10 @@ function publish(client, parts) {
 /** Re-reads one object and publishes the parts `targets` asks for to one client. `tx` decides
  *  the data visibility: the request's own transaction (field change) or one opened for the
  *  client's user (server-triggered events). */
-async function pushObjectPage(tx, client, { service, servicePath, entityType, keys, contextPath, basePath, entitySetPath }, targets) {
+async function pushObjectPage(tx, client, view, targets) {
+  const { service, servicePath, entityType, keys, contextPath, basePath, entitySetPath } = view
   const locale = client.locale
-  const page = await loadObjectPage(tx, { service, servicePath, entityType, keys, contextPath, appRoot: appRoot(), locale })
+  const page = await loadObjectPage(tx, { service, servicePath, entityType, keys, contextPath, appRoot: appRoot(), locale, app: view.app })
   if (!page) return
   const ctx = {
     basePath, entitySetPath, bundle: page.bundle, t: i18n.t,
@@ -93,7 +94,7 @@ async function pushObjectPage(tx, client, { service, servicePath, entityType, ke
 async function onChange(tx, view, { clientId, properties = [], navigations = [] }) {
   const client = channels.get(clientId)
   if (!client || view.keys.IsActiveEntity !== false) return
-  const store = cache.storeFor(cds.model, view.service, view.servicePath, { appRoot: appRoot(), locale: client.locale })
+  const store = cache.storeFor(cds.model, view.service, view.servicePath, { appRoot: appRoot(), locale: client.locale, app: view.app })
   const index = sideEffectsOf(store, view.entityType)
   const effects = new Set()
   for (const p of properties) for (const e of index.byProperty.get(p) || []) effects.add(e)
@@ -126,7 +127,7 @@ async function onSourceEvent(srv, { entityType, eventName, data }) {
     if (!view || view.entityType !== entityType) continue
     try {
       await srv.tx({ user: client.user, locale: client.locale }, async tx => {
-        const store = cache.storeFor(cds.model, srv.name, odata, { appRoot: appRoot(), locale: client.locale })
+        const store = cache.storeFor(cds.model, srv.name, odata, { appRoot: appRoot(), locale: client.locale, app: view.app })
         const effects = sideEffectsOf(store, entityType).byEvent.get(eventName) || []
         if (view.list) {
           if (!config().liveListReport) return
@@ -145,14 +146,14 @@ async function onSourceEvent(srv, { entityType, eventName, data }) {
 /** Live List Report (beyond FE, §4.2.3): re-reads the one affected row with the table's own
  *  columns and swaps it in place by its stable row id. */
 async function pushListRow(tx, client, { srv, servicePath, entityType, view, keys }) {
-  const layout = cache.listReportFor(cds.model, srv.name, servicePath, entityType, `/${view.set}`, { appRoot: appRoot(), locale: client.locale })
+  const layout = cache.listReportFor(cds.model, srv.name, servicePath, entityType, `/${view.set}`, { appRoot: appRoot(), locale: client.locale, app: view.app })
   const row = await tx.run(SELECT.one.from(entityType).columns(selectColumns(cds.model, entityType, layout)).where(keys))
   if (!row) return
   const keyNames = keyElements(entityDef(cds.model, entityType)).map(k => k.name)
   const numeric = layout.table.columns.map(col => isNumericColumn(col, [row]))
   publish(client, [{
     target: '#' + rowId(keyNames, row), swap: 'outerMorph',
-    html: rowMarkup(layout, row, { basePath: view.basePath, entitySetPath: view.set, keyNames, bundle: i18n.bundleFor(appRoot(), client.locale), t: i18n.t, numeric, selectable: true })
+    html: rowMarkup(layout, row, { basePath: view.basePath, entitySetPath: view.set, keyNames, bundle: cache.bundleFor({ appRoot: appRoot(), locale: client.locale, app: view.app }), t: i18n.t, numeric, selectable: true })
   }])
 }
 

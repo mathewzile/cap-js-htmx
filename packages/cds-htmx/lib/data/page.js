@@ -1,6 +1,5 @@
 const cds = require('@sap/cds')
 const cache = require('../model/cache')
-const i18n = require('../i18n')
 const queryLib = require('./query')
 const valueListLib = require('./value-list')
 const { keyElements, entityDef } = require('../annotations/edm')
@@ -33,9 +32,9 @@ function collectFormFields(facets, out = []) {
  *  store), the row (with exactly the columns that layout renders), the child rows of every table
  *  section and, in draft mode, the fixed-value options. Shared by the `GET` route and the SSE
  *  side-effects engine, so a pushed re-render sees the same data a reload would (§4.2). */
-async function loadObjectPage(tx, { service, servicePath, entityType, keys, contextPath, appRoot, locale }) {
-  const layout = cache.objectPageFor(cds.model, service, servicePath, entityType, contextPath, { appRoot, locale })
-  const bundle = i18n.bundleFor(appRoot, locale)
+async function loadObjectPage(tx, { service, servicePath, entityType, keys, contextPath, appRoot, locale, app }) {
+  const layout = cache.objectPageFor(cds.model, service, servicePath, entityType, contextPath, { appRoot, locale, app })
+  const bundle = cache.bundleFor({ appRoot, locale, app })
 
   const columns = queryLib.objectPageColumns(cds.model, entityType, layout)
   const row = await tx.run(queryLib.objectPageQuery(entityType, keys, columns))

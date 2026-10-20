@@ -49,10 +49,13 @@ function mergeLayer(base, layer) {
 /** Builds the layered store for one `@htmx` service: the compiled service annotations first,
  *  then (if `appRoot` is given) every local `annotation.xml` an FE app declares against the same
  *  service path, in manifest order — later files win, exactly like FE's own metadata merge. */
-function build(model, service, servicePath, { appRoot, locale } = {}) {
+function build(model, service, servicePath, { appRoot, locale, app } = {}) {
   const merged = {}
   mergeLayer(merged, annotationsOf(model, service, locale))
-  if (appRoot) {
+  if (app) {
+    // A pulled frontend app (design doc §2) replaces the `app/` folder scan: only ITS layers apply
+    for (const layer of app.scanFor(servicePath).layers) mergeLayer(merged, layer)
+  } else if (appRoot) {
     for (const file of scanService(appRoot, servicePath).annotationFiles) {
       mergeLayer(merged, parseAnnotationXmlFile(file).$Annotations)
     }

@@ -162,7 +162,18 @@ mta.yaml                                  # srv + html5 deployer + destination c
 - **10. E2E + visual parity + README** (former Phase 7), also covering shell mode.
 
 ## 9. Config additions (`cds.htmx`)
-`apps: { sources: [{ kind: "local" }], allow: ["*"] (production: explicit list), ttl: 60000, maxBundleBytes: 2097152, fetchTimeout: 5000 }`, `extensions: []`, `assetsVersioned: true`, `stickySessions: true`.
+`apps: { sources: [{ kind: "local" }], allow: ["*"] (production: explicit list), ttl: 60000, refetchInterval: 5000, localRecheck: 1000, maxApps: 50, maxBundleBytes: 2097152, fetchTimeout: 5000 }`, `extensions: []`, `assetsVersioned: true`, `stickySessions: true`.
 
-## 10. Known issue to fix in Phase 7
-`HtmxAdapter.js:301` calls `cache.annotationStoreFor`, but `model/cache.js` only exports `storeFor`, `manifestScanFor`, `listReportFor`, `objectPageFor`. That route (value help) will throw; the cache refactor should fix it and a test should cover it.
+## 10. Phase 7 status (implemented)
+Done: `lib/apps/` (registry, bundle loader, `local` + `destination` providers, `registerSourceKind()` SPI), per-app store/layout/text caches that live on the `App` instance (`model/cache.js`, `annotations/store.js`), `X-Htmx-App` / `X-Htmx-Base` handling in `HtmxAdapter#resolveApp`, fragment-only responses for app requests, `HX-Trigger: hf:appUpdated` on version skew, the channel/view remembering the app. The `annotationStoreFor` bug in the value-help route is fixed and covered by a test.
+
+Behaviour worth knowing:
+- A refresh that fails keeps serving the already loaded app (logged); a first load that fails is cached for 5 s (404 unknown app, 502 bad bundle: wrong id, a file outside the app, too many bytes).
+- `local` sources are re-checked on each request after `localRecheck` ms by comparing the newest file mtime, so `cds watch` users see `annotation.xml` edits without a restart.
+- Locale variants of the app's `i18n` are pulled lazily and once per locale.
+- `destination` needs `@sap-cloud-sdk/http-client` when a BTP destination name is used (not a dependency of the plugin); a plain `url` works without it.
+
+Not done / open:
+- **`html5-repo` provider**: the HTML5 runtime content URL could not be verified offline. Until then use `destination`, or write a provider with `registerSourceKind('html5-repo', factory)`.
+- **SourceEvents declared only in an app's annotation layer** are not registered at startup (listeners come from the service annotations and the `app/` scan). Declare them in the service annotations, or register lazily when an app loads (later).
+- `X-Htmx-Shell: none` is accepted but there is no backend shellbar to hide yet (`#shell` is empty); it becomes relevant with the shell in Phase 8.
