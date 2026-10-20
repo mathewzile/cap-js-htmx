@@ -29,6 +29,13 @@ entity Authors : cuid {
   email       : String(111);
   phone       : String(30);
   books       : Association to many Books on books.author = $self;
+  awards      : Composition of many Awards on awards.author = $self;
+}
+
+entity Awards : cuid {
+  author : Association to Authors;
+  name   : String(111) @mandatory;
+  year   : Integer;
 }
 
 entity Genres : CodeList {

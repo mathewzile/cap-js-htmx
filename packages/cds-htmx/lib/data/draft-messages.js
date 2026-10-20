@@ -65,8 +65,8 @@ const isEmpty = value => value == null || (typeof value === 'string' && value.tr
 /** `HX-Trigger` value that makes the page script update its message list: `set` messages are added
  *  (replacing those of the same path), `clear` paths removed, `reset` replaces everything. Header values
  *  are Latin-1, so non-ASCII is escaped. */
-function triggerHeader({ set = [], clear = [], reset = false }) {
-  return JSON.stringify({ 'hf:messages': { set, clear, reset } }).replace(/[\u0080-￿]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'))
+function triggerHeader({ set = [], clear = [], reset = false, title = null }) {
+  return JSON.stringify({ 'hf:messages': { set, clear, reset }, ...(title != null ? { 'hf:title': title } : {}) }).replace(/[\u0080-￿]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'))
 }
 
 module.exports = { fieldPathOf, fromDraftMessages, fromError, labelled, missingMandatory, triggerHeader, isEmpty }

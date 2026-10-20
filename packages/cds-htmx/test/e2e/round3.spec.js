@@ -125,6 +125,73 @@ test.describe('List Report', () => {
   })
 })
 
+test.describe('gaps', () => {
+  test('the browser tab follows the title while it is edited', async ({ page }) => {
+    await edit(page)
+    await page.locator('[data-hf-field=title] input[name=title]').fill('Tab Title Test')
+    await page.locator('[data-hf-field=title] input[name=title]').blur()
+    await expect.poll(() => page.title()).toContain('Tab Title Test')
+  })
+
+  test('Adapt Filters can add a filter for any property and it filters', async ({ page }) => {
+    await page.goto('/htmx/catalog/Books')
+    await expect(page.locator('[data-hf-filter=price]')).toHaveCount(0)
+    await page.getByRole('button', { name: /Adapt Filters/ }).click()
+    await page.locator('.hf-dialog select').selectOption({ label: 'Price' })
+    await expect(page.locator('.hf-dialog__row', { hasText: 'Price' })).toBeVisible()
+    await page.getByRole('button', { name: 'OK' }).click()
+    const field = page.locator('[data-hf-filter=price] input')
+    await expect(field).toBeVisible()
+    await field.fill('>10')
+    await page.getByRole('button', { name: 'Go' }).click()
+    await expect(page.locator('#lr-table-body tr')).toHaveCount(1) // only Wuthering Heights costs more than 10
+    await page.reload()
+    await expect(page.locator('[data-hf-filter=price]')).toBeVisible() // remembered
+    await page.getByRole('button', { name: /Adapt Filters/ }).click()
+    await page.getByRole('button', { name: 'Reset' }).click()
+    await page.getByRole('button', { name: 'OK' }).click()
+    await expect(page.locator('[data-hf-filter=price]')).toHaveCount(0)
+  })
+})
+
+test.describe('child rows', () => {
+  const POE = "ID='9d703c23-7cf7-4cad-9f2b-0e1e1a8c0003'"
+
+  test('a non-draft composition table: add and remove rows inline, saved with the author', async ({ page, request }) => {
+    await page.goto(`/htmx/catalog/Authors(${POE})`)
+    const section = page.locator('.hf-section--table', { hasText: 'Awards' })
+    await expect(section.locator('tbody tr')).toHaveCount(2)
+    await page.getByRole('button', { name: 'Edit', exact: true }).first().click()
+    await section.getByRole('button', { name: 'Create' }).click()
+    await section.locator('tbody tr').first().locator('input.fd-input').first().fill('E2E Award')
+    await section.locator('tbody tr').first().locator('input.fd-input').nth(1).fill('2020')
+    await expect(section.locator('.hf-section__title')).toContainText('(3)')
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(section.locator('tbody tr')).toHaveCount(3)
+    await expect(section).toContainText('E2E Award')
+
+    // remove it again
+    await page.getByRole('button', { name: 'Edit', exact: true }).first().click()
+    await section.locator('tbody tr', { hasText: '' }).filter({ has: page.locator('input[value="E2E Award"]') }).locator('.hf-checkbox').check()
+    await section.getByRole('button', { name: 'Delete' }).click()
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(section.locator('tbody tr')).toHaveCount(2)
+  })
+
+  test('pasting spreadsheet rows into a draft table creates rows', async ({ page }) => {
+    await edit(page)
+    const section = page.locator('.hf-section--table', { hasText: 'Chapters' })
+    const before = await section.locator('tbody tr').count()
+    await section.locator('thead').click()
+    await page.evaluate(() => {
+      const data = new DataTransfer(); data.setData('text', 'Pasted X\t11\nPasted Y\t22\n')
+      document.querySelector('.hf-section--table thead').dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }))
+    })
+    await expect(section.locator('tbody tr')).toHaveCount(before + 2)
+    await expect(section.locator('input[value="Pasted X"]')).toHaveCount(1)
+  })
+})
+
 test.describe('table details', () => {
   test('the semantic key column is bold and section tables keep their column widths', async ({ page }) => {
     await page.setViewportSize({ width: 1800, height: 900 })

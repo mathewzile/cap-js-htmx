@@ -289,8 +289,35 @@
   const filtersKey = set => 'filters:' + set
   const filterItems = form => [...form.querySelectorAll('.hf-filter[data-hf-filter]')]
 
+  // Filters added through "Add Filter" (properties beyond UI.SelectionFields) are plain text fields with Define Conditions
+  const extrasKey = set => 'extra-filters:' + set
+  const availableFilters = lr => { try { return JSON.parse(lr.querySelector('form.hf-filter-bar')?.dataset.hfAvailable || '[]') } catch { return [] } }
+
+  function extraFilterItem({ path, label }) {
+    const id = `f-${path.replace(/\W/g, '_')}`
+    const input = el('input', { id, name: `f.${path}`, type: 'text', class: 'fd-input', value: '' })
+    const button = el('button', { type: 'button', class: 'fd-button fd-button--compact fd-button--transparent', 'data-hf-action': 'conditions', 'aria-haspopup': 'dialog', 'aria-label': T('DefineConditions') },
+      el('i', { class: 'sap-icon--value-help', 'aria-hidden': 'true' }))
+    return el('div', { class: 'fd-form-item hf-filter hf-filter--extra', 'data-hf-filter': path, 'data-hf-label': label },
+      el('label', { class: 'fd-form-label hf-filter__label', for: id, text: label }),
+      el('div', { class: 'hf-input-group' }, input, el('span', { class: 'hf-input-group__addon' }, button)))
+  }
+
+  function syncExtraFilters(lr) {
+    const form = lr.querySelector('form.hf-filter-bar')
+    if (!form) return
+    const wanted = new Set(store.get(extrasKey(lr.dataset.hfSet)) ?? [])
+    const available = new Map(availableFilters(lr).map(f => [f.path, f]))
+    for (const item of form.querySelectorAll('.hf-filter--extra')) if (!wanted.has(item.dataset.hfFilter)) item.remove()
+    for (const path of wanted) {
+      if (!available.has(path) || form.querySelector(`.hf-filter[data-hf-filter="${CSS.escape(path)}"]`)) continue
+      form.querySelector('.hf-filter-bar__actions').before(extraFilterItem(available.get(path)))
+    }
+  }
+
   function applyFilters() {
     for (const lr of document.querySelectorAll('.hf-page--lr')) {
+      syncExtraFilters(lr)
       const hidden = new Set(store.get(filtersKey(lr.dataset.hfSet)) ?? [])
       for (const item of filterItems(lr)) {
         const off = hidden.has(item.dataset.hfFilter)
@@ -304,23 +331,50 @@
   function openAdaptFilters(lr) {
     const set = lr.dataset.hfSet
     const hidden = new Set(store.get(filtersKey(set)) ?? [])
-    const items = filterItems(lr).map(item => checkRow(item.dataset.hfLabel, !hidden.has(item.dataset.hfFilter), { 'data-path': item.dataset.hfFilter }))
+    const items = filterItems(lr).map(item => checkRow(item.dataset.hfLabel, !hidden.has(item.dataset.hfFilter), { 'data-path': item.dataset.hfFilter, 'data-extra': item.classList.contains('hf-filter--extra') ? '1' : '' }))
+    const list = el('ul', { class: 'hf-dialog__list' }, items.map(i => i.row))
+
+    // "Add Filter": any other property of the entity
+    const present = () => new Set(items.map(i => i.box.dataset.path))
+    const addSelect = el('select', { class: 'fd-select', 'aria-label': T('AddFilter') })
+    const fillAdd = () => {
+      addSelect.replaceChildren(el('option', { value: '', text: T('AddFilter') }),
+        ...availableFilters(lr).filter(f => !present().has(f.path)).map(f => el('option', { value: f.path, text: f.label })))
+    }
+    fillAdd()
+    addSelect.addEventListener('change', () => {
+      const f = availableFilters(lr).find(x => x.path === addSelect.value)
+      if (!f) return
+      const added = checkRow(f.label, true, { 'data-path': f.path, 'data-extra': '1' })
+      items.push(added)
+      list.append(added.row)
+      fillAdd()
+    })
+
     const dialog = openDialog({
       title: T('AdaptFilters'),
       body: el('div', { class: 'hf-dialog__panel' },
         el('h3', { class: 'hf-dialog__subheader', text: T('FilterValuesAndVisibility') }),
-        el('ul', { class: 'hf-dialog__list' }, items.map(i => i.row))),
-      reset: { label: T('Reset'), action() { for (const { row, box } of items) { box.checked = true; row.classList.add('is-selected') } } },
+        list,
+        el('div', { class: 'hf-dialog__bar hf-dialog__bar--add' }, addSelect)),
+      reset: { label: T('Reset'), action() {
+        for (const i of [...items]) {
+          if (i.box.dataset.extra) { i.row.remove(); items.splice(items.indexOf(i), 1) } else { i.box.checked = true; i.row.classList.add('is-selected') }
+        }
+        fillAdd()
+      } },
       buttons: [
         { label: T('OK'), action() {
-          const off = items.filter(i => !i.box.checked).map(i => i.box.dataset.path)
+          const off = items.filter(i => !i.box.checked && !i.box.dataset.extra).map(i => i.box.dataset.path)
           if (off.length) store.set(filtersKey(set), off); else store.remove(filtersKey(set))
+          const extras = items.filter(i => i.box.dataset.extra && i.box.checked).map(i => i.box.dataset.path)
+          if (extras.length) store.set(extrasKey(set), extras); else store.remove(extrasKey(set))
           applyFilters()
         } },
         { label: T('Cancel') }
       ]
     })
-    if (hidden.size) dialog.markChanged()
+    if (hidden.size || items.some(i => i.box.dataset.extra)) dialog.markChanged()
   }
 
   // ---------------------------------------------------------------- saved views ("Standard" menu)
@@ -333,7 +387,9 @@
     return {
       values,
       hiddenFilters: store.get(filtersKey(lr.dataset.hfSet)) ?? [],
-      hiddenCols: hiddenCols(lr.querySelector('[data-hf-view]'))
+      extraFilters: store.get(extrasKey(lr.dataset.hfSet)) ?? [],
+      hiddenCols: hiddenCols(lr.querySelector('[data-hf-view]')),
+      group: groupOf(lr.querySelector('[data-hf-view]'))
     }
   }
 
@@ -341,7 +397,9 @@
     const form = lr.querySelector('form.hf-filter-bar')
     const container = lr.querySelector('[data-hf-view]')
     store.set(filtersKey(lr.dataset.hfSet), state?.hiddenFilters ?? [])
-    store.set('view:' + container.dataset.hfView, { hidden: state?.hiddenCols ?? [] })
+    store.set(extrasKey(lr.dataset.hfSet), state?.extraFilters ?? [])
+    store.set('view:' + container.dataset.hfView, { hidden: state?.hiddenCols ?? [], ...(state?.group != null ? { group: state.group } : {}) })
+    syncExtraFilters(lr) // the added filter fields have to exist before their values are set
     for (const control of form.querySelectorAll('input[name], select[name]')) {
       if (control.type === 'submit') continue
       control.value = state?.values?.[control.name] ?? (control.name === 'f.EditingStatus' ? 'ALL' : '')
@@ -449,8 +507,62 @@
     }).dialog.classList.add('hf-dialog--value-help')
   }
 
+  // ---------------------------------------------------------------- paste rows (section tables of a draft)
+  // Cells copied from a spreadsheet (tab/newline separated) become new rows, one cell per editable visible column.
+  function pasteRows(section, text) {
+    const url = section.querySelector('[data-hf-paste-url]')?.dataset.hfPasteUrl
+    const lines = String(text).replace(/\r/g, '').split('\n')
+    while (lines.length && lines[lines.length - 1] === '') lines.pop()
+    if (!url || !lines.length) return
+    const cols = [...section.querySelectorAll('thead th[data-hf-paste-path]')].filter(th => !th.hidden).map(th => th.dataset.hfPastePath)
+    if (!cols.length) return
+    htmx.ajax('POST', url, { target: '#app', swap: 'innerHTML', values: { cols: JSON.stringify(cols), rows: JSON.stringify(lines.map(l => l.split('\t'))) } })
+  }
+  document.addEventListener('paste', e => {
+    if (e.target.closest?.('input, textarea, select, [contenteditable]')) return // pasting into a cell is a normal paste
+    const section = e.target.closest?.('.hf-section--table') ?? (document.activeElement?.closest?.('.hf-section--table'))
+    if (!section?.querySelector('[data-hf-paste-url]')) return
+    e.preventDefault()
+    pasteRows(section, e.clipboardData?.getData('text') ?? '')
+  })
+
+  // ---------------------------------------------------------------- rows of a composition in a non-draft Object Page
+  // Rows are added/removed in the page only; the object's Save posts what is there and the server replaces the composition.
+  const renumber = section => {
+    const count = section.querySelectorAll('tbody tr[data-hf-row]').length
+    const title = section.querySelector('.hf-section__title')
+    if (title) title.textContent = title.textContent.replace(/\(\d+\)\s*$/, `(${count})`)
+  }
+  document.addEventListener('click', e => {
+    const add = e.target.closest('[data-hf-action=row-add]')
+    const remove = e.target.closest('[data-hf-action=row-remove]')
+    if (!add && !remove) return
+    const section = (add || remove).closest('.hf-section--table')
+    const body = section.querySelector('tbody')
+    if (add) {
+      const template = section.querySelector('template[data-hf-row-template]')
+      body.querySelector('.hf-table__nodata')?.remove()
+      const id = `n${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`
+      const row = template.content.firstElementChild.cloneNode(true)
+      for (const input of row.querySelectorAll('[name]')) input.name = input.name.replace('~__i__.', `~${id}.`)
+      body.prepend(row)
+      row.querySelector('input:not([type=hidden]):not([type=checkbox])')?.focus()
+    } else {
+      body.querySelectorAll('tr[data-hf-row] .hf-checkbox:checked').forEach(box => box.closest('tr').remove())
+      section.querySelectorAll('thead .hf-checkbox').forEach(box => { box.checked = false })
+    }
+    renumber(section)
+    remove?.setAttribute('disabled', '')
+  })
+
   // ---------------------------------------------------------------- wiring
   document.addEventListener('click', e => {
+    const paste = e.target.closest('[data-hf-action=paste]')
+    if (paste) {
+      const section = paste.closest('.hf-section--table')
+      navigator.clipboard?.readText().then(text => pasteRows(section, text)).catch(() => {})
+      return
+    }
     const button = e.target.closest('[data-hf-action]')
     if (!button) return
     const container = button.closest('[data-hf-view]')

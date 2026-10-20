@@ -108,8 +108,11 @@ async function bindingParts(tx, view, { path, source, appRoot: root, locale, app
   const page = await loadObjectPage(tx, { service: view.service, servicePath: view.servicePath, entityType: view.entityType, keys: view.keys, contextPath: view.contextPath, appRoot: root, locale, app, editing: true })
   if (!page) return { parts: [], layout: null, row: null }
   const ctx = { basePath: view.basePath, entitySetPath: view.entitySetPath, bundle: page.bundle, t: i18n.t, valueLists: page.valueLists, children: page.children, trail: [] }
-  const parts = objectPageRender.sideEffectParts(page.layout, page.row, ctx, { properties: [path], exclude: source ? ['#' + source] : [] })
-  return { parts, layout: page.layout, row: page.row }
+  const parts = [
+    ...objectPageRender.sideEffectParts(page.layout, page.row, ctx, { properties: [path], exclude: source ? ['#' + source] : [] }),
+    ...objectPageRender.visibilityParts(page.layout, page.row, ctx, [path])
+  ]
+  return { parts, layout: page.layout, row: page.row, title: objectPageRender.titleIfChanged(page.layout, page.row, ctx, [path]) }
 }
 
 /** A change inside an Object Page in edit mode (§4.2.1): `properties` the user edited and/or

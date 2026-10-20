@@ -61,7 +61,7 @@ function editingStatusField(query, { bundle, t }) {
  *  count via `<hx-partial>`. */
 function filterBar(layout, { basePath, entitySetPath, query, bundle, t, filterOptions = {} }) {
   return html`
-    <form id="${ids.lrFilterBar()}" class="hf-filter-bar"
+    <form id="${ids.lrFilterBar()}" class="hf-filter-bar" data-hf-available="${JSON.stringify((layout.filterBar.available || []).map(f => ({ path: f.path, label: f.label || f.path })))}"
       hx-get="${basePath}/${entitySetPath}/$table" hx-target="#${ids.lrTableBody()}" hx-swap="innerHTML">
       <div class="fd-form-item hf-filter hf-filter--search">
         <label class="fd-form-label hf-filter__label hf-sr-only" for="lr-search">${t(bundle, 'Search')}</label>

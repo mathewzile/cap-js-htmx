@@ -6,7 +6,7 @@ const KEYS = [
   'ViewSettings', 'Columns', 'Sort', 'SortBy', 'Ascending', 'Descending', 'AdaptFilters', 'FilterValuesAndVisibility', 'Reset', 'OK',
   'Cancel', 'Go', 'Search', 'ExportCsv', 'Standard', 'SaveAs', 'VariantName', 'NoSort', 'Show', 'Settings', 'Delete', 'Items', 'HideUnselected',
   'DefineConditions', 'EqualTo', 'NotEqualTo', 'Contains', 'StartsWith', 'EndsWith', 'AddCondition', 'Value', 'NoConditions', 'Conditions',
-  'Between', 'GreaterThan', 'GreaterOrEqual', 'LessThan', 'LessOrEqual', 'GroupBy', 'NoGrouping', 'Group'
+  'Between', 'GreaterThan', 'GreaterOrEqual', 'LessThan', 'LessOrEqual', 'GroupBy', 'NoGrouping', 'Group', 'AddFilter', 'Paste'
 ]
 
 function textsFor(bundle) {

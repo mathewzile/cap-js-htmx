@@ -146,6 +146,40 @@ describe('FE parity: capabilities, direct editing, history, confirmations (round
       expect((await GET(`/odata/v4/catalog/Authors(${keysRaw.replace(/'/g, '')})`)).data.name).to.equal('Parity Renamed')
     })
 
+    test('a composition table is edited inline and saved with the object (rows added, changed and removed)', async () => {
+      const { POST, GET, expect } = api
+      const form = { headers: { ...HX, 'Content-Type': 'application/x-www-form-urlencoded' } }
+      const plain = keysRaw.replace(/'/g, '')
+      const awards = async () => (await GET(`/odata/v4/catalog/Authors(${plain})/awards`)).data.value
+      const FOREIGN = 'a1a1a1a1-0001-4a4a-8a8a-000000000003' // an award of another author
+      const post = fields => POST(`/htmx/catalog/Authors(${keysRaw})/$save`, new URLSearchParams(fields).toString(), form)
+
+      // the edit page has the inputs, the marker, the row template and the buttons
+      const edit = await POST(`/htmx/catalog/Authors(${keysRaw})/$edit`, {}, { headers: HX })
+      expect(edit.data).to.include('name="awards:present"')
+      expect(edit.data).to.include('data-hf-row-template')
+      expect(edit.data).to.include('data-hf-action="row-add"')
+      expect(edit.data).to.match(/name="awards~__i__\.name"/)
+      const display = await GET(`/htmx/catalog/Authors(${keysRaw})`, { headers: HX })
+      expect(display.data).not.to.include('data-hf-row-template')
+
+      await post({ name: 'Parity Renamed', 'awards:present': '1', 'awards~a.name': 'First', 'awards~a.year': '2001', 'awards~b.name': 'Second', 'awards~b.year': '2002' })
+      let rows = await awards()
+      expect(rows.map(r => r.name).sort()).to.deep.equal(['First', 'Second'])
+
+      const first = rows.find(r => r.name === 'First')
+      // change one, drop the other, add one; a posted key of somebody else's row is not adopted
+      await post({ name: 'Parity Renamed', 'awards:present': '1', 'awards~a.ID': first.ID, 'awards~a.name': 'First Renamed', 'awards~a.year': '2001', 'awards~c.ID': FOREIGN, 'awards~c.name': 'Third', 'awards~c.year': '2003' })
+      rows = await awards()
+      expect(rows.map(r => r.name).sort()).to.deep.equal(['First Renamed', 'Third'])
+      expect(rows.find(r => r.name === 'First Renamed').ID).to.equal(first.ID)
+      expect((await GET(`/odata/v4/catalog/Awards(${FOREIGN})`)).data.name).to.equal('Classic of Literature')
+
+      await post({ name: 'Parity Renamed', 'awards:present': '1' }) // every row removed
+      expect(await awards()).to.have.length(0)
+      await post({ name: 'Parity Renamed' }) // table not part of the form: left alone
+    })
+
     test('the Delete button carries a confirmation the client shows as a UI dialog', async () => {
       const { GET, expect } = api
       const res = await GET(`/htmx/catalog/Authors(${keysRaw})`, { headers: HX })
@@ -202,6 +236,21 @@ describe('FE parity: capabilities, direct editing, history, confirmations (round
       const render = semanticKey => String(rowMarkup({ ...layout, semanticKey }, row, { basePath: '/htmx/catalog', entitySetPath: 'Books', keyNames: ['ID'], bundle: {}, t: () => 'Draft', numeric: [false], selectable: true }))
       expect(render([])).not.to.include('hf-draft-indicator') // no semantic key: FE shows no indicator
       expect(render(['title'])).to.include('hf-draft-indicator')
+    })
+
+    test('"Add Filter": any other property can filter, technical and annotated ones are not offered', async () => {
+      const { GET, expect } = api
+      const page = await GET('/htmx/catalog/Books', { headers: HX })
+      const available = JSON.parse(page.data.match(/data-hf-available="([^"]*)"/)[1].replace(/&quot;/g, '"').replace(/&amp;/g, '&'))
+      const paths = available.map(f => f.path)
+      expect(paths).to.include('price')
+      expect(paths).not.to.include('genre_ID') // already a SelectionField
+      expect(paths).not.to.include('IsActiveEntity')
+      const all = await GET('/htmx/catalog/Books/$table', { headers: HX })
+      const filtered = await GET('/htmx/catalog/Books/$table?f.price=>10', { headers: HX })
+      expect((filtered.data.match(/<tr id="lr-row/g) || []).length).to.be.lessThan((all.data.match(/<tr id="lr-row/g) || []).length)
+      const unknown = await GET('/htmx/catalog/Books/$table?f.nonsense=1', { headers: HX })
+      expect((unknown.data.match(/<tr id="lr-row/g) || []).length).to.equal((all.data.match(/<tr id="lr-row/g) || []).length)
     })
 
     test('Edit on an object that already has your own draft resumes it', async () => {
@@ -320,6 +369,27 @@ describe('FE parity: capabilities, direct editing, history, confirmations (round
       const draft = await api.axios.get(`/odata/v4/catalog/Books(ID=3d2d2d2d-1c1c-4b4b-8a8a-000000000002,IsActiveEntity=false)/chapters(ID=7c7c7c7c-0002-4a4a-8a8a-000000000001,IsActiveEntity=false)`)
       assert.equal(draft.data.title, 'Edited')
       assert.equal((await api.axios.get(`/odata/v4/catalog/Chapters(ID=7c7c7c7c-0002-4a4a-8a8a-000000000001,IsActiveEntity=true)`)).data.title, 'I. Gateshead', 'the saved chapter is untouched')
+    })
+
+    test('pasted rows create one child draft per row, and nothing when a cell is invalid', async () => {
+      assert.match(page, /data-hf-paste-path="title"/)
+      assert.match(page, /data-hf-action="paste"/)
+      const url = `/htmx/catalog/Books(${JANE},IsActiveEntity=false)/chapters/$paste`
+      const send = rows => api.axios.post(url, new URLSearchParams({ cols: JSON.stringify(['title', 'pages']), rows: JSON.stringify(rows) }).toString(), { ...form, validateStatus: () => true })
+      const count = async () => (await api.axios.get(`/odata/v4/catalog/Books(ID=3d2d2d2d-1c1c-4b4b-8a8a-000000000002,IsActiveEntity=false)/chapters`)).data.value.length
+      const before = await count()
+      const bad = await send([['Pasted A', '10'], ['Pasted B', 'ten']])
+      assert.equal(bad.status, 422)
+      assert.equal(await count(), before, 'nothing created')
+      const ok = await send([['Pasted A', '10'], ['Pasted B', '20']])
+      assert.equal(ok.status, 200)
+      assert.equal(await count(), before + 2)
+      assert.match(ok.data, /Pasted A/)
+      assert.equal((await send([['x']].concat(Array(201).fill(['y'])))).status, 400, 'too many rows')
+      // clean up: the later tests count the chapters
+      const drafts = (await api.axios.get(`/odata/v4/catalog/Books(ID=3d2d2d2d-1c1c-4b4b-8a8a-000000000002,IsActiveEntity=false)/chapters`)).data.value.filter(c => /^Pasted/.test(c.title))
+      for (const c of drafts) await api.axios.delete(`/htmx/catalog/Books(${JANE},IsActiveEntity=false)/chapters(ID='${c.ID}',IsActiveEntity=false)`, { headers: HX })
+      assert.equal(await count(), before)
     })
 
     test('an emptied mandatory cell is flagged on exactly that cell', async () => {

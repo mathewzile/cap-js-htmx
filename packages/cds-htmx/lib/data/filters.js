@@ -32,7 +32,8 @@ const EDITING_STATUS = {
  *  {list:[{val:'A'},{val:'B'}]}]`. Every token must be a real CXN object: `.where(array)` passes the
  *  array through untouched, and a bare string there is rendered into the SQL verbatim. */
 function parseFilters(query, layout) {
-  const byPath = new Map(layout.filterBar.fields.map(f => [f.path, f]))
+  // the rendered filter fields, and the properties "Add Filter" may add (nothing else filters)
+  const byPath = new Map([...(layout.filterBar.available || []), ...layout.filterBar.fields].map(f => [f.path, f]))
   const clauses = []
 
   // not a model element, so it bypasses the filter-bar whitelist -- but only for draft roots, and

@@ -10,6 +10,8 @@ service CatalogService {
 
   entity Authors as projection on my.Authors;
 
+  entity Awards as projection on my.Awards;
+
   @readonly
   entity Genres as projection on my.Genres;
 

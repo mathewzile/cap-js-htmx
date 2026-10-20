@@ -227,6 +227,9 @@ function hfLoadMessages() {
   hfRenderMessages()
 }
 
+// the browser tab follows the object's title while it is edited
+document.addEventListener('hf:title', e => { const title = e.detail?.value ?? e.detail; if (typeof title === 'string' && title) document.title = title })
+
 document.addEventListener('hf:messages', e => {
   const { set = [], clear = [], reset = false } = e.detail?.value ?? e.detail ?? {}
   if (reset) hfMessages.list = []

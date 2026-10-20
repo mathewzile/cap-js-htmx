@@ -134,6 +134,8 @@
 .hf-vh-row:hover { background: var(--sapList_Hover_Background, #eaecee); }
 .hf-vh-row:focus-visible { outline: 2px solid var(--sapContent_FocusColor, #0032a5); outline-offset: -2px; }
 
+.hf-dialog__bar--add { border-top: 1px solid var(--sapList_BorderColor, #e5e5e5); border-bottom: 0; justify-content: flex-start; }
+.hf-dialog__bar--add .fd-select { width: 15.9375rem; }
 /* group header rows in the table */
 .hf-table tr.hf-group-row td { height: 2rem; padding: 0 1rem; background: var(--sapList_GroupHeaderBackground, #f5f6f7); border-bottom: 1px solid var(--sapList_BorderColor, #e5e5e5); font-family: var(--sapFontBoldFamily, '72-Bold', '72', Arial, sans-serif); font-weight: 700; }
 
