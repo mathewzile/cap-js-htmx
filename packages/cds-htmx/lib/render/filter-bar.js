@@ -4,7 +4,7 @@ const ids = require('./ids')
 /** One filter-bar field: label above input (Horizon convention, §3.4 `form-item.md`). Fixed-value
  *  lists render as a select, other value lists as an input with a value-help icon (FE look); all
  *  other types stay plain text inputs. */
-function filterField(field, query, options) {
+function filterField(field, query, options, ctx) {
   const name = `f.${field.path}`
   const id = ids.sanitize(name)
   const value = query?.[name] ?? ''
@@ -23,13 +23,14 @@ function filterField(field, query, options) {
     control = html`
       <div class="hf-input-group">
         <input id="${id}" name="${name}" type="text" class="fd-input" value="${value}">
-        <span class="hf-input-group__addon">
-          <span class="hf-input-icon"><i class="sap-icon--value-help" aria-hidden="true"></i></span>
-        </span>
+        <span class="hf-input-group__addon">${field.valueList && ctx?.basePath ? html`
+          <button type="button" class="fd-button fd-button--compact fd-button--transparent hf-vh-open" aria-haspopup="dialog" aria-label="Value Help"
+            hx-get="${ctx.basePath}/${ctx.entitySetPath}/$vh/${field.path}?target=${encodeURIComponent(name)}" hx-target="#dialogs" hx-swap="innerHTML" hx-push-url="false"><i class="sap-icon--value-help" aria-hidden="true"></i></button>` : html`
+          <span class="hf-input-icon"><i class="sap-icon--value-help" aria-hidden="true"></i></span>`}</span>
       </div>`
   }
   return html`
-    <div class="fd-form-item hf-filter">
+    <div class="fd-form-item hf-filter" data-hf-filter="${field.path}" data-hf-label="${field.label}">
       <label class="fd-form-label hf-filter__label" for="${id}">${field.label}</label>
       ${control}
     </div>
@@ -72,10 +73,10 @@ function filterBar(layout, { basePath, entitySetPath, query, bundle, t, filterOp
         </div>
       </div>
       ${layout.filterBar.editingStatus ? editingStatusField(query, { bundle, t }) : html``}
-      ${layout.filterBar.fields.map(field => filterField(field, query, filterOptions[field.path]))}
+      ${layout.filterBar.fields.map(field => filterField(field, query, filterOptions[field.path], { basePath, entitySetPath }))}
       <div class="hf-filter-bar__actions">
         <button type="submit" class="fd-button fd-button--emphasized">${t(bundle, 'Go')}</button>
-        <button type="button" class="fd-button fd-button--transparent">${t(bundle, 'AdaptFilters')}</button>
+        <button type="button" class="fd-button fd-button--transparent" data-hf-action="adapt-filters">${t(bundle, 'AdaptFilters')}</button>
       </div>
     </form>
   `

@@ -18,7 +18,14 @@ function parseValueList(valueList) {
     else if (kind === 'Common.ValueListParameterDisplayOnly' || kind === 'Common.ValueListParameterOut') textProp = p.ValueListProperty
   }
   if (!valueProp) return null
-  return { collectionPath: valueList.CollectionPath, valueProp, textProp: textProp || valueProp }
+  // Every parameter that shows a column in the value-help table (constants and filter-only ones do not)
+  const columns = []
+  for (const p of valueList.Parameters || []) {
+    const kind = typeFromUrl(p['@type'])
+    if (kind === 'Common.ValueListParameterConstant' || kind === 'Common.ValueListParameterFilterOnly') continue
+    if (p.ValueListProperty && !columns.includes(p.ValueListProperty)) columns.push(p.ValueListProperty)
+  }
+  return { collectionPath: valueList.CollectionPath, valueProp, textProp: textProp || valueProp, columns, searchSupported: valueList.SearchSupported !== false }
 }
 
 /** Fetches every row of a fixed-value field's collection (§3.2 Common `ValueListWithFixedValues`:

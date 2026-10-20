@@ -5,7 +5,7 @@ const api = cds.test(path.join(__dirname, '..', '..', '..', '..'))
 const WUTHERING_HEIGHTS = "ID='3d2d2d2d-1c1c-4b4b-8a8a-000000000001',IsActiveEntity=true"
 
 function pushUrlKeys(res) {
-  const url = res.headers['hx-push-url']
+  const url = (res.headers['hx-replace-url'] ?? res.headers['hx-push-url'])
   const m = url && url.match(/Books\(([^)]*)\)/)
   return { url, raw: m ? m[1] : null }
 }
@@ -30,7 +30,7 @@ describe('Draft lifecycle routes (Phase 5)', () => {
     expect(res.status).to.equal(200)
     expect(res.data).to.match(/id="op-footer"/)
     expect(res.data).not.to.match(/aria-label="Edit"/)
-    expect(res.data).not.to.match(/aria-label="Delete"/)
+    expect(res.data).not.to.match(/hx-delete=/) // no Delete of the object itself while editing (a section has its own Delete)
     expect(res.data).to.match(/<input type="text" class="fd-input"[^>]*name="title"/)
 
     const { url, raw } = pushUrlKeys(res)
@@ -45,13 +45,15 @@ describe('Draft lifecycle routes (Phase 5)', () => {
       `/htmx/catalog/Books(${createdDraftRaw})/$field/title`,
       { title: 'Patched Draft Title' }
     )
-    expect(res.status).to.equal(204)
+    expect(res.status).to.equal(200) // 200: carries the other places that show the value (header title)
+    expect(res.data).to.include('id="op-title"')
+    expect(res.data).to.include('Patched Draft Title')
 
     const res2 = await PATCH(
       `/htmx/catalog/Books(${createdDraftRaw})/$field/author_ID`,
       { author_ID: authorId }
     )
-    expect(res2.status).to.equal(204)
+    expect(res2.status).to.equal(200)
   })
 
   test('POST /:Set(keys)/$save activates the draft, rendering the active Object Page with the patched value', async () => {

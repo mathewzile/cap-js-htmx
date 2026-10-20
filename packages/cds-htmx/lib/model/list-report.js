@@ -116,7 +116,8 @@ function buildListReport(store, entityType, { pageSettings } = {}) {
     },
     variantManagement: pageSettings?.variantManagement || feDefaults.listReport.variantManagement,
     initialLoad: pageSettings?.initialLoad ?? feDefaults.listReport.initialLoad,
-    capabilities: buildCapabilities(store, entityType)
+    capabilities: buildCapabilities(store, entityType),
+    edit: require('./edit-capabilities').editCapabilities(store, entityType)
   }
 }
 

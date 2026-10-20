@@ -33,7 +33,7 @@ The repo `cap-js-htmx` is a bare CAP 10 project (`@sap/cds ^10`, ESM root, one `
 
 ## Decisions (defaults; change before implementation if desired)
 1. **Monorepo with npm workspaces.** The plugin lives in `packages/cds-htmx` (package name `cds-htmx`, CommonJS). The root app stays as the demo and test fixture and depends on `"cds-htmx": "*"`.
-2. **Draft-enabled editing is the primary edit flow**, matching FE + CAP (`@odata.draft.enabled`). Non-draft entities render the OP read-only (direct-edit is out of scope for v1).
+2. **Draft-enabled editing is the primary edit flow**, matching FE + CAP (`@odata.draft.enabled`). Non-draft entities are edited **directly on the active entity**, as FE V4 does (Edit only switches the page into edit mode, Save PATCHes, Create POSTs); a draft node (a composition child) is only editable inside its root; `@readonly` / `Capabilities.*Restrictions` hide Create/Edit/Delete.
 3. **Server-side rendering with dependency-free tagged templates** (`html\`…\`` with auto-escaping plus `raw()`). No template engine dependency.
 4. **Theme `sap_horizon`.** Configurable via `cds.htmx.theme`.
 5. **One SSE channel per browser page** (client id). Side-effect results and server-triggered events (`SourceEvents`) are pushed through it as `<hx-partial>` bundles.
@@ -61,7 +61,6 @@ app/annotations.cds               # ALL UI annotations (shared by htmx + FE refe
 app/manage-books/                 # generated FE V4 app (sap.fe.templates.ListReport / ObjectPage)
   webapp/{manifest.json,Component.ts,index.html}
   webapp/annotations/annotation.xml               # local XML annotation layer (overrides/extends service annotations; consumed by BOTH FE and htmx)
-app/index.html                    # landing page: links to /htmx/catalog/ and /manage-books/webapp/index.html
 packages/cds-htmx/
   package.json                    # name cds-htmx, type commonjs, deps: htmx.org@4.0.0, fundamental-styles@0.41.9, @fundamental-styles/common-css@0.41.9, @sap-theming/theming-base-content@^11.36, fast-xml-parser (annotation.xml); peerDep @sap/cds>=9
                                   # "cds": { "protocols": { "htmx": { "path": "/htmx", "impl": "cds-htmx/lib/HtmxAdapter.js" } }, "htmx": { defaults… } }
@@ -114,7 +113,7 @@ packages/cds-htmx/
   test/ (see §6)
 ```
 
-Added by Phases 7–9 (see `FRONTEND_DEPLOYMENT_AND_EXTENSIBILITY.md` §7): `packages/cds-htmx/lib/apps/` (AppSource providers, bundles, fragment templates), `packages/cds-htmx-shell/` (UI5 wrapper component, shell runtime, `hx-fiori` / `hx-csrf` extensions), `app/manage-books-htmx/` (sample frontend project with its own `annotation.xml`), and `mta.yaml`.
+Added by Phases 7, 9 and 10 (see `FRONTEND_DEPLOYMENT_AND_EXTENSIBILITY.md` §7): `packages/cds-htmx/lib/apps/` (AppSource providers, bundles, fragment templates), `packages/cds-htmx-shell/` (UI5 wrapper component, shell runtime, `hx-fiori` / `hx-csrf` extensions), `app/manage-books-htmx/` (sample frontend project with its own `annotation.xml`), and `mta.yaml`.
 
 ## 2. Plugin wiring
 - `packages/cds-htmx/package.json#cds.protocols.htmx = { path: "/htmx", impl: "cds-htmx/lib/HtmxAdapter.js" }`. CAP resolves `impl` from `cds.root`, so the workspace symlink works. Service `@htmx` is served at `/htmx/catalog`; `@htmx: '/books'` gives a custom path.
@@ -220,7 +219,7 @@ Read `sap.ui5.routing.targets[*].options.settings` for `sap.fe.templates.ListRep
 - `controlConfiguration["@com.sap.vocabularies.UI.v1.LineItem#Q"].tableSettings` (`type`, `selectionMode`, `creationMode`, `condensedTableLayout`, `enableExport`, `personalization`, `growingThreshold`)
 - `columns` overrides, `sectionLayout` (Page | Tabs), `editableHeaderContent`, `content.header.visible`, `showRelatedApps`
 
-Without a manifest, use `fe-defaults.js`. Until Phase 9, custom extensions (fragments, controller extensions) are ignored and listed in coverage. From Phase 9 they are resolved to `.fragment.html` templates and `hx-fiori` controller extensions (design doc §6). From Phase 7 the manifest may come from an app bundle (`X-Htmx-App`) instead of the `app/` scan.
+Without a manifest, use `fe-defaults.js`. Until Phase 10, custom extensions (fragments, controller extensions) are ignored and listed in coverage. From Phase 10 they are resolved to `.fragment.html` templates and `hx-fiori` controller extensions (design doc §6). From Phase 7 the manifest may come from an app bundle (`X-Htmx-App`) instead of the `app/` scan.
 
 ### 3.3 Data access (`data/*`)
 - SELECT columns come from the layout model, never hand-picked. For each table/page, the union of `paths()` over all rendered annotation values is used, mapped OData → CQL by `edm.js` (`author/name` → `author.name`, `author_ID`). That union covers:
@@ -302,9 +301,9 @@ Side effects are read from the AnnotationStore. That includes CAP-generated ones
 4. Side effects in FE fire on field change in edit mode only. The engine therefore ignores active-entity PATCHes. Document in README that FE's "deferred until field group left" timing is simplified to "on change".
 
 ## 5. Frontend (runnable page)
-> Standalone mode below stays as is. From Phase 8 a generic shell (`cds-htmx-shell`) can host the same pages in Work Zone; the backend then returns fragments only and prefixes all URLs with `X-Htmx-Base`.
+> Standalone mode below stays as is. From Phase 9 a generic shell (`cds-htmx-shell`) can host the same pages in Work Zone; the backend then returns fragments only and prefixes all URLs with `X-Htmx-Base`.
 
-- No separate SPA. The plugin renders the full HTML shell, so `npm run watch` → `http://localhost:4004/htmx/catalog/` is the app. `app/index.html` links to both the htmx app and the FE reference app.
+- No separate SPA. The plugin renders the full HTML shell, so `npm run watch` → `http://localhost:4004/htmx/catalog/` is the app. CAP's own generated index page at `http://localhost:4004/` lists the service endpoints (including the `htmx` one and its entity links) and the FE reference app; the demo no longer ships its own `app/index.html`. Registering the htmx apps under the index's "Web Applications" list is a possible follow-up.
 - `layout.js` `<head>`:
   - `/htmx/-/theming-base-content/content/Base/baseLib/sap_horizon/css_variables.css`
   - `/htmx/-/fundamental-styles/dist/theming/sap_horizon.css`, `/htmx/-/common-css/…`, `/htmx/-/fundamental-styles/dist/fundamental-styles.css`
@@ -386,9 +385,19 @@ Side effects are read from the AnnotationStore. That includes CAP-generated ones
 5. **Draft editing**: create/edit/patch/save/discard/delete, value states, messages, footer, value help, fixed values, actions + parameter dialogs, LR draft indicators + Editing Status filter.
 6. **SSE + side effects** (§4), including SourceEvents and the live LR row. The channel also records `app`.
 7. **App bundles and app-scoped rendering** (design doc §2–3): `lib/apps/*` (`local` + `destination` providers), per-app store/cache keys and annotation layer lists, `X-Htmx-App` / `X-Htmx-Base` handling with validated `basePath`, version-skew trigger, shell-mode fragment-only responses. Also fix `HtmxAdapter.js` calling the non-existent `cache.annotationStoreFor`. Spike: html5-repo runtime URL.
-8. **Shell + Work Zone + deployment** (design doc §4–5): `packages/cds-htmx-shell` (standalone + FLP adapters, `hx-csrf`), CSS scoping, versioned assets, sticky-session cookie, `app/manage-books-htmx`, `xs-app.json`, `mta.yaml`, deploy guide. Spike: SSE through `@sap/approuter`.
-9. **Frontend extensibility** (design doc §6): fragment templates + sanitizer, building blocks, all FE V4 manifest extension points, `hx-fiori` controller-extension façade + ExtensionAPI, custom page, server extension SPI, coverage entries. Re-verify the parity matrix against the UI5 SDK first.
-10. **E2E + visual parity + README** (usage, supported annotations matrix, config options, known deviations from FE), also covering shell mode. Iterate the CSS until the parity diffs are minimal.
+8. **FE feature parity** (the htmx app must behave and look like the standard Fiori elements app; compared side by side with `app/manage-books` in a real browser). Done in rounds, each ending green with Playwright specs (`npm run test:e2e`):
+   - **Round 1 (done)**: capability-driven editing (`model/edit-capabilities.js`): draft root / draft node / direct, `@readonly` and Capabilities restrictions hide Create/Edit/Delete and are enforced on the routes (a `@readonly` Create no longer reaches the lean-draft runtime); non-draft entities edited directly (`$new`, form `$save`, Cancel, 422 with the input kept); clean URLs and history (no inherited `hx-push-url`, field PATCHes and `$table` never push, filter state replaced into the List Report URL, a stale draft URL falls back to the saved version, document loads of partial URLs redirect); live binding of the header title and other occurrences while editing a draft (PATCH response carries `<hx-partial>`s); FE's draft marker with the "Saved Version" / "Draft" switch popover; Edit resumes your own draft; UI confirmation dialogs for Delete (object and selected rows) and Discard Draft instead of `window.confirm`; List Report multi-delete; toast auto-dismiss; a dev-only SSE playground (`<service>/$playground`); SSE fixes found in the browser (pages opened directly register their view, the field input no longer replaces the inherited client header).
+   - **Round 2 (done)**, each compared with the FE reference app in the browser:
+     - messages: field value states with a bubble on focus, the footer's red message button with FE's "Message Details" popover (click jumps to the field), "Unnamed Object" / "New <type>" titles, "Draft saved" status, persisted `DraftMessages` of a failed activation restored on reload (the failing save rolls back on purpose: CAP stores the messages from that rollback)
+     - value help is a modal "Select: <label>" dialog (search, the value list's columns, F4/Escape/Cancel) for fields and for List Report filter fields
+     - half-star rating; `Core.Immutable` editable while creating
+     - composition children: inline-editable section tables (cells PATCH the child's own draft, mandatory cells flagged), Create opens the child's own page (creation mode NewPage) created through the root's path, child pages have Apply/Delete, section Delete is scoped to its table, deletes CANCEL the child draft
+     - table tools: View Settings (columns, sort), CSV export (server-side for the List Report with its filters/sort/visible columns, client-side for sections), section search, Adapt Filters (which filter fields show), saved views behind the "Standard" menu; settings and views live in the browser's localStorage
+   - **Open**: **tree table** (`Aggregation.RecursiveHierarchy`/`Hierarchy.RecursiveHierarchy` + `TreeTable` settings; deferred, the CAP sample comes from the backend owner); the share/header action menu (explicitly out of scope); copy/paste rows in tables; "Group" in View Settings and Adapt Filters (adding filters for properties that are not `SelectionFields`); saved views are browser-local, not shared like FE's key-user/personalization layer; section search is client-side (all rows are loaded anyway); child-row editing inside a non-draft Object Page (the sample has no non-draft composition to build it against); `UI.CreateHidden` etc. as per-row paths on the List Report (static values and the Object Page's per-row paths work); flexible column layout; related apps (FLP-only, comes with the shell).
+9. **Shell + Work Zone + deployment** (design doc §4–5): `packages/cds-htmx-shell` (standalone + FLP adapters, `hx-csrf`), CSS scoping, versioned assets, sticky-session cookie, `app/manage-books-htmx`, `xs-app.json`, `mta.yaml`, deploy guide. Spike: SSE through `@sap/approuter`.
+10. **Frontend extensibility** (design doc §6): fragment templates + sanitizer, building blocks, all FE V4 manifest extension points, `hx-fiori` controller-extension façade + ExtensionAPI, server extension SPI, coverage entries (custom pages are Phase 11). Re-verify the parity matrix against the UI5 SDK first.
+11. **Custom Pages (non-standard FE floorplans)** — **not started: needs a design and developer documentation first**, then agreement, before any implementation. Scope to be defined in that design (what FE's flexible programming model calls custom pages / `sap.fe.core.fpm` targets, how they are registered, routed, composed from building blocks and extended).
+12. **E2E + visual parity + README** (usage, supported annotations matrix, config options, known deviations from FE), also covering shell mode. Iterate the CSS until the parity diffs are minimal.
 
 ## 9. Config (`cds.htmx`, defaults in the plugin package.json)
 `theme: "sap_horizon"`, `shell: true`, `appTitle: null` (TypeNamePlural), `growingThreshold: 20`, `assets: "local" | "cdn"`, `sse: { heartbeat: 15000 }`, `liveListReport: true`, `requireHxRequestForMutations: true`.
@@ -401,5 +410,5 @@ From Phase 7: `apps: { sources: [{ kind: "local" }], allow: ["*"], ttl: 60000, r
 4. Edit → change Stock to 3 → "Stock Status" turns "Low" (critical) without reload; DevTools shows the `$events` SSE message. Save → toast "Object saved.". Clear Title → Save → error value state + message popover.
 5. Open the same book in a second window. Run the `simulateDelivery` action from the first → the second updates live.
 6. `npm test` green. `npm run test:e2e` green. Review the parity diffs in `test-results/parity/`.
-7. Deployed shell (after Phases 7–8): the app's zip is in the HTML5 repo, Work Zone shows a tile, and the LR/OP load through `xs-app.json` → destination `cap-htmx-srv`. Local annotations come from the app's own `annotation.xml`, and two apps on one service show different layouts. A UI5-wrapper tile and a URL-app tile both work. Intent-based navigation works from the FLP.
+7. Deployed shell (after Phases 7 and 9): the app's zip is in the HTML5 repo, Work Zone shows a tile, and the LR/OP load through `xs-app.json` → destination `cap-htmx-srv`. Local annotations come from the app's own `annotation.xml`, and two apps on one service show different layouts. A UI5-wrapper tile and a URL-app tile both work. Intent-based navigation works from the FLP.
 8. `GET /htmx/catalog/$coverage` lists every annotation term in the service with its status and has no `unknown` entries. `GET /htmx/catalog/$annotations` matches `/odata/v4/catalog/$metadata`. Edit `annotation.xml` (e.g. reorder columns) → both FE and htmx LR change the same way after reload.

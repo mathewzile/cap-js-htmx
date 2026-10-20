@@ -160,7 +160,16 @@ annotate service.Authors with @(
     { Value : email, Label : '{i18n>Email}' },
     { Value : phone, Label : '{i18n>Phone}' }
   ],
+  UI.FieldGroup #General : {
+    Data : [
+      { Value : name },
+      { Value : dateOfBirth },
+      { Value : email },
+      { Value : phone }
+    ]
+  },
   UI.Facets : [
+    { $Type : 'UI.ReferenceFacet', ID : 'AuthorGeneral', Label : '{i18n>GeneralInformation}', Target : '@UI.FieldGroup#General' },
     { $Type : 'UI.ReferenceFacet', ID : 'ContactInfo', Label : '{i18n>Contact}', Target : '@Communication.Contact' },
     { $Type : 'UI.ReferenceFacet', ID : 'AuthorBooks', Label : '{i18n>Books}', Target : 'books/@UI.LineItem' }
   ],

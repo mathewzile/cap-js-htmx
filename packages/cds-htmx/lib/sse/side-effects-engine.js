@@ -61,12 +61,15 @@ function servicePaths(srv) {
 /** Wraps each DOM update as an `<hx-partial>` and sends them as ONE unnamed SSE message, which
  *  the `hx-sse` extension swaps (htmx processes partials independently of the connecting element's
  *  `hx-swap="none"`), followed by the named `htmx:fe:sideEffects` DOM event for client hooks. */
-function publish(client, parts) {
-  if (!parts.length || client.res.writableEnded) return
-  const data = parts
+function partialsMarkup(parts) {
+  return parts
     .map(p => `<hx-partial hx-target="${p.target}" hx-swap="${p.swap}">${String(p.html)}</hx-partial>`)
     .join('\n')
-  write(client.res, { data })
+}
+
+function publish(client, parts) {
+  if (!parts.length || client.res.writableEnded) return
+  write(client.res, { data: partialsMarkup(parts) })
   write(client.res, { event: 'htmx:fe:sideEffects', data: JSON.stringify({ targets: parts.map(p => p.target) }) })
 }
 
@@ -85,6 +88,19 @@ async function pushObjectPage(tx, client, view, targets) {
   publish(client, objectPageRender.sideEffectParts(page.layout, page.row, ctx, {
     all: targets.all, properties: [...targets.properties], entities: [...targets.entities]
   }))
+}
+
+/** The other places a just-edited draft value is shown (FE binds every control to the same model
+ *  property): the header title/description, other facets showing the property, data points.
+ *  Returned with the PATCH response itself, so the page never depends on SSE for it. `source` is the
+ *  edited field's own element id, left alone so the caret and focus stay where the user is typing.
+ *  Also returns the layout and the fresh row, for validating the value. */
+async function bindingParts(tx, view, { path, source, appRoot: root, locale, app }) {
+  const page = await loadObjectPage(tx, { service: view.service, servicePath: view.servicePath, entityType: view.entityType, keys: view.keys, contextPath: view.contextPath, appRoot: root, locale, app, editing: true })
+  if (!page) return { parts: [], layout: null, row: null }
+  const ctx = { basePath: view.basePath, entitySetPath: view.entitySetPath, bundle: page.bundle, t: i18n.t, valueLists: page.valueLists, children: page.children, trail: [] }
+  const parts = objectPageRender.sideEffectParts(page.layout, page.row, ctx, { properties: [path], exclude: source ? ['#' + source] : [] })
+  return { parts, layout: page.layout, row: page.row }
 }
 
 /** A change inside an Object Page in edit mode (§4.2.1): `properties` the user edited and/or
@@ -183,4 +199,4 @@ function registerSourceEvents(srv) {
   }
 }
 
-module.exports = { registerSourceEvents, onChange, onSourceEvent, collectTargets, servicePaths, publish }
+module.exports = { registerSourceEvents, onChange, onSourceEvent, bindingParts, partialsMarkup, collectTargets, servicePaths, publish }

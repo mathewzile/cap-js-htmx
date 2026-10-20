@@ -120,6 +120,8 @@ function collectFacetColumns(facet, cols) {
 function objectPageColumns(model, entityType, layout) {
   const cols = new Set()
   for (const key of keyElements(entityDef(model, entityType))) cols.add(key.name)
+  // draft roots: what the draft marker needs to offer "Saved Version" / "Draft" (HasDraftEntity also locks Edit/Delete)
+  if (isDraftRoot(entityDef(model, entityType))) { cols.add('HasActiveEntity'); cols.add('HasDraftEntity'); cols.add('DraftMessages') }
   for (const p of pathsOf(layout.header?.title)) cols.add(cqlPath(p))
   for (const p of pathsOf(layout.header?.description)) cols.add(cqlPath(p))
   for (const facet of layout.headerFacets || []) collectFacetColumns(facet, cols)

@@ -211,7 +211,7 @@ describe('App bundles and app-scoped rendering (Phase 7)', () => {
       try {
         const res = await GET(`/htmx/catalog/Books(${raw})/$vh/author_ID`, { headers: { 'HX-Request': 'true' } })
         expect(res.status).to.equal(200)
-        expect(res.data).to.include('Value Help')
+        expect(res.data).to.match(/Select: [^<]+/)
       } finally {
         await POST(`/htmx/catalog/Books(${raw})/$discard`, {}, { headers: { 'HX-Request': 'true' } })
       }
