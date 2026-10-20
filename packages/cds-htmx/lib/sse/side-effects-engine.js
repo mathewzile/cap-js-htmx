@@ -93,12 +93,14 @@ async function pushObjectPage(tx, client, view, targets) {
 /** The other places a just-edited draft value is shown (FE binds every control to the same model
  *  property): the header title/description, other facets showing the property, data points.
  *  Returned with the PATCH response itself, so the page never depends on SSE for it. `source` is the
- *  edited field's own element id, left alone so the caret and focus stay where the user is typing. */
+ *  edited field's own element id, left alone so the caret and focus stay where the user is typing.
+ *  Also returns the layout and the fresh row, for validating the value. */
 async function bindingParts(tx, view, { path, source, appRoot: root, locale, app }) {
   const page = await loadObjectPage(tx, { service: view.service, servicePath: view.servicePath, entityType: view.entityType, keys: view.keys, contextPath: view.contextPath, appRoot: root, locale, app, editing: true })
-  if (!page) return []
+  if (!page) return { parts: [], layout: null, row: null }
   const ctx = { basePath: view.basePath, entitySetPath: view.entitySetPath, bundle: page.bundle, t: i18n.t, valueLists: page.valueLists, children: page.children, trail: [] }
-  return objectPageRender.sideEffectParts(page.layout, page.row, ctx, { properties: [path], exclude: source ? ['#' + source] : [] })
+  const parts = objectPageRender.sideEffectParts(page.layout, page.row, ctx, { properties: [path], exclude: source ? ['#' + source] : [] })
+  return { parts, layout: page.layout, row: page.row }
 }
 
 /** A change inside an Object Page in edit mode (§4.2.1): `properties` the user edited and/or

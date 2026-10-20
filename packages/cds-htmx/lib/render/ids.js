@@ -21,8 +21,10 @@ const opField = (facetId, path) => `op-field--${sanitize(facetId)}--${sanitize(p
 const opHeader = () => 'op-header'
 const opPage = () => 'op-page'
 const opTitle = () => 'op-title'
+const opMessages = () => 'op-messages'
+const opDraftStatus = () => 'op-draft-status'
 const opFooter = () => 'op-footer'
 const messages = () => 'messages'
 const toast = () => 'toast'
 
-module.exports = { sanitize, lrTable, lrTableBody, lrFilterBar, lrToolbar, lrCount, lrRow, lrColumnSort, opSection, opField, opHeader, opPage, opTitle, opFooter, messages, toast }
+module.exports = { sanitize, lrTable, lrTableBody, lrFilterBar, lrToolbar, lrCount, lrRow, lrColumnSort, opSection, opField, opHeader, opPage, opTitle, opMessages, opDraftStatus, opFooter, messages, toast }

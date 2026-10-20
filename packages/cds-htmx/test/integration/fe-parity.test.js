@@ -106,12 +106,13 @@ describe('FE parity: capabilities, direct editing, history, confirmations (round
       expect(odata.data.email).to.equal('p@example.com')
     })
 
-    test('a missing mandatory value re-shows the form as typed with the message (422)', async () => {
+    test('a missing mandatory value answers 422 with a message for that field and leaves the page (and what was typed) alone', async () => {
       const { expect } = api
       const res = await api.axios.post('/htmx/catalog/Authors/$save', new URLSearchParams({ name: '', email: 'keep@me.com' }).toString(), { headers: { ...HX, 'Content-Type': 'application/x-www-form-urlencoded' }, validateStatus: () => true })
       expect(res.status).to.equal(422)
-      expect(res.data).to.include('keep@me.com')
-      expect(res.data).to.match(/hx-target="#messages"/)
+      const trigger = JSON.parse(res.headers['hx-trigger'])['hf:messages']
+      expect(trigger.set).to.deep.include({ path: 'name', text: 'Provide the missing value.', severity: 'error', label: 'Name' })
+      expect(res.data).not.to.include('<input') // nothing to swap: the page keeps the form as typed
     })
 
     test('Edit shows the same page in edit mode: no draft, no URL', async () => {
@@ -219,6 +220,39 @@ describe('FE parity: capabilities, direct editing, history, confirmations (round
       const res = await api.axios.get("/htmx/catalog/Books(ID='00000000-0000-0000-0000-000000000000',IsActiveEntity=true)", { headers: HX, validateStatus: () => true })
       expect(res.status).to.equal(404)
       expect(res.data).to.include('/htmx/catalog/Books')
+    })
+  })
+
+  describe('value help dialog', () => {
+    const open = (url, headers = {}) => api.axios.get(url, { headers: { ...HX, ...headers } })
+
+    test('opens as a modal "Select: <label>" with the value list columns and one row per entry', async () => {
+      const res = await open('/htmx/catalog/Books/$vh/author_ID')
+      assert.equal(res.status, 200)
+      assert.match(res.data, /class="hf-overlay" data-hf-dialog/)
+      assert.match(res.data, /Select: [^<]+/)
+      assert.match(res.data, /<span class="hf-th__text">ID<\/span>/)
+      assert.match(res.data, /<span class="hf-th__text">Name<\/span>/)
+      assert.equal((res.data.match(/class="[^"]*hf-vh-row/g) || []).length, 4)
+      assert.match(res.data, /Items \(4\)/)
+      assert.match(res.data, /data-hf-dialog-close/)
+    })
+
+    test('searching only replaces the results (the table), never the whole dialog', async () => {
+      const res = await open('/htmx/catalog/Books/$vh/author_ID?$search=Poe', { 'HX-Target': 'div#vh-results' })
+      assert.doesNotMatch(res.data, /hf-overlay/)
+      assert.match(res.data, /Items \(1\)/)
+      assert.match(res.data, /Edgar Allan Poe/)
+    })
+
+    test('the field opens it with a button (and F4 in the page script), into the dialogs container', async () => {
+      const key = "ID='3d2d2d2d-1c1c-4b4b-8a8a-000000000004'"
+      const edit = await api.axios.post(`/htmx/catalog/Books(${key},IsActiveEntity=true)/$edit`, {}, { headers: HX })
+      try {
+        assert.match(edit.data, /class="[^"]*hf-vh-open"[\s\S]*?hx-get="[^"]*\/\$vh\/author_ID"[\s\S]*?hx-target="#dialogs"/)
+      } finally {
+        await api.axios.post(`/htmx/catalog/Books(${key},IsActiveEntity=false)/$discard`, {}, { headers: HX })
+      }
     })
   })
 

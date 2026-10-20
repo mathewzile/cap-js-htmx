@@ -58,8 +58,7 @@ function fieldEditControl(field, row, { basePath, entitySetPath, valueListOption
         <span class="hf-input-group__addon">
           ${raw(valueHelpButton(field, { basePath, entitySetPath }).value)}
         </span>
-      </div>
-      <div id="vh-dialog-${field.path}"></div>`
+      </div>`
   }
   if (field.fixedValues && valueListOptions) {
     return html`
@@ -102,9 +101,10 @@ function formField(col, row, { facetId, isDraft, editMode, basePath, entitySetPa
     const mandatory = isMandatory(field, row)
     const inputId = `${id}--input`
     return html`
-      <div class="fd-form-item hf-field hf-field--edit" id="${id}">
+      <div class="fd-form-item hf-field hf-field--edit" id="${id}" data-hf-field="${field.path}">
         ${fieldLabel(field.label, { mandatory, forId: inputId })}
         ${fieldEditControl(field, row, { basePath, entitySetPath, valueListOptions: valueLists?.[field.path], id: inputId, editMode: editMode ?? 'draft' })}
+        <span class="hf-field__message" role="alert"></span>
       </div>`
   }
   const text = fieldText(field, row)

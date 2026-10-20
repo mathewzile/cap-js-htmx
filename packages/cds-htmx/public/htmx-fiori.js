@@ -135,3 +135,119 @@ document.addEventListener('htmx:after:swap', () => {
   clearTimeout(hfToastTimer)
   hfToastTimer = setTimeout(() => toast.remove(), 3000)
 })
+
+// ---------- messages: field value states + the footer's "Message Details" (FE's message popover) ----------
+// The list lives here. The server feeds it: persisted draft messages as data-hf-messages on #op-page when
+// a page loads, and `HX-Trigger: {"hf:messages": {set, clear, reset}}` after edits and failed saves.
+const hfMessages = { page: null, list: [] }
+
+const hfFieldControl = wrapper => wrapper.querySelector('input:not([type=hidden]), textarea, select')
+
+function hfRenderMessages() {
+  const page = document.getElementById('op-page')
+  if (!page) return
+  const byPath = new Map()
+  for (const m of hfMessages.list) if (m.path && (!byPath.has(m.path) || m.severity === 'error')) byPath.set(m.path, m)
+  for (const wrapper of page.querySelectorAll('[data-hf-field]')) {
+    const m = byPath.get(wrapper.dataset.hfField)
+    const control = hfFieldControl(wrapper)
+    wrapper.classList.toggle('hf-field--error', m?.severity === 'error')
+    wrapper.classList.toggle('hf-field--warning', m?.severity === 'warning')
+    control?.classList.toggle('is-error', m?.severity === 'error')
+    control?.classList.toggle('is-warning', m?.severity === 'warning')
+    if (control) m ? control.setAttribute('aria-invalid', m.severity === 'error') : control.removeAttribute('aria-invalid')
+    const bubble = wrapper.querySelector('.hf-field__message')
+    if (bubble) bubble.textContent = m?.text ?? ''
+  }
+  const holder = document.getElementById('op-messages')
+  if (!holder) return
+  const list = [...hfMessages.list].sort((a, b) => (b.severity === 'error') - (a.severity === 'error'))
+  if (!list.length) { holder.replaceChildren(); return }
+  const errors = list.filter(m => m.severity === 'error').length
+  const level = errors ? 'error' : list[0].severity === 'warning' ? 'warning' : 'info'
+  const icon = { error: 'error', warning: 'alert', info: 'message-information', success: 'message-success' }
+  const open = holder.querySelector('.hf-popover.is-open') != null
+  holder.innerHTML = `
+    <div class="hf-popover hf-popover--up${open ? ' is-open' : ''}">
+      <button type="button" class="hf-msg-button hf-msg-button--${level}" data-hf-popover-toggle aria-haspopup="true" aria-expanded="${open}" aria-label="Messages">
+        <i class="sap-icon--${icon[level]}" aria-hidden="true"></i><span class="hf-msg-button__count"></span>
+      </button>
+      <div class="fd-popover__body hf-msg-popover">
+        <header class="hf-msg-popover__header"><strong data-hf-title></strong></header>
+        <ul class="hf-msg-popover__list"></ul>
+      </div>
+    </div>`
+  holder.querySelector('.hf-msg-button__count').textContent = String(list.length)
+  holder.querySelector('[data-hf-title]').textContent = holder.dataset.title || 'Message Details'
+  const ul = holder.querySelector('ul')
+  for (const m of list) {
+    const li = document.createElement('li')
+    li.innerHTML = `<button type="button" class="hf-msg-item"><i class="sap-icon--${icon[m.severity] || 'message-information'} hf-msg-item__icon hf-msg-item__icon--${m.severity}" aria-hidden="true"></i><span><span class="hf-msg-item__text"></span><span class="hf-msg-item__label"></span></span></button>`
+    li.querySelector('.hf-msg-item__text').textContent = m.text
+    li.querySelector('.hf-msg-item__label').textContent = m.label || ''
+    li.querySelector('button').addEventListener('click', () => {
+      hfClosePopovers()
+      const wrapper = m.path && document.querySelector(`[data-hf-field="${CSS.escape(m.path)}"]`)
+      const control = wrapper && hfFieldControl(wrapper)
+      control?.scrollIntoView({ block: 'center' })
+      control?.focus()
+    })
+    ul.appendChild(li)
+  }
+}
+
+function hfLoadMessages() {
+  const page = document.getElementById('op-page')
+  if (page === hfMessages.page) return hfRenderMessages() // same page, e.g. a field morphed: keep the list
+  hfMessages.page = page
+  try { hfMessages.list = page?.dataset.hfMessages ? JSON.parse(page.dataset.hfMessages) : [] } catch { hfMessages.list = [] }
+  hfRenderMessages()
+}
+
+document.addEventListener('hf:messages', e => {
+  const { set = [], clear = [], reset = false } = e.detail?.value ?? e.detail ?? {}
+  if (reset) hfMessages.list = []
+  const gone = new Set([...clear, ...set.map(m => m.path)].filter(Boolean))
+  hfMessages.list = hfMessages.list.filter(m => !gone.has(m.path)).concat(set)
+  hfRenderMessages()
+})
+document.addEventListener('htmx:after:swap', hfLoadMessages)
+document.addEventListener('DOMContentLoaded', hfLoadMessages)
+
+// ---------- draft status in the footer ("Saving..." while a field PATCH is on its way) ----------
+document.addEventListener('htmx:before:request', e => {
+  const status = document.getElementById('op-draft-status')
+  if (status && e.target?.hasAttribute?.('hx-patch')) status.textContent = status.dataset.saving || ''
+})
+
+// ---------- modal dialogs (value help): Cancel / Escape close, a row writes its value into the field ----------
+function hfCloseDialog() {
+  document.querySelectorAll('.hf-overlay[data-hf-dialog]').forEach(o => o.remove())
+}
+
+document.addEventListener('click', e => {
+  if (e.target.closest('[data-hf-dialog-close]')) return hfCloseDialog()
+  const row = e.target.closest('.hf-vh-row')
+  if (row) hfPickValue(row)
+})
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.querySelector('.hf-overlay[data-hf-dialog]')) { e.preventDefault(); hfCloseDialog() }
+  if (e.key === 'Enter' && e.target.classList?.contains('hf-vh-row')) hfPickValue(e.target)
+  // F4 opens the value help of the focused field, like in Fiori elements
+  if (e.key === 'F4') e.target.closest?.('.hf-input-group')?.querySelector('.hf-vh-open')?.click()
+})
+
+/** Writes the chosen key into the field the dialog was opened for and fires `change`: a draft PATCHes
+ *  it right away, a direct-edit form just keeps it until Save. */
+function hfPickValue(row) {
+  const path = row.closest('[data-hf-path]')?.dataset.hfPath
+  const input = path && document.querySelector(`[data-hf-field="${CSS.escape(path)}"] input[name="${CSS.escape(path)}"]`)
+  hfCloseDialog()
+  if (!input) return
+  input.value = row.dataset.value
+  input.dispatchEvent(new Event('change', { bubbles: true }))
+  input.focus()
+}
+
+// a freshly opened dialog puts the cursor in its search field
+document.addEventListener('htmx:after:swap', () => document.querySelector('.hf-overlay[data-hf-dialog] [data-hf-autofocus]')?.focus())

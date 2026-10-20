@@ -655,3 +655,81 @@ body {
 .hf-playground__result { margin: 0 0 1rem; font: .8125rem/1.3 Consolas, monospace; }
 .hf-home__dev { margin-top: 2rem; font-size: .875rem; }
 .hf-playground ol { margin: 0; padding-left: 1.25rem; line-height: 1.6; }
+
+/* ---------- value states and message popover ---------- */
+.hf-field { position: relative; }
+.htmx-fiori.is-compact .hf-field--error .fd-input, .htmx-fiori.is-compact .hf-field--error .fd-textarea, .htmx-fiori.is-compact .hf-field--error .fd-select,
+.htmx-fiori.is-compact .hf-field--error .fd-input:focus, .htmx-fiori.is-compact .hf-field--error .fd-textarea:focus {
+  background: var(--sapField_InvalidBackground, #ffeaf4);
+  border-color: var(--sapField_InvalidColor, #d20a0a);
+  box-shadow: inset 0 -2px 0 0 var(--sapField_InvalidColor, #d20a0a);
+}
+.htmx-fiori.is-compact .hf-field--warning .fd-input, .htmx-fiori.is-compact .hf-field--warning .fd-textarea, .htmx-fiori.is-compact .hf-field--warning .fd-select {
+  background: var(--sapField_WarningBackground, #fff8d6);
+  border-color: var(--sapField_WarningColor, #e76500);
+}
+.hf-field__message {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: 100%;
+  z-index: 8;
+  margin-top: .125rem;
+  padding: .375rem .625rem;
+  max-width: 20rem;
+  font-size: .875rem;
+  color: var(--sapTextColor, #1d2d3e);
+  background: var(--sapField_Background, #fff);
+  border: 1px solid var(--sapField_InvalidColor, #d20a0a);
+  border-radius: .25rem;
+  box-shadow: var(--sapContent_Shadow1, 0 0 .125rem rgba(34, 53, 72, .2), 0 .125rem .25rem rgba(34, 53, 72, .2));
+}
+.hf-field--error:focus-within .hf-field__message:not(:empty),
+.hf-field--warning:focus-within .hf-field__message:not(:empty) { display: block; }
+
+.hf-footer__messages { display: flex; align-items: center; }
+.hf-draft-status { font-style: italic; font-size: .875rem; color: var(--sapContent_LabelColor, #556b82); margin-right: .5rem; }
+.hf-msg-button {
+  display: inline-flex; align-items: center; gap: .375rem; height: 1.75rem; padding: 0 .5rem; border: 0;
+  border-radius: .5rem; cursor: pointer; font: inherit; font-weight: 700; color: #fff;
+  background: var(--sapNegativeElementColor, #d20a0a);
+}
+.hf-msg-button--warning { background: var(--sapCriticalElementColor, #e76500); }
+.hf-msg-button--info { background: var(--sapInformativeElementColor, #0a6ed1); }
+.hf-msg-button i { color: #fff; font-size: 1rem; }
+.hf-popover--up .fd-popover__body { top: auto; bottom: 100%; margin: 0 0 .5rem; }
+.hf-msg-popover {
+  width: min(27.5rem, calc(100vw - 2rem)); max-height: 20rem; overflow: auto; padding: 0;
+  background: var(--sapGroup_ContentBackground, #fff); border: 1px solid var(--sapGroup_ContentBorderColor, #d9d9d9);
+  border-radius: var(--sapElement_BorderCornerRadius, .75rem); box-shadow: var(--sapContent_Shadow2, 0 0 .125rem rgba(34, 53, 72, .2), 0 .25rem .5rem rgba(34, 53, 72, .3));
+}
+.hf-msg-popover__header { padding: .75rem 1rem; border-bottom: 1px solid var(--sapGroup_TitleBorderColor, #d9d9d9); }
+.hf-msg-popover__list { margin: 0; padding: .25rem 0; list-style: none; }
+.hf-msg-item { display: flex; gap: .75rem; width: 100%; padding: .625rem 1rem; text-align: left; background: none; border: 0; font: inherit; cursor: pointer; }
+.hf-msg-item:hover { background: var(--sapList_Hover_Background, #eaecee); }
+.hf-msg-item__icon { font-size: 1.125rem; color: var(--sapNegativeElementColor, #d20a0a); }
+.hf-msg-item__icon--warning { color: var(--sapCriticalElementColor, #e76500); }
+.hf-msg-item__icon--info { color: var(--sapInformativeElementColor, #0a6ed1); }
+.hf-msg-item__text { display: block; font-weight: 700; color: var(--sapLinkColor, #0064d9); }
+.hf-msg-item__label { display: block; font-size: .875rem; color: var(--sapContent_LabelColor, #556b82); margin-top: .125rem; }
+
+/* ---------- modal dialog (value help) ---------- */
+.hf-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(48rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 4rem);
+  background: var(--sapBackgroundColor, #fff);
+  border-radius: var(--sapElement_BorderCornerRadius, .75rem);
+  box-shadow: var(--sapContent_Shadow3, 0 0 .125rem rgba(34, 53, 72, .2), 0 .625rem 1.875rem rgba(34, 53, 72, .25));
+  overflow: hidden;
+}
+.hf-dialog__header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--sapGroup_TitleBorderColor, #d9d9d9); }
+.hf-dialog__body { padding: 1rem 1.5rem; overflow: auto; }
+.hf-dialog__footer { display: flex; justify-content: flex-end; padding: .625rem 1rem; border-top: 1px solid var(--sapGroup_TitleBorderColor, #d9d9d9); }
+.hf-vh__search { display: flex; gap: .75rem; align-items: center; margin-bottom: 1rem; }
+.hf-vh__search .hf-input-group { flex: 1 1 auto; }
+.hf-vh__count { margin: 0 0 .5rem; }
+.hf-vh__scroll { max-height: 22rem; overflow: auto; }
+.hf-vh-row { cursor: pointer; }
+.hf-vh-row:focus-visible { outline: 2px solid var(--sapContent_FocusColor, #0032a5); outline-offset: -2px; }

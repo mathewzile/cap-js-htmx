@@ -19,6 +19,7 @@ const actionsLib = require('./data/actions')
 const valueListLib = require('./data/value-list')
 const messageRender = require('./render/messages')
 const playgroundRender = require('./render/playground')
+const draftMessages = require('./data/draft-messages')
 const toastRender = require('./render/toast')
 const listReportRender = require('./render/list-report')
 const objectPageRender = require('./render/object-page')
@@ -239,6 +240,14 @@ class HtmxAdapter extends HttpAdapter {
     return [err, ...(err.details || [])].map(e => ({ severity: 'error', message: e.message }))
   }
 
+  /** A refused edit/save: the page stays as it is, the messages go to the page script (value states on the
+   *  fields and the footer's message button, like FE). The body only clears the message strip: 4xx bodies are
+   *  swapped by htmx, and an empty one would empty the page. */
+  validationFailed(req, res, entityType, messages, { status = 422, contextPath } = {}) {
+    const layout = cache.objectPageFor(cds.model, this.service.name, this.odataServicePath(), entityType, contextPath ?? `/${entityType.split('.').pop()}`, this.appOpts(req))
+    res.status(status).set('HX-Trigger', draftMessages.triggerHeader({ set: draftMessages.labelled(messages, layout) })).type('html').send(this.messagesPartial([]))
+  }
+
   /** Object Page (§routes: `GET /:Set(keys)[/nav(keys)...]`): the full page/fragment -- header,
    *  header facets, sections (forms/dataPoint/contact/table), derived from the *whole* `OPLayout`
    *  tree, not just the LineItem/SideEffects slice (§3.1: "translate all resulting annotations to
@@ -255,6 +264,7 @@ class HtmxAdapter extends HttpAdapter {
     if (!page) return this.objectNotFound(req, res, tx, { keys, segments })
     const { layout: opLayout, row, bundle, valueLists, children } = page
     if (overrides) Object.assign(row, overrides)
+    const persisted = row.IsActiveEntity === false ? draftMessages.labelled(draftMessages.fromDraftMessages(row.DraftMessages), opLayout) : []
     const entitySetPath = segments.map(s => `${s.set}${s.raw ? `(${s.raw})` : ''}`).join('/')
     if (keys) this.trackView(req, { entityType, keys, contextPath, entitySetPath })
     const title = keys
@@ -269,7 +279,7 @@ class HtmxAdapter extends HttpAdapter {
 
     let body = objectPageRender.objectPageFragment(opLayout, row, {
       basePath: base, entitySetPath, trail, children, bundle, t: i18n.t, valueLists, editMode,
-      successMessage: req.successMessage
+      successMessage: req.successMessage, messages: persisted
     })
     if (messages?.length) body = html`${rawHtml(this.messagesPartial(messages))}${body}`
     if (status) res.status(status)
@@ -402,15 +412,19 @@ class HtmxAdapter extends HttpAdapter {
       await draftLib.patch(tx, entity.name, keys, { [path]: value })
     } catch (err) {
       if (!HtmxAdapter.isUserError(err)) throw err
-      return res.status(422).type('html').send(this.messagesPartial(HtmxAdapter.messagesOf(err)))
+      return this.validationFailed(req, res, entity.name, [{ ...draftMessages.fromError(err)[0], path }], { status: 422, contextPath: `/${set}` })
     }
     const view = { service: this.service.name, servicePath: this.odataServicePath(), entityType: entity.name, keys, contextPath: `/${set}`, basePath: this.basePath(req), entitySetPath: `${set}(${raw})` }
     const header = req.headers['x-hf-source']
     const source = typeof header === 'string' && /^[\w-]+$/.test(header) ? header : null
-    const parts = await engine.bindingParts(tx, view, { path, source, ...this.appOpts(req) })
-      .catch(err => { console.error('[htmx] binding refresh for', path, 'failed:', err.message); return [] })
-    // clears a stale validation message of this field as well
-    const markup = `${this.messagesPartial([])}${parts.length ? '\n' + engine.partialsMarkup(parts) : ''}`
+    const { parts, layout, row } = await engine.bindingParts(tx, view, { path, source, ...this.appOpts(req) })
+      .catch(err => { console.error('[htmx] binding refresh for', path, 'failed:', err.message); return { parts: [], layout: null, row: null } })
+    // The value is valid again (clear its message) unless it is a mandatory field the user emptied
+    const missing = layout ? draftMessages.missingMandatory(layout, row, [path], this.text(req, 'MissingValue')) : []
+    res.set('HX-Trigger', draftMessages.triggerHeader({ clear: [path], set: draftMessages.labelled(missing, layout ?? {}) }))
+    const status = `<hx-partial hx-target="#op-draft-status" hx-swap="innerHTML">${this.text(req, 'DraftSavedStatus')}</hx-partial>`
+    // clears a stale validation strip as well
+    const markup = [this.messagesPartial([]), status, ...(parts.length ? [engine.partialsMarkup(parts)] : [])].join('\n')
     res.status(200).type('html').send(markup)
     // The response is out; annotated side effects are pushed over SSE inside this same transaction, so they see the patch
     const clientId = req.headers['x-htmx-client']
@@ -421,29 +435,36 @@ class HtmxAdapter extends HttpAdapter {
 
   /** `GET /:Set/$vh/:path?$search=...` (§routes): Value-help dialog for @Common.ValueList (unbounded, searchable). */
   async valueHelp(req, res, tx) {
-    const { set, raw } = keysLib.splitSegments(req.params.Set)[0] || {}
+    const { set } = keysLib.splitSegments(req.params.Set)[0] || {}
+    const { raw: keyRaw } = keysLib.splitSegments(req.params.Set)[0] || {}
     const entity = this.entitySet(set)
     if (!entity) return res.sendStatus(404)
     const path = req.params.path
-    const search = req.query.$search || ''
+    const search = String(req.query.$search || '')
 
     const store = cache.storeFor(cds.model, this.service.name, this.odataServicePath(), this.appOpts(req))
     const fieldsLib = require('./model/fields')
     const field = fieldsLib.buildField(store, entity.name, path)
-    const valueList = field?.valueList
-    if (!valueList) return res.sendStatus(404)
-
-    const parsed = valueListLib.parseValueList(valueList)
+    const parsed = valueListLib.parseValueList(field?.valueList)
     if (!parsed) return res.sendStatus(404)
-    const { collectionPath, valueProp, textProp } = parsed
+    const { collectionPath, valueProp, columns: props, searchSupported } = parsed
 
-    let q = SELECT.from(collectionPath).columns([valueProp, textProp])
-    if (search) q = q.search(search)
-    const rows = await tx.run(q.limit(100))
-    const options = rows.map(r => ({ value: r[valueProp], text: r[textProp] != null ? String(r[textProp]) : String(r[valueProp]) }))
+    // Column headers: the value list entity's own labels (Common.Label), like FE's table
+    const collectionType = collectionPath.includes('.') ? collectionPath : `${this.service.name}.${collectionPath}`
+    const bundle = cache.bundleFor(this.appOpts(req))
+    const labelOf = label => i18n.resolveText(label, bundle) // labels are still {i18n>Key} placeholders here
+    const columns = props.map(prop => ({ prop, label: labelOf(fieldsLib.buildField(store, collectionType, prop)?.label ?? prop) }))
+    let q = SELECT.from(collectionPath).columns(props)
+    if (search && searchSupported) q = q.search(search)
+    const rows = await tx.run(q.limit(200))
 
-    const body = valueHelpRender.valueHelpDialog(field, options, { basePath: this.basePath(req), entitySetPath: `${set}(${raw})`, collectionPath, valueProp, textProp })
-    this.render(req, res, { title: `${field.label} - Value Help`, body })
+    const t = key => i18n.t(bundle, key)
+    // Searching only replaces the results, opening sends the whole dialog (into #dialogs)
+    if (req.headers['hx-target'] === 'div#vh-results') {
+      return res.type('html').send(String(valueHelpRender.valueHelpResults(columns, rows, { valueProp, t })))
+    }
+    const entitySetPath = keyRaw ? `${set}(${keyRaw})` : set
+    res.type('html').send(String(valueHelpRender.valueHelpDialog({ ...field, label: labelOf(field.label) }, columns, rows, { basePath: this.basePath(req), entitySetPath, valueProp, search, searchSupported, t })))
   }
 
   /** `POST /:Set/$action/:name` (§routes Phase 5d): Invoke a bound action and re-render the OP with the result. */
@@ -478,7 +499,13 @@ class HtmxAdapter extends HttpAdapter {
 
     if (edit.mode === 'draft') {
       const keys = keysLib.parseKeys(raw)
-      await draftLib.save(tx, entity.name, keys)
+      try {
+        await draftLib.save(tx, entity.name, keys)
+      } catch (err) {
+        if (!HtmxAdapter.isUserError(err)) throw err
+        req.hfFailure = e => this.validationFailed(req, res, entity.name, draftMessages.fromError(e), { status: 422, contextPath: `/${set}` })
+        throw err // roll back: CAP stores the failed activation's messages as the draft's DraftMessages
+      }
       const activeKeys = { ...keys, IsActiveEntity: true }
       const activeRaw = keysLib.formatKeys(activeKeys)
       res.set('HX-Push-Url', `${this.basePath(req)}/${set}(${activeRaw})`)
@@ -513,7 +540,7 @@ class HtmxAdapter extends HttpAdapter {
       }
     } catch (err) {
       if (!HtmxAdapter.isUserError(err)) throw err
-      return this.objectPage(req, res, tx, { entityType: entity.name, keys, segments, contextPath, editMode, overrides: values, messages: HtmxAdapter.messagesOf(err), status: 422 })
+      return this.validationFailed(req, res, entity.name, draftMessages.fromError(err), { status: 422, contextPath })
     }
     req.successMessage = this.text(req, creating ? 'ObjectCreated' : 'ObjectSaved')
     if (!creating) return this.objectPage(req, res, tx, { entityType: entity.name, keys, segments, contextPath })
@@ -692,7 +719,9 @@ class HtmxAdapter extends HttpAdapter {
   /** Wraps a handler so it runs inside a service transaction and errors reach the HttpAdapter error handler. */
   handle(fn) {
     const srv = this.service
-    return (req, res, next) => srv.tx(req, tx => fn.call(this, req, res, tx)).catch(next)
+    // `req.hfFailure`: a handler that wants to answer an error itself, AFTER the transaction rolled back
+    // (CAP persists draft messages from the rollback of a failed activation, so the error must propagate)
+    return (req, res, next) => srv.tx(req, tx => fn.call(this, req, res, tx)).catch(err => req.hfFailure ? req.hfFailure(err) : next(err))
   }
 
   isFragmentRequest(req) {

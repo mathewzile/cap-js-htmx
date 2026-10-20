@@ -19,7 +19,7 @@ function toolbar({ typeNamePlural, count, basePath, entitySetPath, bundle, t, ed
       <div class="hf-spacer"></div>
       ${create ? html`<button class="fd-button fd-button--transparent" aria-label="${t(bundle, 'Create')}"
         ${draft
-          ? raw(`hx-post="${basePath}/${entitySetPath}" hx-push-url="true"`)
+          ? raw(`hx-post="${basePath}/${entitySetPath}" hx-push-url="false"`)
           : raw(`hx-get="${basePath}/${entitySetPath}/$new"`)}
         hx-target="#app" hx-swap="innerHTML show:window:top">${t(bundle, 'Create')}</button>` : html``}
       ${del ? html`<button class="fd-button fd-button--transparent" disabled data-hf-needs-selection aria-label="${t(bundle, 'Delete')}"

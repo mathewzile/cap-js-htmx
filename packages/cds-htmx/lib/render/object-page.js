@@ -23,8 +23,14 @@ function breadcrumbs(trail, basePath) {
     </nav>`
 }
 
+/** FE's RatingIndicator rounds to half stars (4.7 shows 4.5). A star glyph fills 1.375 of its 1.6875rem slot
+ *  (the rest is margin), so a half star clips at half of the glyph, not half of the slot. */
+const STAR_GLYPH_SHARE = 1.375 / 1.6875
+
 function ratingIndicator(value, max) {
-  const pct = Math.max(0, Math.min(100, (Number(value) / max) * 100))
+  const rounded = Math.max(0, Math.min(max, Math.round(Number(value) * 2) / 2))
+  const whole = Math.floor(rounded)
+  const pct = ((whole + (rounded - whole) * STAR_GLYPH_SHARE) / max) * 100
   const stars = icon => Array.from({ length: max }, () => html`<i class="sap-icon--${icon}" aria-hidden="true"></i>`)
   return html`<span class="hf-rating" role="img" aria-label="${value} of ${max}"><span class="hf-rating__empty">${stars('unfavorite')}</span><span class="hf-rating__fill" style="width:${pct.toFixed(1)}%">${stars('favorite')}</span></span>`
 }
@@ -190,10 +196,10 @@ function headerActions(actions, bundle, t, { basePath, entitySetPath, editMode, 
       })}
       ${display && canEdit && !draftExists ? html`
         <button class="fd-button fd-button--emphasized" aria-label="${t(bundle, 'Edit')}"
-          hx-post="${opPath}/$edit" hx-target="#app" ${isDraftRoot ? raw('hx-push-url="true"') : html``} hx-swap="innerHTML show:window:top">${t(bundle, 'Edit')}</button>` : html``}
+          hx-post="${opPath}/$edit" hx-target="#app" hx-push-url="false" hx-swap="innerHTML show:window:top">${t(bundle, 'Edit')}</button>` : html``}
       ${display && canDelete ? html`
         <button class="fd-button" aria-label="${t(bundle, 'Delete')}" ${draftExists ? raw('disabled') : html``}
-          hx-delete="${opPath}" hx-target="#app" hx-push-url="true" hx-swap="innerHTML show:window:top"
+          hx-delete="${opPath}" hx-target="#app" hx-push-url="false" hx-swap="innerHTML show:window:top"
           ${confirmAttrs(t(bundle, 'ConfirmDeleteObject'), { bundle, t, title: 'Delete', ok: 'Delete', critical: true })}>${t(bundle, 'Delete')}</button>` : html``}
     </div>`
 }
@@ -214,14 +220,16 @@ function footerBar(bundle, t, { basePath, entitySetPath, editMode } = {}) {
   const include = editMode === 'draft' ? '' : raw(`hx-include="#${ids.opPage()}"`)
   const saveLabel = editMode === 'create' ? 'CreateObject' : 'Save'
   const discard = editMode === 'draft'
-    ? html`<button class="fd-button fd-button--transparent" hx-post="${opPath}/$discard" hx-target="#app" hx-push-url="true"
+    ? html`<button class="fd-button fd-button--transparent" hx-post="${opPath}/$discard" hx-target="#app" hx-push-url="false"
         hx-swap="innerHTML show:window:top" ${confirmAttrs(t(bundle, 'ConfirmDiscardDraft'), { bundle, t, title: 'DiscardDraft', ok: 'DiscardDraft' })}>${t(bundle, 'DiscardDraft')}</button>`
-    : html`<button class="fd-button fd-button--transparent" hx-post="${opPath}/$discard" hx-target="#app" ${editMode === 'create' ? raw('hx-push-url="true"') : html``}
+    : html`<button class="fd-button fd-button--transparent" hx-post="${opPath}/$discard" hx-target="#app" hx-push-url="false"
         hx-swap="innerHTML show:window:top">${t(bundle, 'Cancel')}</button>`
   return html`
     <footer class="hf-footer" id="${ids.opFooter()}">
+      <div id="${ids.opMessages()}" class="hf-footer__messages"></div>
       <div class="hf-spacer"></div>
-      <button class="fd-button fd-button--emphasized" hx-post="${opPath}/$save" hx-target="#app" ${editMode === 'direct' ? html`` : raw('hx-push-url="true"')}
+      ${editMode === 'draft' ? html`<span id="${ids.opDraftStatus()}" class="hf-draft-status" aria-live="polite" data-saving="${t(bundle, 'Saving')}"></span>` : html``}
+      <button class="fd-button fd-button--emphasized" hx-post="${opPath}/$save" hx-target="#app" hx-push-url="false"
         ${include} hx-swap="innerHTML show:window:top">${t(bundle, saveLabel)}</button>
       ${discard}
     </footer>`
@@ -265,6 +273,13 @@ function headerAvatar(header, row) {
   return html``
 }
 
+/** The title, or FE's "Unnamed Object" while it is empty (e.g. the user cleared it in a draft). */
+function titleOf(layout, row, ctx) {
+  const value = evaluate(layout.header?.title?.Value, row)
+  if (value == null || String(value).trim() === '') return layout.header?.title?.Value ? ctx.t(ctx.bundle, 'UnnamedObject') : layout.header?.typeName ?? ''
+  return value
+}
+
 /** Heading + subtitle (`HeaderInfo.Title`/`Description`); own id so a side effect can refresh just the title. */
 function titleText(title, description) {
   return html`<div id="${ids.opTitle()}" class="hf-op-title__text">
@@ -284,12 +299,12 @@ function objectPageFragment(layout, row, ctx) {
   const visibleSections = (layout.sections || []).filter(s => !(s.hidden && evaluate(s.hidden, row) === true))
   const title = editMode === 'create'
     ? ctx.t(ctx.bundle, 'NewObject').replace('{0}', layout.header?.typeName ?? '')
-    : evaluate(layout.header?.title?.Value, row) ?? layout.header?.typeName ?? ''
+    : titleOf(layout, row, ctx)
   const description = evaluate(layout.header?.description?.Value, row)
   const headerFacets = layout.headerFacets || []
   return html`
     ${ctx.successMessage ? raw(`<hx-partial hx-target="#${ids.toast()}" hx-swap="outerHTML">${toast(ctx.successMessage).value}</hx-partial>`) : html``}
-    <div id="${ids.opPage()}" class="hf-page hf-page--op${editMode ? ' hf-page--edit' : ''}" data-entity-type="${layout.entityType}">
+    <div id="${ids.opPage()}" class="hf-page hf-page--op${editMode ? ' hf-page--edit' : ''}" data-entity-type="${layout.entityType}"${ctx.messages?.length ? html` data-hf-messages="${JSON.stringify(ctx.messages)}"` : html``}>
       <header class="hf-page__header hf-op-header" id="${ids.opHeader()}">
         ${breadcrumbs(ctx.trail, ctx.basePath)}
         <div class="hf-op-title">
@@ -341,7 +356,7 @@ function sideEffectParts(layout, row, ctx, { properties = [], entities = [], all
   const parts = []
   const header = layout.header || {}
   if ([header.title, header.description].some(expr => pathsOf(expr).some(p => props.has(p)))) {
-    const title = evaluate(header.title?.Value, row) ?? header.typeName ?? ''
+    const title = titleOf(layout, row, ctx)
     parts.push({ target: '#' + ids.opTitle(), html: titleText(title, evaluate(header.description?.Value, row)), swap: 'outerMorph' })
   }
   eachLeaf([...(layout.headerFacets || []), ...(layout.sections || [])], facet => {
