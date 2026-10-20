@@ -12,15 +12,17 @@
     "cds-htmx": "*"
   },
   "devDependencies": {
-    "@cap-js/sqlite": "^3",
     "@cap-js/cds-test": "^1",
-    "node-html-parser": "^6",
-    "cds-plugin-ui5": "^0.17.0"
+    "@cap-js/sqlite": "^3",
+    "@playwright/test": "^1.64.1",
+    "cds-plugin-ui5": "^0.17.0",
+    "node-html-parser": "^6"
   },
   "scripts": {
     "start": "cds-serve",
     "watch": "cds watch",
     "test": "node --env-file=packages/cds-htmx/test/test.env --test \"packages/cds-htmx/test/**/*.test.js\"",
+    "test:e2e": "playwright test -c packages/cds-htmx/test/e2e/playwright.config.js",
     "test:parity": "playwright test test/e2e/parity.spec.ts",
     "watch-manage-books": "cds watch --open managebooks/index.html?sap-ui-xx-viewCache=false --livereload false"
   },

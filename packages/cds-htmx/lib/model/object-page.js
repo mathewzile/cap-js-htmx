@@ -97,7 +97,8 @@ function buildObjectPage(model, store, entityType, { pageSettings } = {}) {
     headerActions: (identification || []).map(r => buildColumn(store, entityType, r)),
     sections: facets.map(f => buildFacet(model, store, entityType, f)),
     editableHeaderContent: pageSettings?.editableHeaderContent ?? feDefaults.objectPage.editableHeaderContent,
-    sectionLayout: pageSettings?.sectionLayout || feDefaults.objectPage.sectionLayout
+    sectionLayout: pageSettings?.sectionLayout || feDefaults.objectPage.sectionLayout,
+    edit: require('./edit-capabilities').editCapabilities(store, entityType)
   }
 }
 

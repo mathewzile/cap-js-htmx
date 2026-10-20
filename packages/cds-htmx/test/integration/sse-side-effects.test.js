@@ -72,16 +72,16 @@ describe('SSE side effects (Phase 6)', () => {
     expect(edit.status).to.equal(200)
 
     try {
-      const res = await PATCH(`/htmx/catalog/Books(${DRAFT})/$field/stock`, { stock: 3 }, { headers: c.headers })
-      expect(res.status).to.equal(204)
+      const res = await PATCH(`/htmx/catalog/Books(${DRAFT})/$field/stock`, { stock: 0 }, { headers: c.headers })
+      expect(res.status).to.equal(200)
 
       const out = await c.readUntil(/event: htmx:fe:sideEffects\n/)
       const message = out.slice(out.indexOf('\n\n', out.indexOf('event: connected')) + 2)
       // unnamed message => swapped by hx-sse; the named event follows it
       expect(message).to.match(/^data: <hx-partial hx-target="#op-field--[^"]+--stockStatus" hx-swap="outerMorph">/m)
       // stockCriticality is the Status field's own criticality, so it rides along in the same partial
-      expect(message).to.include('fd-object-status--critical')
-      expect(message).to.include('Low Stock')
+      expect(message).to.include('fd-object-status--negative')
+      expect(message).to.include('Out of Stock') // Jane Eyre (stock 5, Low Stock) -> stock 0 changes the status
       // Target list of #Stock: stockStatus + stockCriticality only (no unrelated field re-rendered)
       expect(message).not.to.match(/hx-target="#op-field--[^"]+--title"/)
     } finally {
@@ -108,7 +108,7 @@ describe('SSE side effects (Phase 6)', () => {
     await POST(`/htmx/catalog/Books(${ACTIVE})/$edit`, {}, { headers: { 'HX-Request': 'true' } })
     try {
       const res = await PATCH(`/htmx/catalog/Books(${DRAFT})/$field/stock`, { stock: 4 })
-      expect(res.status).to.equal(204)
+      expect(res.status).to.equal(200)
     } finally {
       await POST(`/htmx/catalog/Books(${DRAFT})/$discard`, {}, { headers: { 'HX-Request': 'true' } })
     }

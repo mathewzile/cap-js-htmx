@@ -1,3 +1,4 @@
+/* global TextDecoder */
 const cds = require('@sap/cds')
 const path = require('node:path')
 const api = cds.test(path.join(__dirname, '..', '..', '..', '..'))

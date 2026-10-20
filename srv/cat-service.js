@@ -9,12 +9,15 @@ function computeStockFields(stock) {
 export default cds.service.impl(async function () {
   const { Books, Chapters } = this.entities
 
-  this.before(['CREATE', 'UPDATE'], 'Books', req => {
+  // Drafts have their own entity (Books.drafts): editing a draft must recompute the status too
+  const bookEntities = [Books, Books.drafts]
+
+  this.before(['CREATE', 'UPDATE'], bookEntities, req => {
     if (req.data.stock == null) return
     Object.assign(req.data, computeStockFields(req.data.stock))
   })
 
-  this.after('READ', 'Books', results => {
+  this.after('READ', bookEntities, results => {
     for (const row of Array.isArray(results) ? results : [results]) {
       if (row?.stock != null) Object.assign(row, computeStockFields(row.stock))
     }

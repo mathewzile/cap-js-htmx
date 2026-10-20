@@ -3,6 +3,7 @@ const { evaluate } = require('../annotations/expressions')
 const { criticalityClass, criticalityIcon, formatAmount, formatNumber, formatBoolean, columnValue } = require('../data/format')
 const { formatKeys } = require('../keys')
 const ids = require('./ids')
+const { canDelete } = require('../model/edit-capabilities')
 
 /** A `UI.DataField`-shaped column's display text for one row. Columns whose `Value` isn't a plain
  *  `$Path` (`col.field.expr`, §list-report.js `valueField()`) have no single property to read --
@@ -84,8 +85,13 @@ function objectStatus(cls, text) {
   return html`<span class="fd-object-status fd-object-status--${cls}">${icon ? html`<i class="fd-object-status__icon sap-icon--${icon}" role="presentation" aria-hidden="true"></i>` : html``}<span class="fd-object-status__text">${text}</span></span>`
 }
 
-function checkbox(label) {
-  return html`<input type="checkbox" class="hf-checkbox" aria-label="${label}">`
+function checkbox(label, { name, value } = {}) {
+  return html`<input type="checkbox" class="hf-checkbox" aria-label="${label}"${name ? raw(` name="${name}"`) : html``}${value != null ? html` value="${value}"` : html``}>`
+}
+
+/** Row selection exists to act on rows (Delete); an entity that can't be deleted gets no checkbox column (FE). */
+function isSelectable(layout) {
+  return layout.edit ? canDelete(layout.edit) : true
 }
 
 function headerCell(col, { basePath, entitySetPath, orderBy, numeric, sortable, index }) {
@@ -143,8 +149,9 @@ function rowMarkup(layout, row, { basePath, entitySetPath, keyNames, bundle, t, 
   const href = rowHref(basePath, entitySetPath, keyNames, row)
   return html`
     <tr id="${rowId(keyNames, row)}" class="fd-table__row fd-table__row--activable fd-table__row--hoverable"
-        hx-get="${href}" hx-trigger="click[!event.target.closest('.fd-table__cell--checkbox')]">
-      ${selectable ? html`<td class="fd-table__cell fd-table__cell--checkbox">${checkbox('Select row')}</td>` : html``}
+        hx-get="${href}" hx-trigger="click[!event.target.closest('.fd-table__cell--checkbox')]"
+        hx-target="#app" hx-push-url="true" hx-swap="innerHTML show:window:top">
+      ${selectable ? html`<td class="fd-table__cell fd-table__cell--checkbox">${checkbox('Select row', { name: 'keys', value: formatKeys(keyValues(keyNames, row)) })}</td>` : html``}
       ${layout.table.columns.map((col, i) => dataCell(col, row, { bundle, t, isFirst: i === 0, numeric: numeric[i], index: i }))}
       <td class="fd-table__cell hf-col-nav">
         <i class="sap-icon--slim-arrow-right" aria-hidden="true"></i>
@@ -193,14 +200,15 @@ function tableHead(columns, rows, { basePath, entitySetPath, orderBy, selectable
  *  activable/hoverable rows with a navigation arrow cell. */
 function table(layout, rows, ctx) {
   const { basePath, entitySetPath, orderBy } = ctx
+  const selectable = isSelectable(layout)
   return html`
-    ${columnVisibilityStyle(`#${ids.lrTable()}`, layout.table.columns, rows)}
+    ${columnVisibilityStyle(`#${ids.lrTable()}`, layout.table.columns, rows, { selectable })}
     <table id="${ids.lrTable()}" class="fd-table hf-table" role="table">
-      ${tableHead(layout.table.columns, rows, { basePath, entitySetPath, orderBy })}
-      <tbody id="${ids.lrTableBody()}">${raw(rowsHtml(layout, rows, ctx).value)}</tbody>
+      ${tableHead(layout.table.columns, rows, { basePath, entitySetPath, orderBy, selectable })}
+      <tbody id="${ids.lrTableBody()}">${raw(rowsHtml(layout, rows, { ...ctx, selectable }).value)}</tbody>
     </table>
     ${growingButton(basePath, entitySetPath, ctx)}
   `
 }
 
-module.exports = { table, tableHead, rowsHtml, rowMarkup, rowId, isNumericColumn, cellText, rowHref, keyValues, objectStatus, columnBreakpoints, columnVisibilityStyle }
+module.exports = { table, tableHead, isSelectable, rowsHtml, rowMarkup, rowId, isNumericColumn, cellText, rowHref, keyValues, objectStatus, columnBreakpoints, columnVisibilityStyle }

@@ -28,7 +28,7 @@ function page({ title, clientId, basePath, assetBase = '', body }) {
 </head>
 <body class="htmx-fiori is-compact"${clientId ? raw(` hx-headers:inherited='{"X-Htmx-Client":"${clientId}"}'`) : ''}>
   <div id="shell"></div>
-  <div id="app" hx-target:inherited="#app" hx-swap:inherited="innerHTML show:window:top" hx-push-url:inherited="true">${raw(body)}</div>
+  <div id="app">${raw(body)}</div>
   <div id="messages"></div>
   <div id="toast"></div>
   <div id="dialogs"></div>

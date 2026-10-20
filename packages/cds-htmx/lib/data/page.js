@@ -32,18 +32,19 @@ function collectFormFields(facets, out = []) {
  *  store), the row (with exactly the columns that layout renders), the child rows of every table
  *  section and, in draft mode, the fixed-value options. Shared by the `GET` route and the SSE
  *  side-effects engine, so a pushed re-render sees the same data a reload would (§4.2). */
-async function loadObjectPage(tx, { service, servicePath, entityType, keys, contextPath, appRoot, locale, app }) {
+async function loadObjectPage(tx, { service, servicePath, entityType, keys, contextPath, appRoot, locale, app, editing = false }) {
   const layout = cache.objectPageFor(cds.model, service, servicePath, entityType, contextPath, { appRoot, locale, app })
   const bundle = cache.bundleFor({ appRoot, locale, app })
 
+  // `keys == null`: an empty object for the create page of a non-draft entity
   const columns = queryLib.objectPageColumns(cds.model, entityType, layout)
-  const row = await tx.run(queryLib.objectPageQuery(entityType, keys, columns))
+  const row = keys ? await tx.run(queryLib.objectPageQuery(entityType, keys, columns)) : {}
   if (!row) return null
 
   const facets = [...(layout.headerFacets || []), ...(layout.sections || [])]
 
   let valueLists
-  if (row.IsActiveEntity === false) {
+  if (row.IsActiveEntity === false || editing) {
     const fixedFields = collectFormFields(facets).filter(f => f.fixedValues && f.valueList)
     if (fixedFields.length) {
       valueLists = {}
@@ -52,7 +53,7 @@ async function loadObjectPage(tx, { service, servicePath, entityType, keys, cont
   }
 
   const children = {}
-  for (const facet of collectTableFacets(facets)) {
+  for (const facet of keys ? collectTableFacets(facets) : []) {
     const { targetEntityType, columns: childFacetColumns } = facet.content
     const childLayout = { table: { columns: childFacetColumns }, filterBar: { fields: [] } }
     const childColumns = queryLib.selectColumns(cds.model, targetEntityType, childLayout)

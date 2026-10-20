@@ -45,13 +45,15 @@ describe('Draft lifecycle routes (Phase 5)', () => {
       `/htmx/catalog/Books(${createdDraftRaw})/$field/title`,
       { title: 'Patched Draft Title' }
     )
-    expect(res.status).to.equal(204)
+    expect(res.status).to.equal(200) // 200: carries the other places that show the value (header title)
+    expect(res.data).to.include('id="op-title"')
+    expect(res.data).to.include('Patched Draft Title')
 
     const res2 = await PATCH(
       `/htmx/catalog/Books(${createdDraftRaw})/$field/author_ID`,
       { author_ID: authorId }
     )
-    expect(res2.status).to.equal(204)
+    expect(res2.status).to.equal(200)
   })
 
   test('POST /:Set(keys)/$save activates the draft, rendering the active Object Page with the patched value', async () => {

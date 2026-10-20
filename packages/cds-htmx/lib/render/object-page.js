@@ -5,6 +5,7 @@ const { formField, fieldLabel } = require('./field')
 const { rowsHtml, tableHead, columnVisibilityStyle } = require('./table')
 const { criticalityClass } = require('../data/format')
 const { toast } = require('./toast')
+const { canEdit, canDelete } = require('../model/edit-capabilities')
 
 /** Ancestor trail above the title (§3.4: "Title: fd-breadcrumb (sub-OP)"). Like FE, the current
  *  object is not repeated and a top-level Object Page shows no breadcrumb at all. */
@@ -127,7 +128,7 @@ function facetContent(facet, row, ctx) {
   switch (content.kind) {
     case 'form':
       return formLayout(content.fields.map(col => formField(col, row, {
-        facetId: facet.id, isDraft: ctx.isDraft, basePath: ctx.basePath, entitySetPath: ctx.entitySetPath, valueLists: ctx.valueLists
+        facetId: facet.id, isDraft: ctx.isDraft, editMode: ctx.editMode, basePath: ctx.basePath, entitySetPath: ctx.entitySetPath, valueLists: ctx.valueLists
       })).filter(f => f.value.trim()))
     case 'dataPoint':
     case 'contact':
@@ -177,8 +178,9 @@ function anchorBar(sections) {
  *  back to List Report); in draft (edit) mode neither applies -- Save/Discard live in the floating
  *  footer instead (§3.4: "floating footer ... Save ... Discard Draft"). Actions are now active buttons
  *  that POST to $action/:name (Phase 5d). */
-function headerActions(actions, bundle, t, { basePath, entitySetPath, isDraft } = {}) {
+function headerActions(actions, bundle, t, { basePath, entitySetPath, editMode, canEdit, canDelete, draftExists, isDraftRoot } = {}) {
   const opPath = `${basePath}/${entitySetPath}`
+  const display = !editMode
   return html`
     <div class="hf-op-title__actions">
       ${actions.map(col => {
@@ -186,30 +188,68 @@ function headerActions(actions, bundle, t, { basePath, entitySetPath, isDraft } 
         return html`<button class="fd-button"
           hx-post="${opPath}/$action/${actionName}" hx-target="#app" hx-swap="innerHTML show:window:top">${col.label}</button>`
       })}
-      ${isDraft ? html`` : html`
+      ${display && canEdit && !draftExists ? html`
         <button class="fd-button fd-button--emphasized" aria-label="${t(bundle, 'Edit')}"
-          hx-post="${opPath}/$edit" hx-target="#app" hx-push-url="true" hx-swap="innerHTML show:window:top">${t(bundle, 'Edit')}</button>`}
-      ${isDraft ? html`` : html`
-        <button class="fd-button" aria-label="${t(bundle, 'Delete')}"
-          hx-delete="${opPath}" hx-target="#app" hx-push-url="true" hx-confirm="${t(bundle, 'Delete')}?"
-          hx-swap="innerHTML show:window:top">${t(bundle, 'Delete')}</button>`}
+          hx-post="${opPath}/$edit" hx-target="#app" ${isDraftRoot ? raw('hx-push-url="true"') : html``} hx-swap="innerHTML show:window:top">${t(bundle, 'Edit')}</button>` : html``}
+      ${display && canDelete ? html`
+        <button class="fd-button" aria-label="${t(bundle, 'Delete')}" ${draftExists ? raw('disabled') : html``}
+          hx-delete="${opPath}" hx-target="#app" hx-push-url="true" hx-swap="innerHTML show:window:top"
+          ${confirmAttrs(t(bundle, 'ConfirmDeleteObject'), { bundle, t, title: 'Delete', ok: 'Delete', critical: true })}>${t(bundle, 'Delete')}</button>` : html``}
     </div>`
 }
 
-/** Floating footer (§3.4): only present in draft (edit) mode -- "Draft saved" status, Save
- *  (-> `$save`, activates into the active OP), Discard Draft (-> `$discard`, back to either the
- *  active OP or the List Report, decided server-side depending on whether this was a new draft). */
-function footerBar(bundle, t, { basePath, entitySetPath, isDraft } = {}) {
-  if (!isDraft) return html``
+/** `hx-confirm` plus the data attributes `htmx-fiori.js` turns into a UI dialog (never `window.confirm`). */
+function confirmAttrs(text, { bundle, t, title, ok, critical }) {
+  return html`hx-confirm="${text}" data-hf-confirm-title="${t(bundle, title)}" data-hf-confirm-ok="${t(bundle, ok)}" data-hf-confirm-cancel="${t(bundle, 'Cancel')}"${critical ? raw(' data-hf-confirm-critical') : html``}`
+}
+
+/** Floating footer (§3.4), present in every edit mode:
+ *   - `draft`: Save (activates the draft) and Discard Draft (asks first, like FE's popover)
+ *   - `direct`: non-draft entity being edited in place: Save PATCHes the active entity, Cancel drops the changes
+ *   - `create`: non-draft entity, new object: Create POSTs the form, Cancel goes back to the List Report
+ *  `direct`/`create` send the page's own inputs (`hx-include`), `draft` already PATCHed them one by one. */
+function footerBar(bundle, t, { basePath, entitySetPath, editMode } = {}) {
+  if (!editMode) return html``
   const opPath = `${basePath}/${entitySetPath}`
+  const include = editMode === 'draft' ? '' : raw(`hx-include="#${ids.opPage()}"`)
+  const saveLabel = editMode === 'create' ? 'CreateObject' : 'Save'
+  const discard = editMode === 'draft'
+    ? html`<button class="fd-button fd-button--transparent" hx-post="${opPath}/$discard" hx-target="#app" hx-push-url="true"
+        hx-swap="innerHTML show:window:top" ${confirmAttrs(t(bundle, 'ConfirmDiscardDraft'), { bundle, t, title: 'DiscardDraft', ok: 'DiscardDraft' })}>${t(bundle, 'DiscardDraft')}</button>`
+    : html`<button class="fd-button fd-button--transparent" hx-post="${opPath}/$discard" hx-target="#app" ${editMode === 'create' ? raw('hx-push-url="true"') : html``}
+        hx-swap="innerHTML show:window:top">${t(bundle, 'Cancel')}</button>`
   return html`
     <footer class="hf-footer" id="${ids.opFooter()}">
       <div class="hf-spacer"></div>
-      <button class="fd-button fd-button--emphasized" hx-post="${opPath}/$save" hx-target="#app" hx-push-url="true"
-        hx-swap="innerHTML show:window:top">${t(bundle, 'Save')}</button>
-      <button class="fd-button fd-button--transparent" hx-post="${opPath}/$discard" hx-target="#app" hx-push-url="true"
-        hx-swap="innerHTML show:window:top">${t(bundle, 'DiscardDraft')}</button>
+      <button class="fd-button fd-button--emphasized" hx-post="${opPath}/$save" hx-target="#app" ${editMode === 'direct' ? html`` : raw('hx-push-url="true"')}
+        ${include} hx-swap="innerHTML show:window:top">${t(bundle, saveLabel)}</button>
+      ${discard}
     </footer>`
+}
+
+/** Active entity path <-> draft path of the same object (`IsActiveEntity=true|false`). */
+const switchedPath = (path, active) => path.replace(/IsActiveEntity=(true|false)/g, `IsActiveEntity=${active}`)
+
+/** FE's draft marker beside the title (design check against the FE reference app):
+ *   - editing a draft that has a saved version: "Draft" with a popover to switch to the Saved Version
+ *   - viewing the saved version while a draft exists: "Saved Version" with a popover to switch to the Draft
+ *   - a brand-new draft (nothing to switch to) is a plain "Draft" label */
+function draftIndicator(row, { basePath, entitySetPath, bundle, t, editMode }) {
+  const onDraft = editMode === 'draft'
+  const switchable = onDraft ? row.HasActiveEntity === true : row.HasDraftEntity === true
+  if (!onDraft && !switchable) return html``
+  const label = t(bundle, onDraft ? 'Draft' : 'SavedVersion')
+  if (!switchable) return html`<span class="hf-op-title__draft" title="${t(bundle, 'DraftSaved')}"><span class="fd-button fd-button--compact fd-button--transparent hf-draft-label">${label}</span></span>`
+  const item = (text, current, path) => html`<li>
+    <button type="button" class="hf-popover__item"${current ? raw(' aria-current="true"') : html``}${current ? html`` : raw(` hx-get="${basePath}/${path}" hx-target="#app" hx-push-url="true" hx-swap="innerHTML show:window:top"`)}>${text}</button></li>`
+  return html`
+    <div class="hf-popover hf-op-title__draft">
+      <button type="button" class="fd-button fd-button--compact fd-button--transparent hf-draft-label" data-hf-popover-toggle aria-haspopup="true" aria-expanded="false">${label} <i class="sap-icon--slim-arrow-down" aria-hidden="true"></i></button>
+      <div class="fd-popover__body"><ul class="hf-popover__list">
+        ${item(t(bundle, 'Draft'), onDraft, switchedPath(entitySetPath, false))}
+        ${item(t(bundle, 'SavedVersion'), !onDraft, switchedPath(entitySetPath, true))}
+      </ul></div>
+    </div>`
 }
 
 /** `HeaderInfo.ImageUrl`/`TypeImageUrl`/`Initials` -> FE's rounded-square header avatar. */
@@ -238,23 +278,30 @@ function titleText(title, description) {
  *  === false`) decides Edit/Delete vs. the floating Save/Discard footer and (via `ctx.isDraft`,
  *  threaded through to `field.js`) whether form fields render as inputs or display text. */
 function objectPageFragment(layout, row, ctx) {
-  const isDraft = row.IsActiveEntity === false
-  const fullCtx = { ...ctx, isDraft }
+  const editMode = editModeOf(ctx, row)
+  const isDraft = editMode === 'draft'
+  const fullCtx = { ...ctx, isDraft, editMode }
   const visibleSections = (layout.sections || []).filter(s => !(s.hidden && evaluate(s.hidden, row) === true))
-  const title = evaluate(layout.header?.title?.Value, row) ?? layout.header?.typeName ?? ''
+  const title = editMode === 'create'
+    ? ctx.t(ctx.bundle, 'NewObject').replace('{0}', layout.header?.typeName ?? '')
+    : evaluate(layout.header?.title?.Value, row) ?? layout.header?.typeName ?? ''
   const description = evaluate(layout.header?.description?.Value, row)
   const headerFacets = layout.headerFacets || []
   return html`
-    ${ctx.successMessage ? raw(`<hx-partial hx-target="#${ids.toast()}" hx-swap="innerHTML">${toast(ctx.successMessage).value}</hx-partial>`) : html``}
-    <div id="${ids.opPage()}" class="hf-page hf-page--op${isDraft ? ' hf-page--edit' : ''}" data-entity-type="${layout.entityType}">
+    ${ctx.successMessage ? raw(`<hx-partial hx-target="#${ids.toast()}" hx-swap="outerHTML">${toast(ctx.successMessage).value}</hx-partial>`) : html``}
+    <div id="${ids.opPage()}" class="hf-page hf-page--op${editMode ? ' hf-page--edit' : ''}" data-entity-type="${layout.entityType}">
       <header class="hf-page__header hf-op-header" id="${ids.opHeader()}">
         ${breadcrumbs(ctx.trail, ctx.basePath)}
         <div class="hf-op-title">
           ${headerAvatar(layout.header, row)}
           ${titleText(title, description)}
-          ${isDraft ? html`<span class="hf-op-title__draft" title="${ctx.t(ctx.bundle, 'DraftSaved')}">${ctx.t(ctx.bundle, 'Draft')} <i class="sap-icon--slim-arrow-down" aria-hidden="true"></i></span>` : html``}
+          ${draftIndicator(row, { basePath: ctx.basePath, entitySetPath: ctx.entitySetPath, bundle: ctx.bundle, t: ctx.t, editMode })}
           <div class="hf-spacer"></div>
-          ${headerActions(layout.headerActions || [], ctx.bundle, ctx.t, { basePath: ctx.basePath, entitySetPath: ctx.entitySetPath, isDraft })}
+          ${headerActions(layout.headerActions || [], ctx.bundle, ctx.t, {
+            basePath: ctx.basePath, entitySetPath: ctx.entitySetPath, editMode,
+            canEdit: !layout.edit || canEdit(layout.edit, row), canDelete: !layout.edit || canDelete(layout.edit, row),
+            draftExists: row.HasDraftEntity === true, isDraftRoot: layout.edit?.mode === 'draft'
+          })}
         </div>
         ${headerFacets.length ? html`<div class="hf-op-header__content">${headerFacets.map(f => facetBlock(f, row, fullCtx, { asSection: false }))}</div>` : html``}
         ${anchorBar(visibleSections)}
@@ -262,8 +309,14 @@ function objectPageFragment(layout, row, ctx) {
       <div class="hf-page__content hf-op-content">
         ${visibleSections.map(f => facetBlock(f, row, fullCtx, { asSection: true }))}
       </div>
-      ${footerBar(ctx.bundle, ctx.t, { basePath: ctx.basePath, entitySetPath: ctx.entitySetPath, isDraft })}
+      ${footerBar(ctx.bundle, ctx.t, { basePath: ctx.basePath, entitySetPath: ctx.entitySetPath, editMode })}
     </div>`
+}
+
+/** Edit mode of a page: passed in by the route (`direct`/`create` for non-draft entities) or implied
+ *  by a draft row (`IsActiveEntity === false`). `undefined` = display mode. */
+function editModeOf(ctx, row) {
+  return ctx.editMode ?? (row.IsActiveEntity === false ? 'draft' : undefined)
 }
 
 /** Visits every leaf (non-`CollectionFacet`) facet of the header and body, in render order. */
@@ -278,9 +331,10 @@ function eachLeaf(facets, fn) {
  *  per rendered occurrence of a target property (a form field, a dataPoint/contact/address block, the
  *  title), one per targeted table section, or the whole page for the `''`/`'*'` wildcard. The engine
  *  wraps each as an `<hx-partial>`. `properties` hold OData paths, `entities` navigation names. */
-function sideEffectParts(layout, row, ctx, { properties = [], entities = [], all = false } = {}) {
-  const isDraft = row.IsActiveEntity === false
-  const fullCtx = { ...ctx, isDraft }
+function sideEffectParts(layout, row, ctx, { properties = [], entities = [], all = false, exclude = [] } = {}) {
+  const editMode = editModeOf(ctx, row)
+  const isDraft = editMode === 'draft'
+  const fullCtx = { ...ctx, isDraft, editMode }
   if (all) return [{ target: '#' + ids.opPage(), html: objectPageFragment(layout, row, ctx), swap: 'outerMorph' }]
 
   const props = new Set(properties)
@@ -300,7 +354,7 @@ function sideEffectParts(layout, row, ctx, { properties = [], entities = [], all
         if (!field || !(props.has(field.path) || pathsOf(col).some(p => props.has(p)))) continue
         parts.push({
           target: '#' + ids.opField(facet.id, field.path), swap: 'outerMorph',
-          html: formField(col, row, { facetId: facet.id, isDraft, basePath: ctx.basePath, entitySetPath: ctx.entitySetPath, valueLists: ctx.valueLists })
+          html: formField(col, row, { facetId: facet.id, isDraft, editMode, basePath: ctx.basePath, entitySetPath: ctx.entitySetPath, valueLists: ctx.valueLists })
         })
       }
     } else if (content.kind === 'dataPoint' || content.kind === 'contact' || content.kind === 'address') {
@@ -313,7 +367,7 @@ function sideEffectParts(layout, row, ctx, { properties = [], entities = [], all
       parts.push({ target: '#' + ids.opSection(facet.id), html: facetBlock(facet, row, fullCtx, { asSection: true }), swap: 'outerMorph' })
     }
   })
-  return parts
+  return parts.filter(p => !exclude.includes(p.target))
 }
 
 module.exports = { objectPageFragment, breadcrumbs, facetBlock, facetContent, footerBar, sideEffectParts }

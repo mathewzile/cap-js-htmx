@@ -27,8 +27,9 @@ function fieldLabel(text, { mandatory, forId } = {}) {
  *  row/object"). `Core.Computed`/`Core.Immutable` fields are always read-only once a draft exists
  *  (immutable fields stay editable only on create, which this minimal pass doesn't distinguish --
  *  listed as a known gap). */
-function isReadOnly(field, row) {
-  if (field.computed || field.immutable) return true
+function isReadOnly(field, row, editMode) {
+  if (field.computed) return true
+  if (field.immutable && editMode !== 'create') return true // Core.Immutable: editable only while creating
   const fc = evaluate(field.fieldControl, row)
   return fc === 'ReadOnly' || fc === 'Inapplicable' || fc === 1 || fc === 7
 }
@@ -41,10 +42,14 @@ function isMandatory(field, row) {
 /** The `<input>`/`<textarea>` for one editable field (§3.4 field renderer table). Patches go
  *  straight to the server on change (`PATCH $field/:path`, §routes) -- the side-effects engine
  *  (Phase 6) is what eventually reacts to them; for now the control just round-trips its own value. */
-function fieldEditControl(field, row, { basePath, entitySetPath, valueListOptions, id }) {
+function fieldEditControl(field, row, { basePath, entitySetPath, valueListOptions, id, editMode }) {
   const value = row[field.cqlPath]
-  const patchUrl = `${basePath}/${entitySetPath}/$field/${field.path}`
-  const common = `id="${id}" name="${field.path}" hx-patch="${patchUrl}" hx-trigger="change" hx-include="this"`
+  // Draft: every change is PATCHed to the draft right away (the response carries the other places
+  // that show the same value). Direct/create: plain inputs, the footer's Save sends them all.
+  // Never push a URL for a field change: this is not navigation.
+  const common = editMode === 'draft' || editMode == null
+    ? `id="${id}" name="${field.path}" hx-patch="${basePath}/${entitySetPath}/$field/${field.path}" hx-trigger="change" hx-include="this" hx-push-url="false" hx-swap="none" hx-headers:inherited:append='{"X-Hf-Source":"${id.replace(/--input$/, '')}"}'`
+    : `id="${id}" name="${field.path}"`
 
   if (field.valueList && !field.fixedValues) {
     return html`
@@ -78,7 +83,8 @@ function fieldEditControl(field, row, { basePath, entitySetPath, valueListOption
  *  empty values show '–'"). `facetId` namespaces the field's DOM id for side-effect targeting.
  *  In draft (edit) mode, editable fields render as inputs (§3.4 "inputs replace values"); criticality
  *  status fields and read-only/computed fields stay display-only. */
-function formField(col, row, { facetId, isDraft, basePath, entitySetPath, valueLists } = {}) {
+function formField(col, row, { facetId, isDraft, editMode, basePath, entitySetPath, valueLists } = {}) {
+  const editing = !!editMode || !!isDraft
   if (col.hidden && evaluate(col.hidden, row) === true) return html``
   const field = col.field
   if (!field) return html`` // DataFieldForAction/ForAnnotation aren't plain form fields -- their own facet content kind renders them
@@ -92,13 +98,13 @@ function formField(col, row, { facetId, isDraft, basePath, entitySetPath, valueL
         <span class="hf-field__value">${text === '' ? '–' : objectStatus(cls, text)}</span>
       </div>`
   }
-  if (isDraft && field.cqlPath && !isReadOnly(field, row)) {
+  if (editing && field.cqlPath && !isReadOnly(field, row, editMode)) {
     const mandatory = isMandatory(field, row)
     const inputId = `${id}--input`
     return html`
       <div class="fd-form-item hf-field hf-field--edit" id="${id}">
         ${fieldLabel(field.label, { mandatory, forId: inputId })}
-        ${fieldEditControl(field, row, { basePath, entitySetPath, valueListOptions: valueLists?.[field.path], id: inputId })}
+        ${fieldEditControl(field, row, { basePath, entitySetPath, valueListOptions: valueLists?.[field.path], id: inputId, editMode: editMode ?? 'draft' })}
       </div>`
   }
   const text = fieldText(field, row)
