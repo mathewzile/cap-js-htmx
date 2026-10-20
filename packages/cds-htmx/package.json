@@ -1,0 +1,44 @@
+{
+  "name": "cds-htmx",
+  "version": "0.1.0",
+  "description": "CAP plugin that serves SAP Fiori Elements-style List Report / Object Page UIs over htmx 4, driven entirely by the compiled OData annotations.",
+  "type": "commonjs",
+  "main": "cds-plugin.js",
+  "files": [
+    "lib",
+    "public",
+    "_i18n",
+    "cds-plugin.js",
+    "index.cds"
+  ],
+  "dependencies": {
+    "htmx.org": "4.0.0",
+    "fundamental-styles": "0.41.9",
+    "@fundamental-styles/common-css": "0.41.9",
+    "@sap-theming/theming-base-content": "^11.36.0",
+    "fast-xml-parser": "^4.5.0"
+  },
+  "peerDependencies": {
+    "@sap/cds": ">=9"
+  },
+  "cds": {
+    "protocols": {
+      "htmx": {
+        "path": "/htmx",
+        "impl": "cds-htmx/lib/HtmxAdapter.js"
+      }
+    },
+    "htmx": {
+      "theme": "sap_horizon",
+      "shell": true,
+      "appTitle": null,
+      "growingThreshold": 20,
+      "assets": "local",
+      "sse": {
+        "heartbeat": 15000
+      },
+      "liveListReport": true,
+      "requireHxRequestForMutations": true
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "name": "cap-js-htmx",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "app/*"
+  ],
+  "dependencies": {
+    "@sap/cds": "^10",
+    "cds-htmx": "*"
+  },
+  "devDependencies": {
+    "@cap-js/sqlite": "^3",
+    "@cap-js/cds-test": "^1",
+    "node-html-parser": "^6",
+    "cds-plugin-ui5": "^0.17.0"
+  },
+  "scripts": {
+    "start": "cds-serve",
+    "watch": "cds watch",
+    "test": "node --env-file=packages/cds-htmx/test/test.env --test \"packages/cds-htmx/test/**/*.test.js\"",
+    "test:parity": "playwright test test/e2e/parity.spec.ts",
+    "watch-manage-books": "cds watch --open managebooks/index.html?sap-ui-xx-viewCache=false --livereload false"
+  },
+  "sapux": [
+    "app/manage-books"
+  ]
+}

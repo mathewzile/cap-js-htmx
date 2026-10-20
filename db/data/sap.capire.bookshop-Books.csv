@@ -1,0 +1,6 @@
+ID,title,descr,author_ID,genre_ID,stock,price,currency_code,rating
+3d2d2d2d-1c1c-4b4b-8a8a-000000000001,Wuthering Heights,A classic novel of passion and revenge on the Yorkshire moors.,9d703c23-7cf7-4cad-9f2b-0e1e1a8c0001,1,12,11.50,EUR,4.5
+3d2d2d2d-1c1c-4b4b-8a8a-000000000002,Jane Eyre,The journey of an orphaned girl who becomes a governess.,9d703c23-7cf7-4cad-9f2b-0e1e1a8c0002,1,5,9.99,EUR,4.7
+3d2d2d2d-1c1c-4b4b-8a8a-000000000003,The Raven,A narrative poem about a mysterious raven's visit.,9d703c23-7cf7-4cad-9f2b-0e1e1a8c0003,2,0,4.50,USD,4.2
+3d2d2d2d-1c1c-4b4b-8a8a-000000000004,Eleonora,A gothic tale of love and loss.,9d703c23-7cf7-4cad-9f2b-0e1e1a8c0003,3,3,6.75,USD,3.9
+3d2d2d2d-1c1c-4b4b-8a8a-000000000005,Catweazle,A comic fantasy about a medieval magician in modern times.,9d703c23-7cf7-4cad-9f2b-0e1e1a8c0004,4,25,7.20,GBP,4.0
