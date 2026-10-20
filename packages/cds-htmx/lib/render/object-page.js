@@ -275,7 +275,7 @@ function draftIndicator(row, { basePath, entitySetPath, bundle, t, editMode }) {
   const label = t(bundle, onDraft ? 'Draft' : 'SavedVersion')
   if (!switchable) return html`<span class="hf-op-title__draft" title="${t(bundle, 'DraftSaved')}"><span class="fd-button fd-button--compact fd-button--transparent hf-draft-label">${label}</span></span>`
   const item = (text, current, path) => html`<li>
-    <button type="button" class="hf-popover__item"${current ? raw(' aria-current="true"') : html``}${current ? html`` : raw(` hx-get="${basePath}/${path}" hx-target="#app" hx-push-url="true" hx-swap="innerHTML show:window:top"`)}>${text}</button></li>`
+    <button type="button" class="hf-popover__item"${current ? raw(' aria-current="true"') : html``}${current ? html`` : raw(` hx-get="${basePath}/${path}" hx-target="#app" hx-replace-url="true" hx-swap="innerHTML show:window:top"`)}>${text}</button></li>`
   return html`
     <div class="hf-popover hf-op-title__draft">
       <button type="button" class="fd-button fd-button--compact fd-button--transparent hf-draft-label" data-hf-popover-toggle aria-haspopup="true" aria-expanded="false">${label} <i class="sap-icon--slim-arrow-down" aria-hidden="true"></i></button>

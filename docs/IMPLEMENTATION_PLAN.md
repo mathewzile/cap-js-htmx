@@ -61,7 +61,6 @@ app/annotations.cds               # ALL UI annotations (shared by htmx + FE refe
 app/manage-books/                 # generated FE V4 app (sap.fe.templates.ListReport / ObjectPage)
   webapp/{manifest.json,Component.ts,index.html}
   webapp/annotations/annotation.xml               # local XML annotation layer (overrides/extends service annotations; consumed by BOTH FE and htmx)
-app/index.html                    # landing page: links to /htmx/catalog/ and /manage-books/webapp/index.html
 packages/cds-htmx/
   package.json                    # name cds-htmx, type commonjs, deps: htmx.org@4.0.0, fundamental-styles@0.41.9, @fundamental-styles/common-css@0.41.9, @sap-theming/theming-base-content@^11.36, fast-xml-parser (annotation.xml); peerDep @sap/cds>=9
                                   # "cds": { "protocols": { "htmx": { "path": "/htmx", "impl": "cds-htmx/lib/HtmxAdapter.js" } }, "htmx": { defaults… } }
@@ -304,7 +303,7 @@ Side effects are read from the AnnotationStore. That includes CAP-generated ones
 ## 5. Frontend (runnable page)
 > Standalone mode below stays as is. From Phase 9 a generic shell (`cds-htmx-shell`) can host the same pages in Work Zone; the backend then returns fragments only and prefixes all URLs with `X-Htmx-Base`.
 
-- No separate SPA. The plugin renders the full HTML shell, so `npm run watch` → `http://localhost:4004/htmx/catalog/` is the app. `app/index.html` links to both the htmx app and the FE reference app.
+- No separate SPA. The plugin renders the full HTML shell, so `npm run watch` → `http://localhost:4004/htmx/catalog/` is the app. CAP's own generated index page at `http://localhost:4004/` lists the service endpoints (including the `htmx` one and its entity links) and the FE reference app; the demo no longer ships its own `app/index.html`. Registering the htmx apps under the index's "Web Applications" list is a possible follow-up.
 - `layout.js` `<head>`:
   - `/htmx/-/theming-base-content/content/Base/baseLib/sap_horizon/css_variables.css`
   - `/htmx/-/fundamental-styles/dist/theming/sap_horizon.css`, `/htmx/-/common-css/…`, `/htmx/-/fundamental-styles/dist/fundamental-styles.css`

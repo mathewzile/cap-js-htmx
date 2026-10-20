@@ -103,8 +103,9 @@ test.describe('draft flow and history (Books)', () => {
     await page.getByRole('button', { name: 'Draft', exact: true }).click()
     await expect(page).toHaveURL(/IsActiveEntity=false/)
 
+    // Edit and the version switches replaced the entry: Back goes to the list (like FE), Forward to where we were
     await page.goBack()
-    await expect(page).toHaveURL(/IsActiveEntity=true/)
+    await expect(page).toHaveURL(/\/htmx\/catalog\/Books$/)
     await page.goForward()
     await expect(page).toHaveURL(/IsActiveEntity=false/)
     await expect(title(page)).toHaveText('Jane Eyre XX')
@@ -113,8 +114,9 @@ test.describe('draft flow and history (Books)', () => {
     await expect(confirmDialog(page)).toBeVisible()
     await confirmDialog(page).locator('[data-hf-ok]').click()
     await expect(page).toHaveURL(/IsActiveEntity=true/)
-    await page.goBack() // the discarded draft's URL must not break the page
-    await expect(title(page)).toContainText('Jane Eyre')
+    await page.goBack() // discarding replaced the draft's entry too: no dead draft URL is left in the history
+    await expect(page).toHaveURL(/\/htmx\/catalog\/Books$/)
+    await expect(page.locator('#lr-table-body tr').first()).toBeVisible()
   })
 
   test('the List Report filter state survives opening an object and going back', async ({ page }) => {

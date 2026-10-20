@@ -396,7 +396,7 @@ class HtmxAdapter extends HttpAdapter {
     }
     const draftKeys = { ...plainKeys, IsActiveEntity: false }
     const draftRaw = keysLib.formatKeys(draftKeys)
-    res.set('HX-Push-Url', `${this.basePath(req)}/${set}(${draftRaw})`)
+    res.set('HX-Replace-Url', `${this.basePath(req)}/${set}(${draftRaw})`)
     return this.objectPage(req, res, tx, {
       entityType: entity.name, keys: draftKeys, segments: [{ set, raw: draftRaw }], contextPath: `/${set}`
     })
@@ -474,7 +474,7 @@ class HtmxAdapter extends HttpAdapter {
 
   /** The parent page again (after a child row changed or was deleted), with its own URL pushed. */
   parentPage(req, res, tx, n, { push }) {
-    if (push) res.set('HX-Push-Url', `${this.basePath(req)}/${n.parent.path}`)
+    if (push) res.set('HX-Replace-Url', `${this.basePath(req)}/${n.parent.path}`)
     return this.objectPage(req, res, tx, { entityType: n.parent.entityType, keys: n.parent.keys, segments: n.parent.segments, contextPath: n.parent.contextPath })
   }
 
@@ -619,7 +619,7 @@ class HtmxAdapter extends HttpAdapter {
       }
       const activeKeys = { ...keys, IsActiveEntity: true }
       const activeRaw = keysLib.formatKeys(activeKeys)
-      res.set('HX-Push-Url', `${this.basePath(req)}/${set}(${activeRaw})`)
+      res.set('HX-Replace-Url', `${this.basePath(req)}/${set}(${activeRaw})`)
       req.successMessage = this.text(req, 'ObjectSaved')
       return this.objectPage(req, res, tx, {
         entityType: entity.name, keys: activeKeys, segments: [{ set, raw: activeRaw }], contextPath: `/${set}`
@@ -672,7 +672,7 @@ class HtmxAdapter extends HttpAdapter {
     const edit = this.editOf(req, entity.name)
     if (edit.mode === 'direct') {
       if (raw == null) {
-        res.set('HX-Push-Url', `${this.basePath(req)}/${set}`)
+        res.set('HX-Replace-Url', `${this.basePath(req)}/${set}`)
         req.params.Set = set
         return this.listReport(req, res, tx)
       }
@@ -686,12 +686,12 @@ class HtmxAdapter extends HttpAdapter {
     if (draftRow?.HasActiveEntity) {
       const activeKeys = { ...plainKeys, IsActiveEntity: true }
       const activeRaw = keysLib.formatKeys(activeKeys)
-      res.set('HX-Push-Url', `${this.basePath(req)}/${set}(${activeRaw})`)
+      res.set('HX-Replace-Url', `${this.basePath(req)}/${set}(${activeRaw})`)
       return this.objectPage(req, res, tx, {
         entityType: entity.name, keys: activeKeys, segments: [{ set, raw: activeRaw }], contextPath: `/${set}`
       })
     }
-    res.set('HX-Push-Url', `${this.basePath(req)}/${set}`)
+    res.set('HX-Replace-Url', `${this.basePath(req)}/${set}`)
     req.params.Set = set
     return this.listReport(req, res, tx)
   }
@@ -708,7 +708,7 @@ class HtmxAdapter extends HttpAdapter {
     if (!canDelete(edit, current)) return this.reject(req, res, 405, 'NotAllowed')
     await this.removeObject(tx, entity, edit, keys)
     req.successMessage = this.text(req, 'ObjectDeleted')
-    res.set('HX-Push-Url', `${this.basePath(req)}/${set}`)
+    res.set('HX-Replace-Url', `${this.basePath(req)}/${set}`)
     req.params.Set = set
     return this.listReport(req, res, tx)
   }

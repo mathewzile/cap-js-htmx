@@ -157,7 +157,7 @@ describe('FE parity: capabilities, direct editing, history, confirmations (round
       const { expect } = api
       const res = await api.axios.delete(`/htmx/catalog/Authors(${keysRaw})`, { headers: HX })
       expect(res.status).to.equal(200)
-      expect(res.headers['hx-push-url']).to.equal('/htmx/catalog/Authors')
+      expect(res.headers['hx-replace-url']).to.equal('/htmx/catalog/Authors')
       expect(res.data).to.include('Object deleted.')
       expect((await api.axios.get(`/odata/v4/catalog/Authors(${keysRaw.replace(/'/g, '')})`, { validateStatus: () => true })).status).to.equal(404)
     })
@@ -181,7 +181,7 @@ describe('FE parity: capabilities, direct editing, history, confirmations (round
       const display = await GET(`/htmx/catalog/Books(${BOOK})`, { headers: HX })
       expect(display.data).not.to.include('data-hf-popover-toggle')
       const edited = await POST(`/htmx/catalog/Books(${BOOK})/$edit`, {}, { headers: HX })
-      draftRaw = edited.headers['hx-push-url'].match(/Books\((.*)\)/)[1]
+      draftRaw = edited.headers['hx-replace-url'].match(/Books\((.*)\)/)[1]
       expect(edited.data).to.include('data-hf-popover-toggle')
       expect(edited.data).to.match(/hx-get="\/htmx\/catalog\/Books\(ID='[^']*',IsActiveEntity=true\)"/) // Saved Version
       const savedVersion = await GET(`/htmx/catalog/Books(${BOOK})`, { headers: HX })
@@ -194,7 +194,7 @@ describe('FE parity: capabilities, direct editing, history, confirmations (round
       const { POST, expect } = api
       const res = await POST(`/htmx/catalog/Books(${BOOK})/$edit`, {}, { headers: HX })
       expect(res.status).to.equal(200)
-      expect(res.headers['hx-push-url']).to.include('IsActiveEntity=false')
+      expect(res.headers['hx-replace-url']).to.include('IsActiveEntity=false')
     })
 
     test('typing in a field never pushes a URL and the response updates the header title', async () => {
@@ -326,7 +326,7 @@ describe('FE parity: capabilities, direct editing, history, confirmations (round
       assert.match(patched.data, /hx-target="#op-title"[\s\S]*Typed title/)
       // delete the child again (CANCEL of the child draft), back on the book
       const removed = await api.axios.delete(childPath, { headers: HX })
-      assert.equal(removed.headers['hx-push-url'], `/htmx/catalog/Books(${JANE},IsActiveEntity=false)`)
+      assert.equal(removed.headers['hx-replace-url'], `/htmx/catalog/Books(${JANE},IsActiveEntity=false)`)
       assert.equal(rowPatches((await api.axios.get(`/htmx/catalog/Books(${JANE},IsActiveEntity=false)`, { headers: HX })).data), 2)
     })
 
@@ -431,6 +431,31 @@ describe('FE parity: capabilities, direct editing, history, confirmations (round
   })
 
   describe('navigation and history', () => {
+    test('switching between saved and draft version replaces the history entry (Back after Edit goes to the list); opening a new page pushes', async () => {
+      const key = "ID='3d2d2d2d-1c1c-4b4b-8a8a-000000000004'"
+      const post = (url, body = {}) => api.axios.post(url, body, { headers: HX })
+      const edit = await post(`/htmx/catalog/Books(${key},IsActiveEntity=true)/$edit`)
+      assert.match(edit.headers['hx-replace-url'], /IsActiveEntity=false/)
+      assert.equal(edit.headers['hx-push-url'], undefined)
+      const saved = await post(`/htmx/catalog/Books(${key},IsActiveEntity=false)/$save`)
+      assert.match(saved.headers['hx-replace-url'], /IsActiveEntity=true/)
+      assert.equal(saved.headers['hx-push-url'], undefined)
+      await post(`/htmx/catalog/Books(${key},IsActiveEntity=true)/$edit`)
+      const discarded = await post(`/htmx/catalog/Books(${key},IsActiveEntity=false)/$discard`)
+      assert.match(discarded.headers['hx-replace-url'], /IsActiveEntity=true/)
+      assert.equal(discarded.headers['hx-push-url'], undefined)
+      // the version switch in the draft marker is a replace as well
+      const page = await post(`/htmx/catalog/Books(${key},IsActiveEntity=true)/$edit`)
+      assert.match(page.data, /class="hf-popover__item" hx-get="[^"]*IsActiveEntity=true\)" hx-target="#app" hx-replace-url="true"/)
+      // a brand-new draft is a new page (push); discarding it goes back to the list in place
+      const created = await post('/htmx/catalog/Books')
+      assert.ok(created.headers['hx-push-url'])
+      const raw = created.headers['hx-push-url'].match(/Books\((.*)\)/)[1]
+      const gone = await post(`/htmx/catalog/Books(${raw})/$discard`)
+      assert.equal(gone.headers['hx-replace-url'], '/htmx/catalog/Books')
+      await post(`/htmx/catalog/Books(${key},IsActiveEntity=false)/$discard`)
+    })
+
     test('the pages no longer inherit "push the URL" from #app; rows and links push explicitly', async () => {
       const { GET, expect } = api
       const page = await GET('/htmx/catalog/Books')

@@ -5,7 +5,7 @@ const api = cds.test(path.join(__dirname, '..', '..', '..', '..'))
 const WUTHERING_HEIGHTS = "ID='3d2d2d2d-1c1c-4b4b-8a8a-000000000001',IsActiveEntity=true"
 
 function pushUrlKeys(res) {
-  const url = res.headers['hx-push-url']
+  const url = (res.headers['hx-replace-url'] ?? res.headers['hx-push-url'])
   const m = url && url.match(/Books\(([^)]*)\)/)
   return { url, raw: m ? m[1] : null }
 }
