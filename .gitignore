@@ -17,3 +17,7 @@ mta_archives/
 
 # @cap-js/cds-typer
 @cds-models
+
+# Playwright output
+test-results/
+playwright-report/
