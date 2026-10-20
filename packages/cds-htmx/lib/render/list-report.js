@@ -22,7 +22,7 @@ function toolbar({ typeNamePlural, count, basePath, entitySetPath, bundle, t, ed
           ? raw(`hx-post="${basePath}/${entitySetPath}" hx-push-url="false"`)
           : raw(`hx-get="${basePath}/${entitySetPath}/$new"`)}
         hx-target="#app" hx-swap="innerHTML show:window:top">${t(bundle, 'Create')}</button>` : html``}
-      ${del ? html`<button class="fd-button fd-button--transparent" disabled data-hf-needs-selection aria-label="${t(bundle, 'Delete')}"
+      ${del ? html`<button class="fd-button fd-button--transparent" disabled data-hf-needs-selection="#${ids.lrTableBody()}" aria-label="${t(bundle, 'Delete')}"
         hx-post="${basePath}/${entitySetPath}/$delete" hx-include="#${ids.lrTableBody()}" hx-target="#app" hx-swap="innerHTML show:window:top"
         hx-confirm="${t(bundle, 'ConfirmDeleteSelected')}" data-hf-confirm-count="#${ids.lrTableBody()} .hf-checkbox:checked"
         data-hf-confirm-title="${t(bundle, 'Delete')}" data-hf-confirm-ok="${t(bundle, 'Delete')}" data-hf-confirm-cancel="${t(bundle, 'Cancel')}" data-hf-confirm-critical>${t(bundle, 'Delete')}</button>` : html``}

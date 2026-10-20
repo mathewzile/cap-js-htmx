@@ -94,10 +94,10 @@ function isSelectable(layout) {
   return layout.edit ? canDelete(layout.edit) : true
 }
 
-function headerCell(col, { basePath, entitySetPath, orderBy, numeric, sortable, index }) {
+function headerCell(col, { basePath, entitySetPath, orderBy, numeric, sortable, index, editing }) {
   const cls = `fd-table__cell hf-th hf-col-${index}${numeric ? ' hf-cell--end' : ''}`
   if (!sortable || !col.field?.cqlPath || col.kind !== 'UI.DataField') {
-    return html`<th class="${cls}" role="columnheader"><span class="hf-th__text">${col.label ?? col.field?.label ?? ''}</span></th>`
+    return html`<th class="${cls}" role="columnheader"><span class="hf-th__text">${col.label ?? col.field?.label ?? ''}</span>${editing && col.field && require('./field').isMandatory(col.field, {}) ? html`<span class="hf-field__required" aria-hidden="true">*</span>` : html``}</th>`
   }
   const path = col.field.cqlPath
   const isCurrent = orderBy?.path === path
@@ -110,11 +110,32 @@ function headerCell(col, { basePath, entitySetPath, orderBy, numeric, sortable, 
   </th>`
 }
 
-function dataCell(col, row, { bundle, t, isFirst, numeric, index } = {}) {
+/** A section table's cell while the draft is edited (FE: every editable DataField column is an input in
+ *  the row). Changes are PATCHed to the child's own draft; the cell has its own message key
+ *  (`nav(rowKey).property`) so a value state can be shown on exactly this cell. */
+function editCell(col, row, { rowPath, rowKey, cls, numeric }) {
+  const { isReadOnly, isMandatory } = require('./field')
+  const field = col.field
+  const path = field.path
+  const id = `cell-${ids.sanitize(rowKey)}--${ids.sanitize(path)}`
+  const mandatory = isMandatory(field, row)
+  return html`<td class="${cls}" data-hf-field="${rowKey}.${path}">
+    <input type="text" class="fd-input${numeric ? ' hf-input--end' : ''}" id="${id}" name="${path}" value="${row[field.cqlPath] ?? ''}"${mandatory ? raw(' required') : html``}
+      hx-patch="${rowPath}/$field/${path}" hx-trigger="change" hx-include="this" hx-push-url="false" hx-swap="none"
+      hx-headers:inherited:append='{"X-Hf-Source":"${id}"}' aria-label="${field.label}">
+    <span class="hf-field__message" role="alert"></span>
+  </td>`
+}
+
+function dataCell(col, row, { bundle, t, isFirst, numeric, index, edit, rowKey } = {}) {
   const cls = `fd-table__cell hf-col-${index}${numeric ? ' hf-cell--end' : ''}`
   if (col.hidden && evaluate(col.hidden, row) === true) return html`<td class="${cls}"></td>`
   if (col.kind === 'UI.DataFieldForAction' || col.kind === 'UI.DataFieldForAnnotation') {
     return html`<td class="${cls}"></td>` // toolbar/inline actions and DataPoint/Chart cells: Phase 4+ (object page) territory for the rendering, revisited for inline table use later
+  }
+  if (edit && col.kind === 'UI.DataField' && col.field?.cqlPath && !col.field.cqlPath.includes('.')) {
+    const { isReadOnly } = require('./field')
+    if (!isReadOnly(col.field, row, 'draft')) return editCell(col, row, { rowPath: edit.rowPath(row), rowKey, cls, numeric })
   }
   const text = cellText(col, row)
   const badge = isFirst ? draftStatusBadge(row, bundle, t) : html``
@@ -145,14 +166,15 @@ function rowId(keyNames, row) {
   return ids.lrRow(keyNames.map(name => row[name]).join('-'))
 }
 
-function rowMarkup(layout, row, { basePath, entitySetPath, keyNames, bundle, t, numeric, selectable }) {
+function rowMarkup(layout, row, { basePath, entitySetPath, keyNames, bundle, t, numeric, selectable, edit }) {
   const href = rowHref(basePath, entitySetPath, keyNames, row)
+  const rowKey = edit ? `${edit.nav}(${formatKeys(keyValues(keyNames, row))})` : undefined
   return html`
     <tr id="${rowId(keyNames, row)}" class="fd-table__row fd-table__row--activable fd-table__row--hoverable"
-        hx-get="${href}" hx-trigger="click[!event.target.closest('.fd-table__cell--checkbox')]"
+        hx-get="${href}" hx-trigger="click[!event.target.closest('.fd-table__cell--checkbox, input, select, textarea, button, a')]"
         hx-target="#app" hx-push-url="true" hx-swap="innerHTML show:window:top">
       ${selectable ? html`<td class="fd-table__cell fd-table__cell--checkbox">${checkbox('Select row', { name: 'keys', value: formatKeys(keyValues(keyNames, row)) })}</td>` : html``}
-      ${layout.table.columns.map((col, i) => dataCell(col, row, { bundle, t, isFirst: i === 0, numeric: numeric[i], index: i }))}
+      ${layout.table.columns.map((col, i) => dataCell(col, row, { bundle, t, isFirst: i === 0, numeric: numeric[i], index: i, edit, rowKey }))}
       <td class="fd-table__cell hf-col-nav">
         <i class="sap-icon--slim-arrow-right" aria-hidden="true"></i>
       </td>
@@ -163,12 +185,12 @@ function rowMarkup(layout, row, { basePath, entitySetPath, keyNames, bundle, t, 
  *  as the `$table` partial-swap payload for sort/search/growing (§routes: `GET /:Set/$table`),
  *  where the requesting element targets `#lr-table-body` directly with `innerHTML` (replace, for
  *  sort/search/Go) or `beforeend` (append, for growing "More"). */
-function rowsHtml(layout, rows, { basePath, entitySetPath, keyNames, bundle, t, selectable = true }) {
+function rowsHtml(layout, rows, { basePath, entitySetPath, keyNames, bundle, t, selectable = true, edit }) {
   if (!rows.length) {
     return html`<tr class="hf-table__nodata"><td class="fd-table__cell" colspan="${layout.table.columns.length + (selectable ? 2 : 1)}">${t(bundle, 'NoDataFound')}</td></tr>`
   }
   const numeric = layout.table.columns.map(col => isNumericColumn(col, rows))
-  return html`${rows.map(row => rowMarkup(layout, row, { basePath, entitySetPath, keyNames, bundle, t, numeric, selectable }))}`
+  return html`${rows.map(row => rowMarkup(layout, row, { basePath, entitySetPath, keyNames, bundle, t, numeric, selectable, edit }))}`
 }
 
 function growingButton(basePath, entitySetPath, { skip, hasMore, bundle, t, query }) {
@@ -185,12 +207,12 @@ function growingButton(basePath, entitySetPath, { skip, hasMore, bundle, t, quer
 }
 
 /** Header row shared by the List Report table and Object Page table sections. */
-function tableHead(columns, rows, { basePath, entitySetPath, orderBy, selectable = true, sortable = true } = {}) {
+function tableHead(columns, rows, { basePath, entitySetPath, orderBy, selectable = true, sortable = true, editing = false } = {}) {
   return html`
     <thead>
       <tr class="fd-table__row" role="row">
         ${selectable ? html`<th class="fd-table__cell fd-table__cell--checkbox" role="columnheader">${checkbox('Select all')}</th>` : html``}
-        ${columns.map((col, index) => headerCell(col, { basePath, entitySetPath, orderBy, sortable, index, numeric: isNumericColumn(col, rows) }))}
+        ${columns.map((col, index) => headerCell(col, { basePath, entitySetPath, orderBy, sortable, index, numeric: isNumericColumn(col, rows), editing }))}
         <th class="fd-table__cell hf-col-nav" role="columnheader"></th>
       </tr>
     </thead>`

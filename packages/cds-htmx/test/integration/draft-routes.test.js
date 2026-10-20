@@ -30,7 +30,7 @@ describe('Draft lifecycle routes (Phase 5)', () => {
     expect(res.status).to.equal(200)
     expect(res.data).to.match(/id="op-footer"/)
     expect(res.data).not.to.match(/aria-label="Edit"/)
-    expect(res.data).not.to.match(/aria-label="Delete"/)
+    expect(res.data).not.to.match(/hx-delete=/) // no Delete of the object itself while editing (a section has its own Delete)
     expect(res.data).to.match(/<input type="text" class="fd-input"[^>]*name="title"/)
 
     const { url, raw } = pushUrlKeys(res)

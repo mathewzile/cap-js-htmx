@@ -2,7 +2,7 @@ const { html, raw } = require('./html')
 const ids = require('./ids')
 const { evaluate, paths: pathsOf } = require('../annotations/expressions')
 const { formField, fieldLabel } = require('./field')
-const { rowsHtml, tableHead, columnVisibilityStyle } = require('./table')
+const { rowsHtml, tableHead, columnVisibilityStyle, rowHref } = require('./table')
 const { criticalityClass } = require('../data/format')
 const { toast } = require('./toast')
 const { canEdit, canDelete } = require('../model/edit-capabilities')
@@ -93,24 +93,32 @@ function formLayout(blocks) {
 function tableBlock(facet, ctx) {
   const child = ctx.children?.[facet.id]
   const rows = child?.rows || []
-  const entitySetPath = `${ctx.entitySetPath}/${facet.content.nav}`
+  const nav = facet.content.nav
+  const entitySetPath = `${ctx.entitySetPath}/${nav}`
+  const sectionId = ids.opSection(facet.id)
   const miniLayout = { table: { columns: facet.content.columns } }
-  const selectable = !!ctx.isDraft
+  const editing = !!ctx.isDraft
+  const keyNames = child?.keyNames || []
+  const bundle = ctx.bundle
+  const t = key => ctx.t(bundle, key)
+  // While the draft is edited the rows are inputs; a change is PATCHed to the child's own draft
+  const edit = editing ? { nav, rowPath: row => rowHref(ctx.basePath, entitySetPath, keyNames, row) } : undefined
   return html`
     <div class="hf-table-toolbar hf-table-toolbar--section">
       <h2 class="hf-section__title">${facet.label} (${rows.length})</h2>
       <div class="hf-spacer"></div>
-      ${ctx.isDraft ? html`
-        <button class="fd-button fd-button--transparent"
-          hx-post="${ctx.basePath}/${ctx.entitySetPath}/${facet.content.nav}"
-          hx-target="#${ids.opSection(facet.id)}"
-          hx-swap="outerHTML">${ctx.t(ctx.bundle, 'Create')}</button>
-      ` : html``}
+      ${editing ? html`
+        <button class="fd-button fd-button--transparent" hx-post="${ctx.basePath}/${ctx.entitySetPath}/${nav}"
+          hx-target="#app" hx-push-url="false" hx-swap="innerHTML show:window:top">${t('Create')}</button>
+        <button class="fd-button fd-button--transparent" disabled data-hf-needs-selection="#${sectionId}" aria-label="${t('Delete')}"
+          hx-post="${ctx.basePath}/${entitySetPath}/$delete" hx-include="#${sectionId}" hx-target="#app" hx-push-url="false" hx-swap="innerHTML show:window:top"
+          hx-confirm="${t('ConfirmDeleteSelected')}" data-hf-confirm-count="#${sectionId} tbody .hf-checkbox:checked"
+          data-hf-confirm-title="${t('Delete')}" data-hf-confirm-ok="${t('Delete')}" data-hf-confirm-cancel="${t('Cancel')}" data-hf-confirm-critical>${t('Delete')}</button>` : html``}
     </div>
-    ${columnVisibilityStyle(`#${ids.opSection(facet.id)}`, facet.content.columns, rows, { selectable })}
+    ${columnVisibilityStyle(`#${sectionId}`, facet.content.columns, rows, { selectable: editing })}
     <table class="fd-table hf-table" role="table">
-      ${tableHead(facet.content.columns, rows, { selectable, sortable: false })}
-      <tbody>${rowsHtml(miniLayout, rows, { basePath: ctx.basePath, entitySetPath, keyNames: child?.keyNames || [], bundle: ctx.bundle, t: ctx.t, selectable })}</tbody>
+      ${tableHead(facet.content.columns, rows, { selectable: editing, sortable: false, editing })}
+      <tbody>${rowsHtml(miniLayout, rows, { basePath: ctx.basePath, entitySetPath, keyNames, bundle, t: ctx.t, selectable: editing, edit })}</tbody>
     </table>`
 }
 
@@ -184,7 +192,7 @@ function anchorBar(sections) {
  *  back to List Report); in draft (edit) mode neither applies -- Save/Discard live in the floating
  *  footer instead (§3.4: "floating footer ... Save ... Discard Draft"). Actions are now active buttons
  *  that POST to $action/:name (Phase 5d). */
-function headerActions(actions, bundle, t, { basePath, entitySetPath, editMode, canEdit, canDelete, draftExists, isDraftRoot } = {}) {
+function headerActions(actions, bundle, t, { basePath, entitySetPath, editMode, canEdit, canDelete, draftExists, isDraftRoot, deleteChild } = {}) {
   const opPath = `${basePath}/${entitySetPath}`
   const display = !editMode
   return html`
@@ -197,7 +205,7 @@ function headerActions(actions, bundle, t, { basePath, entitySetPath, editMode, 
       ${display && canEdit && !draftExists ? html`
         <button class="fd-button fd-button--emphasized" aria-label="${t(bundle, 'Edit')}"
           hx-post="${opPath}/$edit" hx-target="#app" hx-push-url="false" hx-swap="innerHTML show:window:top">${t(bundle, 'Edit')}</button>` : html``}
-      ${display && canDelete ? html`
+      ${(display && canDelete) || deleteChild ? html`
         <button class="fd-button" aria-label="${t(bundle, 'Delete')}" ${draftExists ? raw('disabled') : html``}
           hx-delete="${opPath}" hx-target="#app" hx-push-url="false" hx-swap="innerHTML show:window:top"
           ${confirmAttrs(t(bundle, 'ConfirmDeleteObject'), { bundle, t, title: 'Delete', ok: 'Delete', critical: true })}>${t(bundle, 'Delete')}</button>` : html``}
@@ -214,9 +222,20 @@ function confirmAttrs(text, { bundle, t, title, ok, critical }) {
  *   - `direct`: non-draft entity being edited in place: Save PATCHes the active entity, Cancel drops the changes
  *   - `create`: non-draft entity, new object: Create POSTs the form, Cancel goes back to the List Report
  *  `direct`/`create` send the page's own inputs (`hx-include`), `draft` already PATCHed them one by one. */
-function footerBar(bundle, t, { basePath, entitySetPath, editMode } = {}) {
+function footerBar(bundle, t, { basePath, entitySetPath, editMode, node } = {}) {
   if (!editMode) return html``
   const opPath = `${basePath}/${entitySetPath}`
+  // A child row of a draft has no Save of its own: its changes are part of the root's draft, Apply goes back to it
+  if (node) {
+    const parent = `${basePath}/${entitySetPath.replace(/\/[^/]+$/, '')}`
+    return html`
+      <footer class="hf-footer" id="${ids.opFooter()}">
+        <div id="${ids.opMessages()}" class="hf-footer__messages"></div>
+        <div class="hf-spacer"></div>
+        <span id="${ids.opDraftStatus()}" class="hf-draft-status" aria-live="polite" data-saving="${t(bundle, 'Saving')}"></span>
+        <button class="fd-button fd-button--emphasized" hx-get="${parent}" hx-target="#app" hx-push-url="true" hx-swap="innerHTML show:window:top">${t(bundle, 'Apply')}</button>
+      </footer>`
+  }
   const include = editMode === 'draft' ? '' : raw(`hx-include="#${ids.opPage()}"`)
   const saveLabel = editMode === 'create' ? 'CreateObject' : 'Save'
   const discard = editMode === 'draft'
@@ -276,7 +295,10 @@ function headerAvatar(header, row) {
 /** The title, or FE's "Unnamed Object" while it is empty (e.g. the user cleared it in a draft). */
 function titleOf(layout, row, ctx) {
   const value = evaluate(layout.header?.title?.Value, row)
-  if (value == null || String(value).trim() === '') return layout.header?.title?.Value ? ctx.t(ctx.bundle, 'UnnamedObject') : layout.header?.typeName ?? ''
+  if (value == null || String(value).trim() === '') {
+    if (row.HasActiveEntity === false) return ctx.t(ctx.bundle, 'NewObject').replace('{0}', layout.header?.typeName ?? '') // a draft that was never saved
+    return layout.header?.title?.Value ? ctx.t(ctx.bundle, 'UnnamedObject') : layout.header?.typeName ?? ''
+  }
   return value
 }
 
@@ -310,12 +332,13 @@ function objectPageFragment(layout, row, ctx) {
         <div class="hf-op-title">
           ${headerAvatar(layout.header, row)}
           ${titleText(title, description)}
-          ${draftIndicator(row, { basePath: ctx.basePath, entitySetPath: ctx.entitySetPath, bundle: ctx.bundle, t: ctx.t, editMode })}
+          ${layout.edit?.mode === 'node' ? html`` : draftIndicator(row, { basePath: ctx.basePath, entitySetPath: ctx.entitySetPath, bundle: ctx.bundle, t: ctx.t, editMode })}
           <div class="hf-spacer"></div>
           ${headerActions(layout.headerActions || [], ctx.bundle, ctx.t, {
             basePath: ctx.basePath, entitySetPath: ctx.entitySetPath, editMode,
             canEdit: !layout.edit || canEdit(layout.edit, row), canDelete: !layout.edit || canDelete(layout.edit, row),
-            draftExists: row.HasDraftEntity === true, isDraftRoot: layout.edit?.mode === 'draft'
+            draftExists: row.HasDraftEntity === true, isDraftRoot: layout.edit?.mode === 'draft',
+            deleteChild: layout.edit?.mode === 'node' && editMode === 'draft' // a child row of the draft being edited
           })}
         </div>
         ${headerFacets.length ? html`<div class="hf-op-header__content">${headerFacets.map(f => facetBlock(f, row, fullCtx, { asSection: false }))}</div>` : html``}
@@ -324,7 +347,7 @@ function objectPageFragment(layout, row, ctx) {
       <div class="hf-page__content hf-op-content">
         ${visibleSections.map(f => facetBlock(f, row, fullCtx, { asSection: true }))}
       </div>
-      ${footerBar(ctx.bundle, ctx.t, { basePath: ctx.basePath, entitySetPath: ctx.entitySetPath, editMode })}
+      ${footerBar(ctx.bundle, ctx.t, { basePath: ctx.basePath, entitySetPath: ctx.entitySetPath, editMode, node: layout.edit?.mode === 'node' })}
     </div>`
 }
 

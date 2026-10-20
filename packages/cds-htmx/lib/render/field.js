@@ -29,7 +29,9 @@ function fieldLabel(text, { mandatory, forId } = {}) {
  *  listed as a known gap). */
 function isReadOnly(field, row, editMode) {
   if (field.computed) return true
-  if (field.immutable && editMode !== 'create') return true // Core.Immutable: editable only while creating
+  // Core.Immutable: editable only while the object is being created (the create page, or a draft that has no saved version yet)
+  const creating = editMode === 'create' || row?.HasActiveEntity === false
+  if (field.immutable && !creating) return true
   const fc = evaluate(field.fieldControl, row)
   return fc === 'ReadOnly' || fc === 'Inapplicable' || fc === 1 || fc === 7
 }

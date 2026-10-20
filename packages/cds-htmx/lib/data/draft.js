@@ -1,4 +1,5 @@
 const cds = require('@sap/cds')
+const { INSERT } = cds.ql
 
 /** Thin wrappers over the lean-draft runtime's own convenience methods (`srv.new/edit/save/discard`,
  *  installed onto the service instance by `@sap/cds/libx/_runtime/fiori/lean-draft.js` whenever the
@@ -23,6 +24,23 @@ async function create(tx, entityType, data = {}) {
   const Entity = entityDef(entityType)
   const result = await tx.new(Entity.drafts, data)
   return result[0]
+}
+
+/** `NEW` of a child (a composition node such as `Books.chapters`): lean draft only creates those through the
+ *  draft root's navigation path (a flat `NEW` of the child is `DRAFT_MODIFICATION_ONLY_VIA_ROOT`), so the root draft
+ *  is addressed by key and the child sent as a `NEW` event on `<root>/<nav>`. `data` should carry the backlink
+ *  foreign key. Returns the child's key (`{ID, IsActiveEntity:false}`). */
+async function createChild(tx, parentType, parentKeys, nav, data = {}) {
+  const { IsActiveEntity: _ignored, ...plainKeys } = parentKeys
+  const where = []
+  for (const [k, v] of Object.entries({ ...plainKeys, IsActiveEntity: false })) {
+    if (where.length) where.push('and')
+    where.push({ ref: [k] }, '=', { val: v })
+  }
+  const query = INSERT.into({ ref: [{ id: parentType, where }, nav] }).entries(data)
+  const result = await tx.send({ event: 'NEW', query })
+  const { IsActiveEntity: _active, ...keys } = result[0]
+  return { ...keys, IsActiveEntity: false } // same key order as every URL we build (`ID` first)
 }
 
 /** `EDIT`: copies the active instance into a new draft. `keys` identifies the active instance's
@@ -59,4 +77,4 @@ async function discard(tx, entityType, keys) {
   return tx.discard(Entity.drafts, plainKeys)
 }
 
-module.exports = { create, edit, patch, save, discard }
+module.exports = { create, createChild, edit, patch, save, discard }

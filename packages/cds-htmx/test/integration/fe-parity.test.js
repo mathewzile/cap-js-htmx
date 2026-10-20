@@ -31,6 +31,16 @@ describe('FE parity: capabilities, direct editing, history, confirmations (round
       assert.deepEqual([canCreate(chapters), canEdit(chapters, {}), canDelete(chapters, {})], [false, false, false], 'a draft node is only editable inside its root')
     })
 
+    test('Core.Immutable fields are editable while creating (create page, brand-new draft) and read-only afterwards', () => {
+      const { isReadOnly } = require('../../lib/render/field')
+      const immutable = { path: 'code', immutable: true }
+      assert.equal(isReadOnly(immutable, {}, 'create'), false)
+      assert.equal(isReadOnly(immutable, { HasActiveEntity: false, IsActiveEntity: false }, 'draft'), false) // new draft
+      assert.equal(isReadOnly(immutable, { HasActiveEntity: true, IsActiveEntity: false }, 'draft'), true) // edit of a saved object
+      assert.equal(isReadOnly(immutable, {}, 'direct'), true)
+      assert.equal(isReadOnly({ path: 'x', computed: true }, {}, 'create'), true)
+    })
+
     test('path-based restrictions are evaluated per object', () => {
       const edit = { mode: 'direct', insertable: true, updatable: { $Path: 'editable' }, deletable: true }
       assert.equal(canEdit(edit, { editable: true }), true)
@@ -253,6 +263,88 @@ describe('FE parity: capabilities, direct editing, history, confirmations (round
       } finally {
         await api.axios.post(`/htmx/catalog/Books(${key},IsActiveEntity=false)/$discard`, {}, { headers: HX })
       }
+    })
+  })
+
+  describe('composition children in a draft (Books.chapters)', () => {
+    const JANE = "ID='3d2d2d2d-1c1c-4b4b-8a8a-000000000002'"
+    const CH1 = "ID='7c7c7c7c-0002-4a4a-8a8a-000000000001',IsActiveEntity=false"
+    const form = { headers: { ...HX, 'Content-Type': 'application/x-www-form-urlencoded' } }
+    const activeChapters = async () => (await api.axios.get(`/odata/v4/catalog/Books(ID=3d2d2d2d-1c1c-4b4b-8a8a-000000000002,IsActiveEntity=true)/chapters`)).data.value.length
+    let page
+    const rowPatches = html => (html.match(/hx-patch="[^"]*\/chapters\([^"]*\/\$field\/title"/g) || []).length
+
+    before(async () => {
+      page = (await api.axios.post(`/htmx/catalog/Books(${JANE},IsActiveEntity=true)/$edit`, {}, { headers: HX })).data
+    })
+    after(async () => {
+      await api.axios.post(`/htmx/catalog/Books(${JANE},IsActiveEntity=false)/$discard`, {}, { headers: HX }).catch(() => {})
+    })
+
+    test('rows are inputs that PATCH the child draft, rows navigate only via the arrow, the mandatory header is marked', () => {
+      assert.match(page, /<td[^>]*data-hf-field="chapters\(ID=(?:'|&#39;)7c7c7c7c-0002-4a4a-8a8a-000000000001(?:'|&#39;),IsActiveEntity=false\)\.title"/)
+      assert.match(page, /hx-patch="[^"]*\/chapters\(ID=(?:'|&#39;)7c7c7c7c-0002-4a4a-8a8a-000000000001(?:'|&#39;),IsActiveEntity=false\)\/\$field\/title"/)
+      assert.match(page, /click\[!event\.target\.closest\('\.fd-table__cell--checkbox, input, select, textarea, button, a'\)\]/)
+      assert.match(page, /hf-field__required/)
+    })
+
+    test('a cell change patches only the child draft and answers with a (cleared) message state', async () => {
+      const res = await api.axios.patch(`/htmx/catalog/Books(${JANE},IsActiveEntity=false)/chapters(${CH1})/$field/title`, 'title=Edited', form)
+      assert.equal(res.status, 200)
+      assert.deepEqual(JSON.parse(res.headers['hx-trigger'])['hf:messages'].set, [])
+      assert.match(res.data, /Draft saved/)
+      const draft = await api.axios.get(`/odata/v4/catalog/Books(ID=3d2d2d2d-1c1c-4b4b-8a8a-000000000002,IsActiveEntity=false)/chapters(ID=7c7c7c7c-0002-4a4a-8a8a-000000000001,IsActiveEntity=false)`)
+      assert.equal(draft.data.title, 'Edited')
+      assert.equal((await api.axios.get(`/odata/v4/catalog/Chapters(ID=7c7c7c7c-0002-4a4a-8a8a-000000000001,IsActiveEntity=true)`)).data.title, 'I. Gateshead', 'the saved chapter is untouched')
+    })
+
+    test('an emptied mandatory cell is flagged on exactly that cell', async () => {
+      const res = await api.axios.patch(`/htmx/catalog/Books(${JANE},IsActiveEntity=false)/chapters(${CH1})/$field/title`, 'title=', form)
+      const { set, clear } = JSON.parse(res.headers['hx-trigger'])['hf:messages']
+      assert.equal(set.length, 1)
+      assert.equal(set[0].path, `chapters(${CH1}).title`)
+      assert.equal(set[0].text, 'Provide the missing value.')
+      assert.deepEqual(clear, [`chapters(${CH1}).title`])
+      await api.axios.patch(`/htmx/catalog/Books(${JANE},IsActiveEntity=false)/chapters(${CH1})/$field/title`, 'title=I.%20Gateshead', form)
+    })
+
+    test('Create makes a child draft linked to the book and opens its own page (Apply, Delete, New Chapter)', async () => {
+      const res = await api.axios.post(`/htmx/catalog/Books(${JANE},IsActiveEntity=false)/chapters`, {}, { headers: HX })
+      assert.equal(res.status, 200)
+      assert.match(res.headers['hx-push-url'], /\/htmx\/catalog\/Books\(ID='[^']*',IsActiveEntity=false\)\/chapters\(ID='[0-9a-f-]{36}',IsActiveEntity=false\)$/)
+      assert.match(res.data, /New Chapter/)
+      assert.match(res.data, />Apply</)
+      assert.doesNotMatch(res.data, />Save</)
+      assert.match(res.data, /hx-delete="[^"]*\/chapters\([^"]*"/) // Delete of the child row
+      const childPath = res.headers['hx-push-url']
+      // the child belongs to the book: the book page lists it
+      const book = await api.axios.get(`/htmx/catalog/Books(${JANE},IsActiveEntity=false)`, { headers: HX })
+      assert.equal(rowPatches(book.data), 3)
+      // typing in its page field: header title, validation, no URL (partials in the response)
+      const source = 'op-field--ChapterInfo--title'
+      const patched = await api.axios.patch(childPath.replace('/htmx/catalog', '/htmx/catalog') + '/$field/title', 'title=Typed%20title', { headers: { ...form.headers, 'X-Hf-Source': source } })
+      assert.match(patched.data, /hx-target="#op-title"[\s\S]*Typed title/)
+      // delete the child again (CANCEL of the child draft), back on the book
+      const removed = await api.axios.delete(childPath, { headers: HX })
+      assert.equal(removed.headers['hx-push-url'], `/htmx/catalog/Books(${JANE},IsActiveEntity=false)`)
+      assert.equal(rowPatches((await api.axios.get(`/htmx/catalog/Books(${JANE},IsActiveEntity=false)`, { headers: HX })).data), 2)
+    })
+
+    test('bulk delete cancels the ticked child drafts only; discarding the book leaves every saved chapter', async () => {
+      const body = new URLSearchParams([['keys', CH1]]).toString()
+      const res = await api.axios.post(`/htmx/catalog/Books(${JANE},IsActiveEntity=false)/chapters/$delete`, body, form)
+      assert.equal(res.status, 200)
+      assert.equal(rowPatches((await api.axios.get(`/htmx/catalog/Books(${JANE},IsActiveEntity=false)`, { headers: HX })).data), 1)
+      assert.equal(await activeChapters(), 2, 'nothing of the saved data was deleted')
+      await api.axios.post(`/htmx/catalog/Books(${JANE},IsActiveEntity=false)/$discard`, {}, { headers: HX })
+      assert.equal(await activeChapters(), 2)
+    })
+
+    test('children are only editable through a draft root', async () => {
+      const bad = await api.axios.post('/htmx/catalog/Authors/books', {}, { headers: HX, validateStatus: () => true })
+      assert.ok([404, 405].includes(bad.status))
+      const noDraft = await api.axios.patch(`/htmx/catalog/Authors(ID='9d703c23-7cf7-4cad-9f2b-0e1e1a8c0001')/books(ID='3d2d2d2d-1c1c-4b4b-8a8a-000000000001')/$field/title`, 'title=x', { ...form, validateStatus: () => true })
+      assert.ok([404, 405].includes(noDraft.status))
     })
   })
 

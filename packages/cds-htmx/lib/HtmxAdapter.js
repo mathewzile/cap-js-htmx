@@ -9,7 +9,7 @@ const cache = require('./model/cache')
 const i18n = require('./i18n')
 const { appRoot } = require('./config')
 const apps = require('./apps')
-const { keyElements, entityDef, resolveElement } = require('./annotations/edm')
+const { keyElements, entityDef, resolveElement, backlinkElement } = require('./annotations/edm')
 const { evaluate } = require('./annotations/expressions')
 const keysLib = require('./keys')
 const filtersLib = require('./data/filters')
@@ -69,6 +69,9 @@ class HtmxAdapter extends HttpAdapter {
     router.delete('/:Set', this.handle(this.deleteEntity))
     router.get('/:Set', this.handle(this.entityRoute))
     router.get('/*splat', this.handle(this.subObjectPage))
+    router.patch('/*splat', this.handle(this.patchNested))
+    router.delete('/*splat', this.handle(this.deleteNested))
+    router.post('/*splat', this.handle(this.postNested))
 
     return router
   }
@@ -339,26 +342,25 @@ class HtmxAdapter extends HttpAdapter {
     })
   }
 
-  /** `POST /:Set/:nav` (§routes Phase 5c): Create a child row in a navigation (table section) of a draft.
-   *  The parent OP is re-rendered to show the new child row inline. */
+  /** `POST /:Set(keys)/:nav`: Create in a table section of a draft. Like FE (creation mode "NewPage") it makes the
+   *  child's own draft row, linked to the parent through the composition's foreign key, and opens its page. */
   async createChild(req, res, tx) {
     const { set, raw: parentRaw } = keysLib.splitSegments(req.params.Set)[0] || {}
     const parent = this.entitySet(set)
-    if (!parent) return res.sendStatus(404)
-    const parentKeys = keysLib.parseKeys(parentRaw)
+    if (!parent || parentRaw == null) return res.sendStatus(404)
+    if (this.editOf(req, parent.name).mode !== 'draft') return this.reject(req, res, 405, 'NotAllowed')
     const nav = req.params.nav
-
     const element = resolveElement(cds.model, parent.name, nav)
     if (!element?.target) return res.sendStatus(404)
-
-    const childEntity = this.entitySet(element.target.split('.').pop())
-    if (!childEntity) return res.sendStatus(404)
-
-    const childDefaults = { ...parentKeys }
-    await draftLib.create(tx, childEntity.name, childDefaults)
-
+    const parentKeys = keysLib.parseKeys(parentRaw)
+    const { IsActiveEntity: _active, ...plainParent } = parentKeys
+    const assoc = backlinkElement(cds.model, element.target, parent.name)
+    const defaults = assoc ? Object.fromEntries(Object.entries(plainParent).map(([k, v]) => [`${assoc}_${k}`, v])) : {}
+    const childKeys = await draftLib.createChild(tx, parent.name, parentKeys, nav, defaults)
+    const childRaw = keysLib.formatKeys(childKeys)
+    res.set('HX-Push-Url', `${this.basePath(req)}/${set}(${parentRaw})/${nav}(${childRaw})`)
     return this.objectPage(req, res, tx, {
-      entityType: parent.name, keys: parentKeys, segments: [{ set, raw: parentRaw }], contextPath: `/${set}`
+      entityType: element.target, keys: childKeys, segments: [{ set, raw: parentRaw }, { set: nav, raw: childRaw }], contextPath: `/${set}/${nav}`
     })
   }
 
@@ -431,6 +433,111 @@ class HtmxAdapter extends HttpAdapter {
     if (!clientId) return
     await engine.onChange(tx, view, { clientId, properties: [path] })
       .catch(err => console.error('[sse] side effects for', path, 'failed:', err.message))
+  }
+
+  /** Parses a path below a draft root: `Books(k)/chapters(k2)` followed by `/$field/title` (a change) or
+   *  `/$delete` (a bulk delete), or nothing (the child itself). Walks the navigation chain structurally
+   *  (CSN) like `subObjectPage`. Returns the child's entity type and keys, the parent it belongs to and the
+   *  key string the client uses for this row (`chapters(ID='…',IsActiveEntity=false)`). */
+  parseNested(req) {
+    let full = (req.params.splat || []).join('/')
+    let action = null
+    let property = null
+    const field = /\/\$field\/(\w+)$/.exec(full)
+    if (field) { action = 'field'; property = field[1]; full = full.slice(0, field.index) } else if (/\/\$delete$/.test(full)) { action = 'delete'; full = full.slice(0, -'/$delete'.length) }
+    const segments = keysLib.splitSegments(full)
+    if (segments.length < 2 || segments[0].raw == null) return null
+    const top = this.entitySet(segments[0].set)
+    if (!top) return null
+    const types = [top.name]
+    for (let i = 1; i < segments.length; i++) {
+      const element = resolveElement(cds.model, types[i - 1], segments[i].set)
+      if (!element?.target) return null
+      types.push(element.target)
+    }
+    const last = segments.length - 1
+    const target = segments[last]
+    const parentSegments = segments.slice(0, last)
+    const pathOf = segs => segs.map(s => `${s.set}${s.raw ? `(${s.raw})` : ''}`).join('/')
+    return {
+      action, property, segments, nav: target.set,
+      root: { set: segments[0].set, raw: segments[0].raw, entityType: top.name, keys: keysLib.parseKeys(segments[0].raw) },
+      entityType: types[last], raw: target.raw, keys: target.raw == null ? null : keysLib.parseKeys(target.raw),
+      parent: { entityType: types[last - 1], segments: parentSegments, path: pathOf(parentSegments), keys: keysLib.parseKeys(parentSegments[last - 1].raw), contextPath: `/${segments[0].set}${parentSegments.slice(1).map(s => `/${s.set}`).join('')}` },
+      rowKey: target.raw == null ? null : `${target.set}(${target.raw})`,
+      path: pathOf(segments)
+    }
+  }
+
+  /** The parent page again (after a child row changed or was deleted), with its own URL pushed. */
+  parentPage(req, res, tx, n, { push }) {
+    if (push) res.set('HX-Push-Url', `${this.basePath(req)}/${n.parent.path}`)
+    return this.objectPage(req, res, tx, { entityType: n.parent.entityType, keys: n.parent.keys, segments: n.parent.segments, contextPath: n.parent.contextPath })
+  }
+
+  /** `PATCH …/chapters(k)/$field/:path`: a cell of a child row, or a field of a child page, in a draft. The
+   *  child is its own draft entity (`IsActiveEntity=false`); mandatory cells get a value state like FE. */
+  async patchNested(req, res, tx) {
+    const n = this.parseNested(req)
+    if (!n || n.action !== 'field' || !n.keys) return res.sendStatus(404)
+    if (this.editOf(req, n.root.entityType).mode !== 'draft') return this.reject(req, res, 405, 'NotAllowed')
+    const key = `${n.rowKey}.${n.property}`
+    try {
+      await draftLib.patch(tx, n.entityType, n.keys, { [n.property]: req.body?.[n.property] })
+    } catch (err) {
+      if (!HtmxAdapter.isUserError(err)) throw err
+      return this.validationFailed(req, res, n.root.entityType, [{ ...draftMessages.fromError(err)[0], path: key }], { status: 422, contextPath: `/${n.root.set}` })
+    }
+    const header = req.headers['x-hf-source']
+    const source = typeof header === 'string' && /^[\w-]+$/.test(header) ? header : null
+    const status = `<hx-partial hx-target="#op-draft-status" hx-swap="innerHTML">${this.text(req, 'DraftSavedStatus')}</hx-partial>`
+    if (source?.startsWith('op-field--')) {
+      // A field of the child's own page: same as a field of the root page (other occurrences, header title, validation)
+      const view = { service: this.service.name, servicePath: this.odataServicePath(), entityType: n.entityType, keys: n.keys, contextPath: n.parent.contextPath + `/${n.nav}`, basePath: this.basePath(req), entitySetPath: n.path }
+      const { parts, layout: childLayout, row: childRow } = await engine.bindingParts(tx, view, { path: n.property, source, ...this.appOpts(req) })
+        .catch(err => { console.error('[htmx] binding refresh for', n.property, 'failed:', err.message); return { parts: [], layout: null, row: null } })
+      const missingField = childLayout ? draftMessages.missingMandatory(childLayout, childRow, [n.property], this.text(req, 'MissingValue')) : []
+      res.set('HX-Trigger', draftMessages.triggerHeader({ clear: [n.property], set: draftMessages.labelled(missingField, childLayout ?? {}) }))
+      res.status(200).type('html').send([this.messagesPartial([]), status, ...(parts.length ? [engine.partialsMarkup(parts)] : [])].join('\n'))
+    } else {
+      // A cell of the table section that shows this row: a mandatory cell the user emptied is flagged
+      const layout = cache.objectPageFor(cds.model, this.service.name, this.odataServicePath(), n.root.entityType, `/${n.root.set}`, this.appOpts(req))
+      const column = require('./data/page').collectTableFacets([...(layout.headerFacets || []), ...(layout.sections || [])])
+        .find(f => f.content.nav === n.nav)?.content.columns.find(c => c.field?.path === n.property)
+      const { IsActiveEntity: _a, ...plain } = n.keys
+      const row = await tx.run(SELECT.one.from(n.entityType).where({ ...plain, IsActiveEntity: false }))
+      const missing = column && row && require('./render/field').isMandatory(column.field, row) && draftMessages.isEmpty(row[column.field.cqlPath])
+        ? [{ path: key, text: this.text(req, 'MissingValue'), severity: 'error', label: column.field.label }] : []
+      res.set('HX-Trigger', draftMessages.triggerHeader({ clear: [key], set: missing }))
+      res.status(200).type('html').send([this.messagesPartial([]), status].join('\n'))
+    }
+    // Annotated side effects of the root (e.g. Chapters -> totalPages) are pushed over SSE after the response
+    const clientId = req.headers['x-htmx-client']
+    if (!clientId) return
+    const view = { service: this.service.name, servicePath: this.odataServicePath(), entityType: n.root.entityType, keys: n.root.keys, contextPath: `/${n.root.set}`, basePath: this.basePath(req), entitySetPath: `${n.root.set}(${n.root.raw})` }
+    await engine.onChange(tx, view, { clientId, navigations: [n.segments[1].set] })
+      .catch(err => console.error('[sse] side effects for', n.nav, 'failed:', err.message))
+  }
+
+  /** `DELETE …/chapters(k)`: deletes a child of the draft (Delete on its page), back to the parent. */
+  async deleteNested(req, res, tx) {
+    const n = this.parseNested(req)
+    if (!n || n.action || !n.keys) return res.sendStatus(404)
+    if (this.editOf(req, n.root.entityType).mode !== 'draft') return this.reject(req, res, 405, 'NotAllowed')
+    await draftLib.discard(tx, n.entityType, n.keys) // CANCEL of the child draft; a plain DELETE would remove the saved row
+    return this.parentPage(req, res, tx, n, { push: true })
+  }
+
+  /** `POST …/chapters/$delete`: deletes the ticked rows of a table section of the draft. */
+  async postNested(req, res, tx) {
+    const n = this.parseNested(req)
+    if (!n || n.action !== 'delete') return res.sendStatus(404)
+    if (this.editOf(req, n.root.entityType).mode !== 'draft') return this.reject(req, res, 405, 'NotAllowed')
+    for (const raw of [].concat(req.body?.keys ?? []).slice(0, 200)) {
+      await draftLib.discard(tx, n.entityType, keysLib.parseKeys(raw))
+    }
+    // the segment list of the section is the parent's own
+    return this.objectPage(req, res, tx, { entityType: n.parent.entityType, keys: n.parent.keys, segments: n.parent.segments, contextPath: n.parent.contextPath })
   }
 
   /** `GET /:Set/$vh/:path?$search=...` (§routes): Value-help dialog for @Common.ValueList (unbounded, searchable). */

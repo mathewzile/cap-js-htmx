@@ -112,20 +112,21 @@ document.addEventListener('click', e => {
 document.addEventListener('keydown', e => { if (e.key === 'Escape') hfClosePopovers() })
 document.addEventListener('htmx:after:swap', () => hfClosePopovers())
 
-// ---------- List Report selection: Delete is enabled while rows are ticked ----------
-function hfSyncSelection(table) {
-  const any = !!table.querySelector('tbody .hf-checkbox:checked')
-  for (const button of document.querySelectorAll('[data-hf-needs-selection]')) button.disabled = !any
+// ---------- row selection: Delete buttons are enabled while rows of their table are ticked ----------
+// A button names the container it works on (data-hf-needs-selection="#section"), so the List Report and the
+// Object Page sections each have their own.
+function hfSyncSelection() {
+  for (const button of document.querySelectorAll('[data-hf-needs-selection]')) {
+    const scope = document.querySelector(button.dataset.hfNeedsSelection) || document
+    button.disabled = !scope.querySelector('tbody .hf-checkbox:checked')
+  }
 }
 document.addEventListener('change', e => {
   const box = e.target
   if (!box.classList?.contains('hf-checkbox')) return
-  const table = box.closest('table')
-  if (table) hfSyncSelection(table)
+  hfSyncSelection()
 })
-document.addEventListener('htmx:after:swap', () => {
-  for (const table of document.querySelectorAll('table.hf-table')) hfSyncSelection(table)
-})
+document.addEventListener('htmx:after:swap', hfSyncSelection)
 
 // ---------- toast: shown for a few seconds, then removed ----------
 let hfToastTimer

@@ -733,3 +733,8 @@ body {
 .hf-vh__scroll { max-height: 22rem; overflow: auto; }
 .hf-vh-row { cursor: pointer; }
 .hf-vh-row:focus-visible { outline: 2px solid var(--sapContent_FocusColor, #0032a5); outline-offset: -2px; }
+
+/* ---------- inline-editable table cells ---------- */
+.hf-table td .fd-input { width: 100%; box-sizing: border-box; }
+.hf-table td .hf-input--end { text-align: right; }
+.hf-table td[data-hf-field] { position: relative; }
