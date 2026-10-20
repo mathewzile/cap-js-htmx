@@ -27,7 +27,7 @@ const { cellText } = require('./render/table')
 const objectPageRender = require('./render/object-page')
 const valueHelpRender = require('./render/value-help')
 const { loadObjectPage } = require('./data/page')
-const { formValues, InputError } = require('./data/form')
+const { formValues, InputError, invalidValueListKeys, childRowValues } = require('./data/form')
 const { editCapabilities, canCreate, canEdit, canDelete } = require('./model/edit-capabilities')
 const engine = require('./sse/side-effects-engine')
 
@@ -170,7 +170,9 @@ class HtmxAdapter extends HttpAdapter {
     req.hfView = this.viewOf(req, view)
     const clientId = req.headers['x-htmx-client']
     if (!clientId) return
-    channels.setView(clientId, this.viewOf(req, view))
+    // The stream may not be open yet (pages that want one open it after the swap): it picks the view up then
+    if (channels.get(clientId)) channels.setView(clientId, this.viewOf(req, view))
+    else channels.rememberView(clientId, this.viewOf(req, view))
   }
 
   entitySet(name) {
@@ -388,9 +390,9 @@ class HtmxAdapter extends HttpAdapter {
       await draftLib.edit(tx, entity.name, { ...plainKeys, IsActiveEntity: true })
     } catch (err) {
       if ((err.status ?? err.statusCode ?? err.code) !== 409) throw err
-      const lock = await tx.run(SELECT.one.from(entity.name).columns('DraftAdministrativeData.InProcessByUser as user').where({ ...plainKeys, IsActiveEntity: false })).catch(() => null)
-      if (lock && lock.user !== cds.context.user.id) {
-        return this.reject(req, res, 409, 'LockedBy', lock.user)
+      const lockedBy = await queryLib.draftLockUser(tx, entity.name, { ...plainKeys, IsActiveEntity: false })
+      if (lockedBy && lockedBy !== cds.context.user.id) {
+        return this.reject(req, res, 409, 'LockedBy', lockedBy)
       }
       // your own draft: resume it
     }
@@ -413,6 +415,11 @@ class HtmxAdapter extends HttpAdapter {
     const keys = keysLib.parseKeys(raw)
     const path = req.params.path
     const value = req.body?.[path]
+    // A key typed into a value-help field has to exist in its value list (the draft is not changed otherwise)
+    const field = require('./model/fields').buildField(cache.storeFor(cds.model, this.service.name, this.odataServicePath(), this.appOpts(req)), entity.name, path)
+    if (field?.valueList && !field.fixedValues && !(await valueListLib.keyExists(tx, field.valueList, value))) {
+      return this.validationFailed(req, res, entity.name, [{ path, text: this.text(req, 'InvalidValue'), severity: 'error' }], { status: 422, contextPath: `/${set}` })
+    }
     try {
       await draftLib.patch(tx, entity.name, keys, { [path]: value })
     } catch (err) {
@@ -422,11 +429,11 @@ class HtmxAdapter extends HttpAdapter {
     const view = { service: this.service.name, servicePath: this.odataServicePath(), entityType: entity.name, keys, contextPath: `/${set}`, basePath: this.basePath(req), entitySetPath: `${set}(${raw})` }
     const header = req.headers['x-hf-source']
     const source = typeof header === 'string' && /^[\w-]+$/.test(header) ? header : null
-    const { parts, layout, row } = await engine.bindingParts(tx, view, { path, source, ...this.appOpts(req) })
-      .catch(err => { console.error('[htmx] binding refresh for', path, 'failed:', err.message); return { parts: [], layout: null, row: null } })
+    const { parts, layout, row, title } = await engine.bindingParts(tx, view, { path, source, ...this.appOpts(req) })
+      .catch(err => { console.error('[htmx] binding refresh for', path, 'failed:', err.message); return { parts: [], layout: null, row: null, title: null } })
     // The value is valid again (clear its message) unless it is a mandatory field the user emptied
     const missing = layout ? draftMessages.missingMandatory(layout, row, [path], this.text(req, 'MissingValue')) : []
-    res.set('HX-Trigger', draftMessages.triggerHeader({ clear: [path], set: draftMessages.labelled(missing, layout ?? {}) }))
+    res.set('HX-Trigger', draftMessages.triggerHeader({ clear: [path], set: draftMessages.labelled(missing, layout ?? {}), title }))
     const status = `<hx-partial hx-target="#op-draft-status" hx-swap="innerHTML">${this.text(req, 'DraftSavedStatus')}</hx-partial>`
     // clears a stale validation strip as well
     const markup = [this.messagesPartial([]), status, ...(parts.length ? [engine.partialsMarkup(parts)] : [])].join('\n')
@@ -447,7 +454,7 @@ class HtmxAdapter extends HttpAdapter {
     let action = null
     let property = null
     const field = /\/\$field\/(\w+)$/.exec(full)
-    if (field) { action = 'field'; property = field[1]; full = full.slice(0, field.index) } else if (/\/\$delete$/.test(full)) { action = 'delete'; full = full.slice(0, -'/$delete'.length) }
+    if (field) { action = 'field'; property = field[1]; full = full.slice(0, field.index) } else if (/\/\$delete$/.test(full)) { action = 'delete'; full = full.slice(0, -'/$delete'.length) } else if (/\/\$paste$/.test(full)) { action = 'paste'; full = full.slice(0, -'/$paste'.length) }
     const segments = keysLib.splitSegments(full)
     if (segments.length < 2 || segments[0].raw == null) return null
     const top = this.entitySet(segments[0].set)
@@ -534,6 +541,7 @@ class HtmxAdapter extends HttpAdapter {
   /** `POST …/chapters/$delete`: deletes the ticked rows of a table section of the draft. */
   async postNested(req, res, tx) {
     const n = this.parseNested(req)
+    if (n?.action === 'paste') return this.pasteRows(req, res, tx, n)
     if (!n || n.action !== 'delete') return res.sendStatus(404)
     if (this.editOf(req, n.root.entityType).mode !== 'draft') return this.reject(req, res, 405, 'NotAllowed')
     for (const raw of [].concat(req.body?.keys ?? []).slice(0, 200)) {
@@ -541,6 +549,47 @@ class HtmxAdapter extends HttpAdapter {
     }
     // the segment list of the section is the parent's own
     return this.objectPage(req, res, tx, { entityType: n.parent.entityType, keys: n.parent.keys, segments: n.parent.segments, contextPath: n.parent.contextPath })
+  }
+
+  /** `POST …/chapters/$paste` (FE: paste rows from a spreadsheet into a table of the draft). `cols` names the
+   *  columns the pasted cells belong to (JSON array of properties), `rows` the pasted rows (JSON array of arrays of
+   *  text). Only editable columns of this table are taken; every row is converted first, so nothing is created when one
+   *  cell is invalid. One child draft per row, linked to the parent like Create. */
+  async pasteRows(req, res, tx, n) {
+    if (n.segments.length !== 2 || n.raw != null) return res.sendStatus(404)
+    if (this.editOf(req, n.root.entityType).mode !== 'draft') return this.reject(req, res, 405, 'NotAllowed')
+    let cols, rows
+    try { cols = JSON.parse(req.body?.cols); rows = JSON.parse(req.body?.rows) } catch { return res.sendStatus(400) }
+    if (!Array.isArray(cols) || !Array.isArray(rows) || rows.length > 200 || rows.some(r => !Array.isArray(r))) return res.sendStatus(400)
+
+    const layout = cache.objectPageFor(cds.model, this.service.name, this.odataServicePath(), n.root.entityType, `/${n.root.set}`, this.appOpts(req))
+    const { isReadOnly } = require('./render/field')
+    const columns = require('./data/page').collectTableFacets([...(layout.headerFacets || []), ...(layout.sections || [])])
+      .find(f => f.content.nav === n.nav)?.content.columns || []
+    const editable = new Map(columns.filter(c => c.kind === 'UI.DataField' && c.field?.cqlPath && !c.field.cqlPath.includes('.') && !isReadOnly(c.field, {}, 'draft')).map(c => [c.field.path, c.field]))
+    const picked = cols.map(c => editable.get(c) ?? null)
+
+    const assoc = backlinkElement(cds.model, n.entityType, n.root.entityType)
+    const { IsActiveEntity: _a, ...plainParent } = n.root.keys
+    const defaults = assoc ? Object.fromEntries(Object.entries(plainParent).map(([k, v]) => [`${assoc}_${k}`, v])) : {}
+    const { coerce, InputError } = require('./data/form')
+    let data
+    try {
+      data = rows.map(cells => {
+        const values = { ...defaults }
+        picked.forEach((field, i) => {
+          if (!field || cells[i] == null) return
+          const element = resolveElement(cds.model, n.entityType, field.cqlPath)
+          values[field.cqlPath] = coerce(element, String(cells[i]).trim(), field.label || field.path, field.path)
+        })
+        return values
+      })
+    } catch (err) {
+      if (!(err instanceof InputError)) throw err
+      return this.reject(req, res, 422, 'PasteInvalid', err.message)
+    }
+    for (const values of data) await draftLib.createChild(tx, n.root.entityType, n.root.keys, n.nav, values)
+    return this.parentPage(req, res, tx, n, { push: false })
   }
 
   /** `GET /:Set/$vh/:path?$search=...` (§routes): Value-help dialog for @Common.ValueList (unbounded, searchable). */
@@ -565,17 +614,35 @@ class HtmxAdapter extends HttpAdapter {
     const bundle = cache.bundleFor(this.appOpts(req))
     const labelOf = label => i18n.resolveText(label, bundle) // labels are still {i18n>Key} placeholders here
     const columns = props.map(prop => ({ prop, label: labelOf(fieldsLib.buildField(store, collectionType, prop)?.label ?? prop) }))
+    const suggest = req.query.mode === 'suggest'
     let q = SELECT.from(collectionPath).columns(props)
     if (search && searchSupported) q = q.search(search)
-    const rows = await tx.run(q.limit(200))
+    const limit = suggest ? 8 : 200
+    // per-column filters of the dialog ("Show Filters"): `c.<column>` contains, columns whitelisted from the value list
+    const columnFilters = {}
+    for (const prop of props) {
+      const v = req.query[`c.${prop}`]
+      if (typeof v === 'string' && v.trim()) { columnFilters[prop] = v.trim(); q = q.where(`${prop} like`, `%${v.trim()}%`) }
+    }
+    let rows = await tx.run(q.limit(limit))
+    if (search && searchSupported && !Object.keys(columnFilters).length) {
+      // `$search` only covers the text columns; what is typed is often the key itself (a UUID is not searched)
+      try {
+        const byKey = await tx.run(SELECT.from(collectionPath).columns(props).where(`${valueProp} like`, `%${search}%`).limit(limit))
+        const seen = new Set(rows.map(r => r[valueProp]))
+        rows = [...rows, ...byKey.filter(r => !seen.has(r[valueProp]))].slice(0, limit)
+      } catch { /* key type not comparable with text: the search result stands */ }
+    }
 
     const t = key => i18n.t(bundle, key)
+    // Type-ahead under the input while typing: the best matches only
+    if (suggest) return res.type('html').send(String(valueHelpRender.valueHelpSuggest(columns, rows, { valueProp, t })))
     // Searching only replaces the results, opening sends the whole dialog (into #dialogs)
     if (req.headers['hx-target'] === 'div#vh-results') {
       return res.type('html').send(String(valueHelpRender.valueHelpResults(columns, rows, { valueProp, t })))
     }
     const entitySetPath = keyRaw ? `${set}(${keyRaw})` : set
-    res.type('html').send(String(valueHelpRender.valueHelpDialog({ ...field, label: labelOf(field.label) }, columns, rows, { basePath: this.basePath(req), entitySetPath, valueProp, search, searchSupported, t, target })))
+    res.type('html').send(String(valueHelpRender.valueHelpDialog({ ...field, label: labelOf(field.label) }, columns, rows, { basePath: this.basePath(req), entitySetPath, valueProp, search, searchSupported, t, target, filters: columnFilters })))
   }
 
   /** `POST /:Set/$action/:name` (§routes Phase 5d): Invoke a bound action and re-render the OP with the result. */
@@ -640,15 +707,20 @@ class HtmxAdapter extends HttpAdapter {
     let values = {}
     try {
       values = formValues(cds.model, entity.name, layout, req.body, { editMode, row: current || {} })
+      const badKeys = await invalidValueListKeys(tx, layout, values, this.text(req, 'InvalidValue'))
+      if (badKeys.length) return this.validationFailed(req, res, entity.name, badKeys, { status: 422, contextPath })
+      const childSets = await childRowValues(tx, cds.model, entity.name, layout, req.body, keys) // composition tables, saved with the object
       if (creating) {
         // keys the service would otherwise generate are needed to show the new object
         for (const key of keyElements(entityDef(cds.model, entity.name))) {
           if (key.type === 'cds.UUID' && values[key.name] == null) values[key.name] = cds.utils.uuid()
         }
         await tx.run(INSERT.into(entity.name).entries(values))
-      } else {
+      } else if (Object.keys(values).length) {
         await tx.run(UPDATE(entity.name).set(values).where(keys))
       }
+      const parentKeys = creating ? Object.fromEntries(keyElements(entityDef(cds.model, entity.name)).map(k => [k.name, values[k.name]])) : keys
+      await this.saveChildRows(tx, entity.name, parentKeys, childSets)
     } catch (err) {
       if (!HtmxAdapter.isUserError(err)) throw err
       return this.validationFailed(req, res, entity.name, draftMessages.fromError(err), { status: 422, contextPath })
@@ -659,6 +731,32 @@ class HtmxAdapter extends HttpAdapter {
     const newRaw = keysLib.formatKeys(newKeys)
     res.set('HX-Push-Url', `${this.basePath(req)}/${set}(${newRaw})`)
     return this.objectPage(req, res, tx, { entityType: entity.name, keys: newKeys, segments: [{ set, raw: newRaw }], contextPath })
+  }
+
+  /** The posted rows of composition tables become the object's children: rows no longer posted are deleted,
+   *  known ones updated, new ones inserted (linked to the parent through the composition's foreign key). */
+  async saveChildRows(tx, entityType, parentKeys, childSets) {
+    for (const [nav, rows] of Object.entries(childSets)) {
+      const target = resolveElement(cds.model, entityType, nav)?.target
+      if (!target) continue
+      const assoc = backlinkElement(cds.model, target, entityType)
+      const fk = assoc ? Object.fromEntries(Object.entries(parentKeys).filter(([k]) => k !== 'IsActiveEntity').map(([k, v]) => [`${assoc}_${k}`, v])) : {}
+      const keyNames = keyElements(entityDef(cds.model, target)).map(k => k.name).filter(n => n !== 'IsActiveEntity')
+      const keyOf = r => keyNames.map(n => r[n]).join('|')
+      const keyWhere = r => Object.fromEntries(keyNames.map(n => [n, r[n]]))
+      const existing = await tx.run(SELECT.from(target).columns(keyNames).where(fk))
+      const known = new Set(existing.map(keyOf))
+      const kept = new Set(rows.map(keyOf))
+      for (const row of existing) if (!kept.has(keyOf(row))) await tx.run(DELETE.from(target).where(keyWhere(row)))
+      for (const row of rows) {
+        if (known.has(keyOf(row))) {
+          const data = Object.fromEntries(Object.entries(row).filter(([k]) => !keyNames.includes(k)))
+          if (Object.keys(data).length) await tx.run(UPDATE(target).set(data).where(keyWhere(row)))
+        } else {
+          await tx.run(INSERT.into(target).entries({ ...row, ...fk }))
+        }
+      }
+    }
   }
 
   /** `POST /…(keys)/$discard` and `POST /:Set/$discard` (§routes). Draft root: DISCARD deletes the draft; a
@@ -764,6 +862,7 @@ class HtmxAdapter extends HttpAdapter {
     const [rows, countResult] = await Promise.all([tx.run(q), tx.run(countQ)])
     const hasMore = rows.length > threshold
     const pageRows = hasMore ? rows.slice(0, threshold) : rows
+    await queryLib.markDraftOwners(tx, entityType, lrLayout, pageRows, cds.context.user.id)
     const orderBy = orderByFromTerms(orderByTerms)
 
     const filterOptions = {}
@@ -853,6 +952,7 @@ class HtmxAdapter extends HttpAdapter {
     const [rows, countResult] = await Promise.all([tx.run(q), tx.run(countQ)])
     const hasMore = rows.length > threshold
     const pageRows = hasMore ? rows.slice(0, threshold) : rows
+    await queryLib.markDraftOwners(tx, entityType, lrLayout, pageRows, cds.context.user.id)
     const orderBy = orderByFromTerms(orderByTerms)
 
     const body = listReportRender.tablePartial(lrLayout, pageRows, {
@@ -882,6 +982,10 @@ class HtmxAdapter extends HttpAdapter {
   /** Every page replaces `#app`; the message strips live outside it, so a page without messages of its own
    *  clears the previous page's (`keepMessages`: the page brings its own). */
   render(req, res, { title, body, keepMessages }) {
+    // The page says whether it wants the event stream (`#hf-live`); the page script opens or closes it (§4.1)
+    const view = req.hfView
+    const live = !!view && engine.needsStream(cache.storeFor(cds.model, view.service, view.servicePath, this.appOpts(req)), view.entityType, { list: !!view.list })
+    body = html`${body}<span id="hf-live" hidden data-hf-live="${live ? '1' : '0'}"></span>`
     if (this.isFragmentRequest(req) || req.htmxApp) {
       const clear = keepMessages ? '' : this.messagesPartial([])
       res.set('Content-Type', 'text/html').send(String(layout.fragment({ title, body: html`${rawHtml(clear)}${body}` })))

@@ -1,6 +1,7 @@
 using CatalogService as service from '../srv/cat-service';
 
 annotate service.Books with @(
+  Common.SemanticKey : [title],
   Common.SideEffects #Stock : {
     SourceProperties : [stock],
     TargetProperties : ['stockStatus', 'stockCriticality']
@@ -171,7 +172,8 @@ annotate service.Authors with @(
   UI.Facets : [
     { $Type : 'UI.ReferenceFacet', ID : 'AuthorGeneral', Label : '{i18n>GeneralInformation}', Target : '@UI.FieldGroup#General' },
     { $Type : 'UI.ReferenceFacet', ID : 'ContactInfo', Label : '{i18n>Contact}', Target : '@Communication.Contact' },
-    { $Type : 'UI.ReferenceFacet', ID : 'AuthorBooks', Label : '{i18n>Books}', Target : 'books/@UI.LineItem' }
+    { $Type : 'UI.ReferenceFacet', ID : 'AuthorBooks', Label : '{i18n>Books}', Target : 'books/@UI.LineItem' },
+    { $Type : 'UI.ReferenceFacet', ID : 'AuthorAwards', Label : 'Awards', Target : 'awards/@UI.LineItem' }
   ],
   Communication.Contact : {
     fn    : name,
@@ -186,6 +188,19 @@ annotate service.Authors with {
   email       @Common.Label : '{i18n>Email}' @Communication.IsEmailAddress;
   phone       @Common.Label : '{i18n>Phone}' @Communication.IsPhoneNumber;
   dateOfBirth @Common.Label : '{i18n>DateOfBirth}';
+};
+
+// A non-draft composition: the Authors' awards are edited inline together with the author (saved with it)
+annotate service.Awards with @(
+  UI.HeaderInfo : { TypeName : 'Award', TypeNamePlural : 'Awards', Title : { Value : name } },
+  UI.LineItem   : [
+    { Value : name, Label : 'Award' },
+    { Value : year, Label : 'Year' }
+  ]
+);
+annotate service.Awards with {
+  name @Common.Label : 'Award';
+  year @Common.Label : 'Year';
 };
 
 annotate service.Genres with @(

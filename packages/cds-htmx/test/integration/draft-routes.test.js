@@ -56,6 +56,13 @@ describe('Draft lifecycle routes (Phase 5)', () => {
     expect(res2.status).to.equal(200)
   })
 
+  test('a typed value-help key that is not in the value list is rejected (422) and not stored', async () => {
+    const { PATCH, expect } = api
+    const res = await PATCH(`/htmx/catalog/Books(${createdDraftRaw})/$field/author_ID`, { author_ID: 'no-such-author' }, { validateStatus: () => true })
+    expect(res.status).to.equal(422)
+    expect(JSON.stringify(res.headers)).to.include('Enter a valid value')
+  })
+
   test('POST /:Set(keys)/$save activates the draft, rendering the active Object Page with the patched value', async () => {
     const { POST, expect } = api
     const res = await POST(`/htmx/catalog/Books(${createdDraftRaw})/$save`, {})

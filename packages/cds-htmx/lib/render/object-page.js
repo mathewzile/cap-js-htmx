@@ -97,12 +97,15 @@ function tableBlock(facet, ctx) {
   const entitySetPath = `${ctx.entitySetPath}/${nav}`
   const sectionId = ids.opSection(facet.id)
   const miniLayout = { table: { columns: facet.content.columns } }
-  const editing = !!ctx.isDraft
+  // A composition of a non-draft object being edited/created: rows are plain inputs saved with the object
+  const direct = !ctx.isDraft && (ctx.editMode === 'direct' || ctx.editMode === 'create') && !!facet.content.composition
+  const editing = !!ctx.isDraft || direct
   const keyNames = child?.keyNames || []
   const bundle = ctx.bundle
   const t = key => ctx.t(bundle, key)
   // While the draft is edited the rows are inputs; a change is PATCHed to the child's own draft
-  const edit = editing ? { nav, rowPath: row => rowHref(ctx.basePath, entitySetPath, keyNames, row) } : undefined
+  const edit = direct ? { direct: true, nav }
+    : editing ? { nav, rowPath: row => rowHref(ctx.basePath, entitySetPath, keyNames, row) } : undefined
   return html`
     <div class="hf-table-toolbar hf-table-toolbar--section">
       <h2 class="hf-section__title">${facet.label} (${rows.length})</h2>
@@ -111,7 +114,9 @@ function tableBlock(facet, ctx) {
         <input type="search" class="fd-input" data-hf-table-search placeholder="${t('Search')}" aria-label="${t('Search')}">
         <span class="hf-input-group__addon"><span class="hf-input-icon"><i class="sap-icon--search" aria-hidden="true"></i></span></span>
       </div>
-      ${editing ? html`
+      ${direct ? html`
+        <button type="button" class="fd-button fd-button--transparent" data-hf-action="row-add">${t('Create')}</button>
+        <button type="button" class="fd-button fd-button--transparent" disabled data-hf-needs-selection="#${sectionId}" data-hf-action="row-remove">${t('Delete')}</button>` : editing ? html`
         <button class="fd-button fd-button--transparent" hx-post="${ctx.basePath}/${ctx.entitySetPath}/${nav}"
           hx-target="#app" hx-push-url="false" hx-swap="innerHTML show:window:top">${t('Create')}</button>
         <button class="fd-button fd-button--transparent" disabled data-hf-needs-selection="#${sectionId}" aria-label="${t('Delete')}"
@@ -119,6 +124,7 @@ function tableBlock(facet, ctx) {
           hx-confirm="${t('ConfirmDeleteSelected')}" data-hf-confirm-count="#${sectionId} tbody .hf-checkbox:checked"
           data-hf-confirm-title="${t('Delete')}" data-hf-confirm-ok="${t('Delete')}" data-hf-confirm-cancel="${t('Cancel')}" data-hf-confirm-critical>${t('Delete')}</button>` : html``}
       <span class="hf-toolbar-separator"></span>
+      ${editing && !direct ? html`<button type="button" class="fd-button fd-button--transparent hf-icon-button" data-hf-action="paste" data-hf-paste-url="${ctx.basePath}/${entitySetPath}/$paste" aria-label="${t('Paste')}" title="${t('Paste')}"><i class="sap-icon--paste" aria-hidden="true"></i></button>` : html``}
       <button type="button" class="fd-button fd-button--transparent hf-icon-button" data-hf-action="export-dom" data-hf-filename="${facet.label}" aria-label="${t('ExportCsv')}" title="${t('ExportCsv')}"><i class="sap-icon--excel-attachment" aria-hidden="true"></i></button>
       <button type="button" class="fd-button fd-button--transparent hf-icon-button" data-hf-action="settings" aria-label="${t('ViewSettings')}" title="${t('ViewSettings')}"><i class="sap-icon--action-settings" aria-hidden="true"></i></button>
     </div>
@@ -126,7 +132,10 @@ function tableBlock(facet, ctx) {
     <table class="fd-table hf-table" role="table">
       ${tableHead(facet.content.columns, rows, { selectable: editing, sortable: false, editing })}
       <tbody>${rowsHtml(miniLayout, rows, { basePath: ctx.basePath, entitySetPath, keyNames, bundle, t: ctx.t, selectable: editing, edit })}</tbody>
-    </table>`
+    </table>
+    ${direct ? html`
+      <input type="hidden" name="${nav}:present" value="1">
+      <template data-hf-row-template>${rowsHtml(miniLayout, [{}], { basePath: ctx.basePath, entitySetPath, keyNames, bundle, t: ctx.t, selectable: true, edit: { ...edit, index: '__i__' } })}</template>` : html``}`
 }
 
 /** The single label/value block of a dataPoint / contact / address facet. Its `id` is what the
@@ -165,13 +174,16 @@ function facetContent(facet, row, ctx) {
 /** A body section (title + white card) or a header-facet block -- recurses for `CollectionFacet`
  *  nesting (§3.2: "CollectionFacet -> section/subsections"). A table section uses the table's own
  *  "Title (n)" toolbar as its heading, as FE does for single-table sections. */
-function facetBlock(facet, row, ctx, { asSection } = {}) {
-  if (facet.hidden && evaluate(facet.hidden, row) === true) return html``
+function facetBlock(facet, row, ctx, { asSection, hidden = false } = {}) {
+  hidden = hidden || (facet.hidden && evaluate(facet.hidden, row) === true)
   if (facet.kind === 'CollectionFacet') {
-    return html`${facet.facets.map(f => facetBlock(f, row, ctx, { asSection }))}`
+    return html`${facet.facets.map(f => facetBlock(f, row, ctx, { asSection, hidden }))}`
   }
+  // A hidden facet leaves an empty placeholder with its id, so a later edit that makes it visible has
+  // something to swap the real content into
+  if (hidden) return html`<div id="${asSection ? ids.opSection(facet.id) : ids.opHeaderFacet(facet.id)}" hidden></div>`
   const body = facetContent(facet, row, ctx)
-  if (!asSection) return html`<div class="hf-header-facet">${body}</div>`
+  if (!asSection) return html`<div class="hf-header-facet" id="${ids.opHeaderFacet(facet.id)}">${body}</div>`
   if (facet.content?.kind === 'table') {
     return html`
       <section id="${ids.opSection(facet.id)}" class="hf-section hf-section--table" aria-label="${facet.label}" data-hf-view="section:${facet.content.targetEntityType}:${facet.id}">${body}</section>`
@@ -186,9 +198,9 @@ function facetBlock(facet, row, ctx, { asSection } = {}) {
 /** Text-only anchor bar, hidden entirely when there's only one section
  *  (§3.4: "Anchor bar ... hidden when there is only one section"). */
 function anchorBar(sections) {
-  if (sections.length < 2) return html``
+  if (sections.length < 2) return html`<div id="${ids.opAnchor()}"></div>`
   return html`
-    <nav class="hf-anchor-bar" aria-label="Sections">
+    <nav id="${ids.opAnchor()}" class="hf-anchor-bar" aria-label="Sections">
       <div class="hf-anchor-bar__tabs" role="tablist">
         ${sections.map((s, i) => html`<a class="hf-anchor-bar__tab${i === 0 ? ' is-selected' : ''}" role="tab" href="#${ids.opSection(s.id)}">${s.label}</a>`)}
       </div>
@@ -352,7 +364,7 @@ function objectPageFragment(layout, row, ctx) {
         ${anchorBar(visibleSections)}
       </header>
       <div class="hf-page__content hf-op-content">
-        ${visibleSections.map(f => facetBlock(f, row, fullCtx, { asSection: true }))}
+        ${(layout.sections || []).map(f => facetBlock(f, row, fullCtx, { asSection: true }))}
       </div>
       ${footerBar(ctx.bundle, ctx.t, { basePath: ctx.basePath, entitySetPath: ctx.entitySetPath, editMode, node: layout.edit?.mode === 'node' })}
     </div>`
@@ -415,4 +427,49 @@ function sideEffectParts(layout, row, ctx, { properties = [], entities = [], all
   return parts.filter(p => !exclude.includes(p.target))
 }
 
-module.exports = { objectPageFragment, breadcrumbs, facetBlock, facetContent, footerBar, sideEffectParts }
+/** What a changed property does to what is shown: a facet/section/field whose `Hidden` expression reads the
+ *  property is re-rendered from the fresh row (a placeholder when hidden, the content when visible; morphing
+ *  leaves an unchanged one as it was), and the anchor bar follows when sections are affected. A form with a
+ *  field that appears or disappears is re-rendered whole, so its columns balance as on a fresh load. */
+function visibilityParts(layout, row, ctx, properties) {
+  const props = new Set(properties)
+  const touches = expr => !!expr && pathsOf(expr).some(p => props.has(p))
+  const editMode = editModeOf(ctx, row)
+  const fullCtx = { ...ctx, isDraft: editMode === 'draft', editMode }
+  const parts = []
+  let sectionsTouched = false
+  const visit = (facets, asSection, { hidden, touched }) => {
+    for (const facet of facets || []) {
+      const state = {
+        hidden: hidden || (facet.hidden && evaluate(facet.hidden, row) === true),
+        touched: touched || touches(facet.hidden)
+      }
+      if (facet.kind === 'CollectionFacet') { visit(facet.facets, asSection, state); continue }
+      const fieldTouched = facet.content?.kind === 'form' && facet.content.fields.some(col => touches(col.hidden))
+      if (!state.touched && !fieldTouched) continue
+      if (asSection) sectionsTouched = sectionsTouched || state.touched
+      parts.push({
+        target: '#' + (asSection ? ids.opSection(facet.id) : ids.opHeaderFacet(facet.id)), swap: 'outerMorph',
+        html: facetBlock(facet, row, fullCtx, { asSection, hidden: state.hidden })
+      })
+    }
+  }
+  visit(layout.headerFacets, false, { hidden: false, touched: false })
+  visit(layout.sections, true, { hidden: false, touched: false })
+  if (sectionsTouched) {
+    const visible = (layout.sections || []).filter(s => !(s.hidden && evaluate(s.hidden, row) === true))
+    parts.push({ target: '#' + ids.opAnchor(), swap: 'outerMorph', html: anchorBar(visible) })
+  }
+  return parts
+}
+
+/** Does a change to these properties alter the page title (header title/description)? Returns the new
+ *  title text for the browser tab, else null. */
+function titleIfChanged(layout, row, ctx, properties) {
+  const header = layout.header || {}
+  const props = new Set(properties)
+  if (![header.title, header.description].some(expr => pathsOf(expr).some(p => props.has(p)))) return null
+  return String(titleOf(layout, row, ctx))
+}
+
+module.exports = { objectPageFragment, breadcrumbs, facetBlock, facetContent, footerBar, sideEffectParts, visibilityParts, titleIfChanged }

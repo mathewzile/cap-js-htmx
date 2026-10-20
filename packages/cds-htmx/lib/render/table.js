@@ -97,7 +97,9 @@ function isSelectable(layout) {
 function headerCell(col, { basePath, entitySetPath, orderBy, numeric, sortable, index, editing }) {
   const cls = `fd-table__cell hf-th hf-col-${index}${numeric ? ' hf-cell--end' : ''}`
   if (!sortable || !col.field?.cqlPath || col.kind !== 'UI.DataField') {
-    return html`<th class="${cls}" role="columnheader"><span class="hf-th__text">${col.label ?? col.field?.label ?? ''}</span>${editing && col.field && require('./field').isMandatory(col.field, {}) ? html`<span class="hf-field__required" aria-hidden="true">*</span>` : html``}</th>`
+    // the columns a paste can fill (editable cells of a section table in a draft)
+    const pasteTarget = editing && col.kind === 'UI.DataField' && col.field?.cqlPath && !col.field.cqlPath.includes('.') && !require('./field').isReadOnly(col.field, {}, 'draft')
+    return html`<th class="${cls}" role="columnheader"${pasteTarget ? html` data-hf-paste-path="${col.field.path}"` : html``}><span class="hf-th__text">${col.label ?? col.field?.label ?? ''}</span>${editing && col.field && require('./field').isMandatory(col.field, {}) ? html`<span class="hf-field__required" aria-hidden="true">*</span>` : html``}</th>`
   }
   const path = col.field.cqlPath
   const isCurrent = orderBy?.path === path
@@ -127,8 +129,8 @@ function editCell(col, row, { rowPath, rowKey, cls, numeric }) {
   </td>`
 }
 
-function dataCell(col, row, { bundle, t, isFirst, numeric, index, edit, rowKey } = {}) {
-  const cls = `fd-table__cell hf-col-${index}${numeric ? ' hf-cell--end' : ''}`
+function dataCell(col, row, { bundle, t, isSemanticKey, numeric, index, edit, rowKey } = {}) {
+  const cls = `fd-table__cell hf-col-${index}${numeric ? ' hf-cell--end' : ''}${isSemanticKey ? ' hf-semantic-key' : ''}`
   if (col.hidden && evaluate(col.hidden, row) === true) return html`<td class="${cls}"></td>`
   if (col.kind === 'UI.DataFieldForAction' || col.kind === 'UI.DataFieldForAnnotation') {
     return html`<td class="${cls}"></td>` // toolbar/inline actions and DataPoint/Chart cells: Phase 4+ (object page) territory for the rendering, revisited for inline table use later
@@ -138,7 +140,7 @@ function dataCell(col, row, { bundle, t, isFirst, numeric, index, edit, rowKey }
     if (!isReadOnly(col.field, row, 'draft')) return editCell(col, row, { rowPath: edit.rowPath(row), rowKey, cls, numeric })
   }
   const text = cellText(col, row)
-  const badge = isFirst ? draftStatusBadge(row, bundle, t) : html``
+  const badge = isSemanticKey ? draftStatusBadge(row, bundle, t) : html``
   const crit = col.criticality ? criticalityClass(evaluate(col.criticality, row)) : ''
   return html`<td class="${cls}">${objectStatus(crit, text)}${raw(badge.value)}</td>`
 }
@@ -155,7 +157,9 @@ function draftStatusBadge(row, bundle, t) {
     return html`<div class="hf-draft-indicator"><span class="fd-object-status fd-object-status--informative">${t(bundle, 'Draft')}</span></div>`
   }
   if (row.HasDraftEntity === true) {
-    return html`<div class="hf-draft-indicator"><span class="fd-object-status fd-object-status--informative">${t(bundle, 'LockedByAnotherUser')}</span></div>`
+    // your own draft is "Draft" (the active row stands in for it), somebody else's locks the object
+    const own = row._draftOwn === true
+    return html`<div class="hf-draft-indicator"><span class="fd-object-status fd-object-status--informative">${t(bundle, own ? 'Draft' : 'LockedByAnotherUser')}</span></div>`
   }
   return html``
 }
@@ -166,7 +170,32 @@ function rowId(keyNames, row) {
   return ids.lrRow(keyNames.map(name => row[name]).join('-'))
 }
 
+/** A row of a composition table in a non-draft Object Page that is being edited (direct edit / create): plain
+ *  inputs named `<nav>[<i>].<property>`, saved together with the object by its Save (the server replaces the
+ *  composition with the posted rows). The key of an existing row travels as hidden inputs, a new row has none. */
+function directRowMarkup(layout, row, { keyNames, bundle, t, numeric, edit }) {
+  const { isReadOnly, isMandatory } = require('./field')
+  const prefix = `${edit.nav}~${edit.index}` // `<nav>~<row>.<property>`: brackets would be nested by the body parser
+  const cells = layout.table.columns.map((col, i) => {
+    const cls = `fd-table__cell hf-col-${i}${numeric[i] ? ' hf-cell--end' : ''}`
+    const field = col.field
+    if (col.kind === 'UI.DataField' && field?.cqlPath && !field.cqlPath.includes('.') && !isReadOnly(field, row, 'direct')) {
+      return html`<td class="${cls}"><input type="text" class="fd-input${numeric[i] ? ' hf-input--end' : ''}" name="${prefix}.${field.path}" value="${row[field.cqlPath] ?? ''}"${isMandatory(field, row) ? raw(' required') : html``} aria-label="${field.label}"></td>`
+    }
+    return dataCell(col, row, { bundle, t, numeric: numeric[i], index: i })
+  })
+  const keys = keyNames.filter(n => n !== 'IsActiveEntity' && row[n] != null)
+    .map(n => html`<input type="hidden" name="${prefix}.${n}" value="${row[n]}">`)
+  return html`
+    <tr class="fd-table__row" data-hf-row>
+      <td class="fd-table__cell fd-table__cell--checkbox">${checkbox('Select row')}${keys}</td>
+      ${cells}
+      <td class="fd-table__cell hf-col-nav"></td>
+    </tr>`
+}
+
 function rowMarkup(layout, row, { basePath, entitySetPath, keyNames, bundle, t, numeric, selectable, edit }) {
+  if (edit?.direct) return directRowMarkup(layout, row, { keyNames, bundle, t, numeric, edit })
   const href = rowHref(basePath, entitySetPath, keyNames, row)
   const rowKey = edit ? `${edit.nav}(${formatKeys(keyValues(keyNames, row))})` : undefined
   return html`
@@ -174,7 +203,7 @@ function rowMarkup(layout, row, { basePath, entitySetPath, keyNames, bundle, t, 
         hx-get="${href}" hx-trigger="click[!event.target.closest('.fd-table__cell--checkbox, input, select, textarea, button, a')]"
         hx-target="#app" hx-push-url="true" hx-swap="innerHTML show:window:top">
       ${selectable ? html`<td class="fd-table__cell fd-table__cell--checkbox">${checkbox('Select row', { name: 'keys', value: formatKeys(keyValues(keyNames, row)) })}</td>` : html``}
-      ${layout.table.columns.map((col, i) => dataCell(col, row, { bundle, t, isFirst: i === 0, numeric: numeric[i], index: i, edit, rowKey }))}
+      ${layout.table.columns.map((col, i) => dataCell(col, row, { bundle, t, isSemanticKey: !!layout.semanticKey?.includes(col.field?.path), numeric: numeric[i], index: i, edit, rowKey }))}
       <td class="fd-table__cell hf-col-nav">
         <i class="sap-icon--slim-arrow-right" aria-hidden="true"></i>
       </td>
@@ -190,7 +219,7 @@ function rowsHtml(layout, rows, { basePath, entitySetPath, keyNames, bundle, t, 
     return html`<tr class="hf-table__nodata"><td class="fd-table__cell" colspan="${layout.table.columns.length + (selectable ? 2 : 1)}">${t(bundle, 'NoDataFound')}</td></tr>`
   }
   const numeric = layout.table.columns.map(col => isNumericColumn(col, rows))
-  return html`${rows.map(row => rowMarkup(layout, row, { basePath, entitySetPath, keyNames, bundle, t, numeric, selectable, edit }))}`
+  return html`${rows.map((row, index) => rowMarkup(layout, row, { basePath, entitySetPath, keyNames, bundle, t, numeric, selectable, edit: edit?.direct ? { index, ...edit } : edit }))}`
 }
 
 function growingButton(basePath, entitySetPath, { skip, hasMore, bundle, t, query }) {

@@ -5,7 +5,7 @@ const cache = require('../model/cache')
 const { buildSideEffects } = require('../model/side-effects')
 const { loadObjectPage } = require('../data/page')
 const { invokeAction } = require('../data/actions')
-const { selectColumns } = require('../data/query')
+const { selectColumns, markDraftOwners } = require('../data/query')
 const objectPageRender = require('../render/object-page')
 const { rowMarkup, rowId, isNumericColumn } = require('../render/table')
 const i18n = require('../i18n')
@@ -47,6 +47,15 @@ function sideEffectsOf(store, entityType) {
   if (!perStore) indexCache.set(store, perStore = new Map())
   if (!perStore.has(entityType)) perStore.set(entityType, buildSideEffects(store, entityType))
   return perStore.get(entityType)
+}
+
+/** Does a page of this entity ever receive pushed events? Only then does the browser open a stream
+ *  (§4.1): an Object Page when the entity has any `Common.SideEffects` (edits in a draft, `SourceEvents`),
+ *  a List Report when it is live and some side effect has `SourceEvents`. */
+function needsStream(store, entityType, { list = false } = {}) {
+  const index = sideEffectsOf(store, entityType)
+  if (list) return config().liveListReport && index.byEvent.size > 0
+  return index.byProperty.size > 0 || index.byNavigation.size > 0 || index.byEvent.size > 0
 }
 
 /** OData and htmx endpoint paths of a service (FE manifests and `cds.compile.to.edm()` are keyed to
@@ -99,8 +108,11 @@ async function bindingParts(tx, view, { path, source, appRoot: root, locale, app
   const page = await loadObjectPage(tx, { service: view.service, servicePath: view.servicePath, entityType: view.entityType, keys: view.keys, contextPath: view.contextPath, appRoot: root, locale, app, editing: true })
   if (!page) return { parts: [], layout: null, row: null }
   const ctx = { basePath: view.basePath, entitySetPath: view.entitySetPath, bundle: page.bundle, t: i18n.t, valueLists: page.valueLists, children: page.children, trail: [] }
-  const parts = objectPageRender.sideEffectParts(page.layout, page.row, ctx, { properties: [path], exclude: source ? ['#' + source] : [] })
-  return { parts, layout: page.layout, row: page.row }
+  const parts = [
+    ...objectPageRender.sideEffectParts(page.layout, page.row, ctx, { properties: [path], exclude: source ? ['#' + source] : [] }),
+    ...objectPageRender.visibilityParts(page.layout, page.row, ctx, [path])
+  ]
+  return { parts, layout: page.layout, row: page.row, title: objectPageRender.titleIfChanged(page.layout, page.row, ctx, [path]) }
 }
 
 /** A change inside an Object Page in edit mode (§4.2.1): `properties` the user edited and/or
@@ -165,6 +177,7 @@ async function pushListRow(tx, client, { srv, servicePath, entityType, view, key
   const layout = cache.listReportFor(cds.model, srv.name, servicePath, entityType, `/${view.set}`, { appRoot: appRoot(), locale: client.locale, app: view.app })
   const row = await tx.run(SELECT.one.from(entityType).columns(selectColumns(cds.model, entityType, layout)).where(keys))
   if (!row) return
+  await markDraftOwners(tx, entityType, layout, [row], client.user?.id)
   const keyNames = keyElements(entityDef(cds.model, entityType)).map(k => k.name)
   const numeric = layout.table.columns.map(col => isNumericColumn(col, [row]))
   publish(client, [{
@@ -199,4 +212,4 @@ function registerSourceEvents(srv) {
   }
 }
 
-module.exports = { registerSourceEvents, onChange, onSourceEvent, bindingParts, partialsMarkup, collectTargets, servicePaths, publish }
+module.exports = { needsStream, registerSourceEvents, onChange, onSourceEvent, bindingParts, partialsMarkup, collectTargets, servicePaths, publish }

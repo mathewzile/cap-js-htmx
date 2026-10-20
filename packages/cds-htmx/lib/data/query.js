@@ -12,6 +12,32 @@ function isDraftRoot(entity) {
   return !!entity?.drafts
 }
 
+/** Who is editing the draft of one object (`DraftAdministrativeData.InProcessByUser`). The service does not
+ *  support the path inside a column list ("Navigation ... in expand is not supported"), so the draft's
+ *  administrative record is read by its UUID. Null when there is no such draft. */
+async function draftLockUser(tx, entityType, where) {
+  try {
+    const draft = await tx.run(SELECT.one.from(entityType).columns('DraftAdministrativeData_DraftUUID as uuid').where(where))
+    if (!draft?.uuid) return null
+    const admin = await cds.db.run(SELECT.one.from('DRAFT.DraftAdministrativeData').columns('InProcessByUser').where({ DraftUUID: draft.uuid }))
+    return admin?.InProcessByUser ?? null
+  } catch {
+    return null
+  }
+}
+
+/** Rows whose active version has a draft get `_draftOwn`: true when that draft is the current user's, else
+ *  it is locked by somebody else (FE shows "Draft" for the former, "Locked" for the latter). Only needed
+ *  when the table shows the indicator (a `Common.SemanticKey` column), so other tables pay nothing. */
+async function markDraftOwners(tx, entityType, layout, rows, userId) {
+  if (!layout.semanticKey?.length || !isDraftRoot(entityDef(cds.model, entityType))) return
+  const keyNames = keyElements(entityDef(cds.model, entityType)).map(k => k.name).filter(n => n !== 'IsActiveEntity')
+  await Promise.all(rows.filter(r => r.IsActiveEntity !== false && r.HasDraftEntity === true).map(async row => {
+    const where = { IsActiveEntity: false, ...Object.fromEntries(keyNames.map(n => [n, row[n]])) }
+    row._draftOwn = (await draftLockUser(tx, entityType, where)) === userId
+  }))
+}
+
 /** The union of every `$Path` reachable from the rendered columns/filter fields/key, mapped
  *  OData -> CQL (§3.3: "the union of `paths()` over all rendered annotation values ... mapped
  *  OData -> CQL by `edm.js`"). Walking the whole column/field object (not just `.field.cqlPath`)
@@ -156,5 +182,5 @@ function objectPageChildQuery(model, parentEntityType, parentKeys, childEntityTy
 
 module.exports = {
   selectColumns, listReportQuery, listReportCountQuery, defaultOrderBy, parseOrderBy,
-  objectPageColumns, objectPageQuery, objectPageChildQuery,
+  objectPageColumns, objectPageQuery, objectPageChildQuery, markDraftOwners, draftLockUser
 }

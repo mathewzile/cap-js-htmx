@@ -26,7 +26,7 @@ function filterField(field, query, options, ctx) {
         <span class="hf-input-group__addon">${field.valueList && ctx?.basePath ? html`
           <button type="button" class="fd-button fd-button--compact fd-button--transparent hf-vh-open" aria-haspopup="dialog" aria-label="Value Help"
             hx-get="${ctx.basePath}/${ctx.entitySetPath}/$vh/${field.path}?target=${encodeURIComponent(name)}" hx-target="#dialogs" hx-swap="innerHTML" hx-push-url="false"><i class="sap-icon--value-help" aria-hidden="true"></i></button>` : html`
-          <span class="hf-input-icon"><i class="sap-icon--value-help" aria-hidden="true"></i></span>`}</span>
+          <button type="button" class="fd-button fd-button--compact fd-button--transparent" data-hf-action="conditions" aria-haspopup="dialog" aria-label="Define Conditions"><i class="sap-icon--value-help" aria-hidden="true"></i></button>`}</span>
       </div>`
   }
   return html`
@@ -61,7 +61,7 @@ function editingStatusField(query, { bundle, t }) {
  *  count via `<hx-partial>`. */
 function filterBar(layout, { basePath, entitySetPath, query, bundle, t, filterOptions = {} }) {
   return html`
-    <form id="${ids.lrFilterBar()}" class="hf-filter-bar"
+    <form id="${ids.lrFilterBar()}" class="hf-filter-bar" data-hf-available="${JSON.stringify((layout.filterBar.available || []).map(f => ({ path: f.path, label: f.label || f.path })))}"
       hx-get="${basePath}/${entitySetPath}/$table" hx-target="#${ids.lrTableBody()}" hx-swap="innerHTML">
       <div class="fd-form-item hf-filter hf-filter--search">
         <label class="fd-form-label hf-filter__label hf-sr-only" for="lr-search">${t(bundle, 'Search')}</label>

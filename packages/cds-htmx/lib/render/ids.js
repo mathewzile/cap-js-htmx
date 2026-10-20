@@ -18,6 +18,8 @@ const lrColumnSort = path => `lr-sort--${sanitize(path)}`
 
 const opSection = id => `op-section--${sanitize(id)}`
 const opField = (facetId, path) => `op-field--${sanitize(facetId)}--${sanitize(path)}`
+const opHeaderFacet = id => `op-hfacet--${sanitize(id)}`
+const opAnchor = () => 'op-anchor'
 const opHeader = () => 'op-header'
 const opPage = () => 'op-page'
 const opTitle = () => 'op-title'
@@ -27,4 +29,4 @@ const opFooter = () => 'op-footer'
 const messages = () => 'messages'
 const toast = () => 'toast'
 
-module.exports = { sanitize, lrTable, lrTableBody, lrFilterBar, lrToolbar, lrCount, lrRow, lrColumnSort, opSection, opField, opHeader, opPage, opTitle, opMessages, opDraftStatus, opFooter, messages, toast }
+module.exports = { sanitize, lrTable, lrTableBody, lrFilterBar, lrToolbar, lrCount, lrRow, lrColumnSort, opSection, opField, opHeaderFacet, opAnchor, opHeader, opPage, opTitle, opMessages, opDraftStatus, opFooter, messages, toast }

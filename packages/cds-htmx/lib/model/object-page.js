@@ -44,7 +44,7 @@ function buildFacet(model, store, entityType, facet) {
     const columns = targetEntityType
       ? (store.get(targetEntityType, 'UI.LineItem') || []).map(r => buildColumn(store, targetEntityType, r))
       : []
-    return { ...base, kind: 'ReferenceFacet', content: { kind: 'table', nav, targetEntityType, columns } }
+    return { ...base, kind: 'ReferenceFacet', content: { kind: 'table', nav, targetEntityType, columns, composition: element?.type === 'cds.Composition' } }
   }
 
   const ref = parseAnnotationPathTarget(facet.Target)

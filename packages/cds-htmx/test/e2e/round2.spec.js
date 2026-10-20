@@ -147,7 +147,7 @@ test.describe('table tools', () => {
     await page.locator('[data-hf-action=settings]').click()
     await page.locator('.hf-dialog__tab', { hasText: 'Sort' }).click()
     await page.locator('.hf-dialog select').first().selectOption({ label: 'Price' })
-    await page.locator('.hf-dialog select').nth(1).selectOption('desc')
+    await page.getByRole('button', { name: 'Descending' }).click()
     await page.getByRole('button', { name: 'OK' }).click()
     await expect(page.locator('#lr-table-body tr').first()).toContainText('Wuthering Heights')
     await expect(headers).toHaveCount(4)
@@ -161,7 +161,8 @@ test.describe('table tools', () => {
     expect(csv.trim().split('\r\n')).toHaveLength(6)
 
     await page.locator('[data-hf-action=settings]').click()
-    await page.getByRole('button', { name: 'Reset' }).click()
+    await page.getByRole('button', { name: 'Reset' }).click() // back to all columns, applied with OK
+    await page.getByRole('button', { name: 'OK' }).click()
     await expect(headers).toHaveCount(5)
 
     await page.getByRole('button', { name: /Adapt Filters/ }).click()

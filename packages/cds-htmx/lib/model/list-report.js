@@ -66,6 +66,21 @@ function buildFilterBar(store, entityType, selectionFields = []) {
     .map(path => buildField(store, entityType, path))
 }
 
+/** Properties a user may add through Adapt Filters ("Add Filter") beyond `UI.SelectionFields`: the entity's own
+ *  scalar properties, minus technical/draft ones, `@UI.HiddenFilter` and what `Capabilities.FilterRestrictions`
+ *  names as non-filterable. They are whitelisted for `f.<path>` like the rendered filter fields. */
+const TECHNICAL = new Set(['IsActiveEntity', 'HasActiveEntity', 'HasDraftEntity', 'DraftAdministrativeData_DraftUUID', 'SiblingEntity', 'DraftAdministrativeData'])
+function buildAvailableFilters(store, entityType, selected, restrictions) {
+  const entity = require('../annotations/edm').entityDef(require('@sap/cds').model, entityType)
+  const nonFilterable = new Set((restrictions?.NonFilterableProperties || []).map(p => p.$PropertyPath ?? p))
+  const taken = new Set(selected)
+  return Object.values(entity?.elements || {})
+    .filter(el => !el.isAssociation && !el.virtual && el.type !== 'cds.Association' && el.type !== 'cds.Composition')
+    .filter(el => !TECHNICAL.has(el.name) && !taken.has(el.name) && !nonFilterable.has(el.name))
+    .filter(el => !store.raw(`${entityType}/${el.name}`)['@UI.HiddenFilter'])
+    .map(el => buildField(store, entityType, el.name))
+}
+
 /** Restriction terms live on the container-member target (`Capabilities.*Restrictions`, §3.2).
  *  Absent in the sample today; still read generically so a future model gains support for free. */
 function buildCapabilities(store, entityType) {
@@ -101,6 +116,7 @@ function buildListReport(store, entityType, { pageSettings } = {}) {
     },
     filterBar: {
       fields: buildFilterBar(store, entityType, bag['@UI.SelectionFields']),
+      available: buildAvailableFilters(store, entityType, bag['@UI.SelectionFields'] || [], bag['@Capabilities.FilterRestrictions'] ?? store.raw(containerTarget(entityType))['@Capabilities.FilterRestrictions']),
       // FE shows the "Editing Status" filter for draft roots; it is not a model element, so it must
       // stay out of `fields` (those feed SELECT columns and the filter whitelist)
       editingStatus: !!store.raw(containerTarget(entityType))['@Common.DraftRoot']
@@ -116,6 +132,9 @@ function buildListReport(store, entityType, { pageSettings } = {}) {
     },
     variantManagement: pageSettings?.variantManagement || feDefaults.listReport.variantManagement,
     initialLoad: pageSettings?.initialLoad ?? feDefaults.listReport.initialLoad,
+    // The draft indicator ("Draft", "Locked", ...) sits under the semantic key column(s) only; without a
+    // `Common.SemanticKey` FE shows none
+    semanticKey: (bag['@Common.SemanticKey'] || []).map(k => typeof k === 'string' ? k : k.$PropertyPath ?? k.$Path).filter(Boolean),
     capabilities: buildCapabilities(store, entityType),
     edit: require('./edit-capabilities').editCapabilities(store, entityType)
   }

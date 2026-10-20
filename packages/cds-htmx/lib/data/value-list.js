@@ -39,4 +39,14 @@ async function fixedValueOptions(tx, valueList) {
   return rows.map(r => ({ value: r[valueProp], text: r[textProp] != null ? String(r[textProp]) : String(r[valueProp]) }))
 }
 
-module.exports = { parseValueList, fixedValueOptions }
+/** A key typed into a value-help field must exist in the value list's collection (FE checks it as you leave
+ *  the field). Empty is fine (mandatory-ness is another check). Fixed-value lists are a select, never typed. */
+async function keyExists(tx, valueList, value) {
+  if (value == null || String(value).trim() === '') return true
+  const parsed = parseValueList(valueList)
+  if (!parsed) return true
+  const found = await tx.run(SELECT.one.from(parsed.collectionPath).columns(parsed.valueProp).where({ [parsed.valueProp]: value }))
+  return !!found
+}
+
+module.exports = { parseValueList, fixedValueOptions, keyExists }

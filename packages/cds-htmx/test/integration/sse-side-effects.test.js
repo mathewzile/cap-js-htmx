@@ -49,7 +49,16 @@ describe('SSE side effects (Phase 6)', () => {
     const res = await GET('/htmx/catalog/Books')
     expect(res.data).to.match(/<body[^>]*hx-headers:inherited='\{"X-Htmx-Client":"[0-9a-f-]{36}"\}'/)
     const id = res.data.match(/X-Htmx-Client":"([0-9a-f-]{36})"/)[1]
-    expect(res.data).to.include(`hx-sse:connect="/htmx/catalog/$events?client=${id}"`)
+    expect(res.data).to.include(`"url":"/htmx/catalog/$events?client=${id}"`) // the page script connects on demand
+    expect(res.data).to.include('id="hf-live" hidden data-hf-live="1"') // Books has side effects (live List Report)
+  })
+
+  test('pages of entities without side effects do not ask for a stream', async () => {
+    const { GET, expect } = api
+    const res = await GET('/htmx/catalog/Genres')
+    expect(res.data).to.include('data-hf-live="0"')
+    const op = await GET(`/htmx/catalog/Books(${ACTIVE})`)
+    expect(op.data).to.include('data-hf-live="1"')
   })
 
   test('the channel remembers the app and what the page shows', async () => {

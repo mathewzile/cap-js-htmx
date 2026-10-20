@@ -1,0 +1,167 @@
+/* Dialogs, measured against the Fiori elements reference app at 1440x900 (Horizon):
+ *  - View Settings / Adapt Filters: 640 px wide, 94 % of the window high, 12 px radius
+ *  - Value help ("Select: <label>"): 1080 px wide, 60 px from top and bottom
+ *  - header 39 px (bold 14 px title, "Reset" at the right), tabs 40 px, footer 40 px, rows 33 px */
+
+.hf-dialog {
+  display: flex;
+  flex-direction: column;
+  width: 40rem;
+  max-width: calc(100vw - 2rem);
+  height: min(52.875rem, calc(100vh - 3.375rem));
+  background: var(--sapGroup_ContentBackground, #fff);
+  border-radius: var(--sapElement_BorderCornerRadius, .75rem);
+  box-shadow: var(--sapContent_Shadow3, 0 0 .125rem rgba(34, 53, 72, .2), 0 .625rem 1.875rem rgba(34, 53, 72, .25));
+  overflow: hidden;
+  font-family: var(--sapFontFamily, '72', Arial, sans-serif);
+  font-size: .875rem;
+  color: var(--sapTextColor, #1d2d3e);
+}
+.hf-dialog--value-help { width: min(67.5rem, calc(100vw - 2rem)); height: min(48.75rem, calc(100vh - 7.5rem)); }
+
+.hf-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 0 0 auto;
+  height: 2.4375rem;
+  padding: 0 1rem;
+  border-bottom: 1px solid var(--sapGroup_TitleBorderColor, #d9d9d9);
+}
+.hf-dialog__header h2 { margin: 0; font-family: var(--sapFontBoldFamily, '72-Bold', '72', Arial, sans-serif); font-size: .875rem; font-weight: 700; line-height: 1rem; }
+.hf-dialog__link {
+  background: none; border: 0; padding: 0; font: inherit; color: var(--sapLinkColor, #0064d9); cursor: pointer;
+}
+.hf-dialog__link:disabled { opacity: .4; cursor: default; }
+
+.hf-dialog__tabs {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 2rem;
+  height: 2.5rem;
+  padding: 0 1.1875rem;
+  border-bottom: 1px solid var(--sapGroup_TitleBorderColor, #d9d9d9);
+}
+.hf-dialog__tab {
+  position: relative;
+  background: none; border: 0; padding: 0 .1875rem; font: inherit; cursor: pointer;
+  font-family: var(--sapFontBoldFamily, '72-Bold', '72', Arial, sans-serif); font-weight: 700;
+  color: var(--sapTextColor, #1d2d3e);
+}
+.hf-dialog__tab.is-selected { color: var(--sapSelectedColor, #0064d9); }
+.hf-dialog__tab.is-selected::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: .1875rem; background: var(--sapSelectedColor, #0064d9); }
+.hf-dialog__tab:focus-visible { outline: 2px solid var(--sapContent_FocusColor, #0032a5); outline-offset: -4px; border-radius: .25rem; }
+
+.hf-dialog__panels { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.hf-dialog__panel { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.hf-dialog__panel[hidden] { display: none !important; }
+.hf-dialog__body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: auto; }
+
+.hf-dialog__footer {
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  align-items: center;
+  gap: .5rem;
+  height: 2.5rem;
+  padding: 0 1rem;
+  border-top: 1px solid var(--sapGroup_TitleBorderColor, #d9d9d9);
+}
+.hf-dialog__footer .fd-button { min-width: 0; }
+
+/* ---------- columns tab ---------- */
+.hf-dialog__bar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex: 0 0 auto; height: 2.75rem; padding: 0 1rem; border-bottom: 1px solid var(--sapList_BorderColor, #e5e5e5); }
+.hf-dialog__bar .hf-input-group { width: 15.9375rem; }
+.hf-switch-label { display: inline-flex; align-items: center; gap: .5rem; font-size: .8125rem; cursor: pointer; }
+.hf-switch { position: relative; width: 2rem; height: 1.25rem; appearance: none; margin: 0; border-radius: .625rem; background: var(--sapButton_Neutral_Background, #fff); border: 1px solid var(--sapField_BorderColor, #556b81); cursor: pointer; }
+.hf-switch::after { content: ''; position: absolute; top: .125rem; left: .125rem; width: .875rem; height: .875rem; border-radius: 50%; background: var(--sapField_BorderColor, #556b81); transition: transform .15s; }
+.hf-switch:checked { background: var(--sapButton_Selected_Background, #ebf8ff); border-color: var(--sapButton_Selected_BorderColor, #0064d9); }
+.hf-switch:checked::after { transform: translateX(.75rem); background: var(--sapButton_Selected_BorderColor, #0064d9); }
+
+.hf-dialog__list { flex: 1 1 auto; min-height: 0; overflow: auto; margin: 0; padding: 0; list-style: none; }
+.hf-dialog__row {
+  display: flex; align-items: center; gap: .5rem; height: 2.0625rem; padding: 0 1rem; margin: 0;
+  border-bottom: 1px solid var(--sapList_BorderColor, #e5e5e5); cursor: pointer; box-sizing: border-box;
+}
+.hf-dialog__row:hover { background: var(--sapList_Hover_Background, #eaecee); }
+.hf-dialog__row.is-selected { background: var(--sapList_SelectionBackgroundColor, #ebf8ff); border-top: 1px solid var(--sapList_SelectionBorderColor, #0064d9); border-bottom-color: var(--sapList_SelectionBorderColor, #0064d9); }
+.hf-dialog__row--head { font-family: var(--sapFontBoldFamily, '72-Bold', '72', Arial, sans-serif); font-weight: 700; cursor: default; }
+.hf-dialog__row--head:hover { background: none; }
+.hf-dialog__row input[type=checkbox] { margin: 0 .25rem 0 0; }
+.hf-dialog__row .hf-dialog__row-text { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.hf-dialog__row-label { display: flex; align-items: center; gap: .5rem; flex: 1 1 auto; height: 100%; cursor: pointer; }
+.hf-dialog__row--head .hf-dialog__row-label { cursor: pointer; }
+.hf-dialog__subheader { margin: 0; flex: 0 0 auto; padding: 0 1rem; height: 2.75rem; display: flex; align-items: center; font-family: var(--sapFontBoldFamily, '72-Bold', '72', Arial, sans-serif); font-size: .875rem; font-weight: 700; border-bottom: 1px solid var(--sapList_BorderColor, #e5e5e5); }
+.hf-dialog .hf-input-group { position: relative; display: flex; }
+.hf-dialog .hf-input-group .fd-input { width: 100%; }
+
+/* ---------- sort tab ---------- */
+.hf-dialog__sort { display: flex; align-items: center; gap: 1rem; flex: 0 0 auto; height: 3rem; padding: 0 1.5rem; border-bottom: 1px solid var(--sapList_BorderColor, #e5e5e5); }
+.hf-dialog__sort .fd-select { width: 11.75rem; }
+.hf-segmented { display: inline-flex; border: 1px solid var(--sapButton_BorderColor, #0064d9); border-radius: .5rem; overflow: hidden; }
+.hf-segmented button { width: 2rem; height: 1.625rem; background: var(--sapButton_Background, #fff); border: 0; cursor: pointer; color: var(--sapButton_TextColor, #0064d9); }
+.hf-segmented button + button { border-left: 1px solid var(--sapButton_BorderColor, #0064d9); }
+.hf-segmented button.is-selected { background: var(--sapButton_Selected_Background, #ebf8ff); }
+.hf-segmented i { color: inherit; }
+
+/* ---------- other panels ---------- */
+.hf-dialog__form { display: flex; flex-direction: column; gap: .5rem; padding: 1rem; }
+
+/* ---------- value help ---------- */
+.hf-dialog--value-help .hf-dialog__body { padding: 1.1875rem 2rem 0; overflow: hidden; }
+.hf-vh__search { display: flex; align-items: center; gap: .625rem; flex: 0 0 auto; margin-bottom: 1.25rem; }
+.hf-vh__search .hf-input-group { flex: 0 1 31.75rem; }
+.hf-vh__search { flex-wrap: wrap; }
+.hf-vh__filters { flex: 0 0 100%; display: flex; gap: 1rem; flex-wrap: wrap; }
+.hf-vh__filters[hidden] { display: none; }
+.hf-vh__filters label { display: flex; flex-direction: column; gap: .25rem; flex: 1 1 10rem; }
+.hf-vh__results { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.hf-vh__count { display: flex; align-items: center; justify-content: space-between; flex: 0 0 auto; height: 2.25rem; margin: 0; font-family: var(--sapFontBoldFamily, '72-Bold', '72', Arial, sans-serif); font-size: .875rem; font-weight: 700; }
+/* The table keeps its natural width and the area below it is ruled like empty rows, as in FE */
+.hf-vh__scroll {
+  flex: 1 1 auto; min-height: 0; overflow: auto; margin-bottom: 1.25rem;
+  background-image: linear-gradient(to bottom, transparent calc(2.0625rem - 1px), var(--sapList_BorderColor, #e5e5e5) calc(2.0625rem - 1px));
+  background-size: 100% 2.0625rem;
+  background-position: 0 2.25rem;
+  border-bottom: 1px solid var(--sapList_TableFooterBorder, #a9b4be);
+}
+.hf-vh__table { width: auto; min-width: 29.6875rem; border-collapse: collapse; background: var(--sapList_Background, #fff); border-right: 1px solid var(--sapList_TableFooterBorder, #a9b4be); }
+.hf-vh__table th, .hf-vh__table td { height: 2.0625rem; padding: 0 1rem; text-align: left; border-bottom: 1px solid var(--sapList_BorderColor, #e5e5e5); white-space: nowrap; max-width: 20rem; overflow: hidden; text-overflow: ellipsis; }
+.hf-vh__table th { font-family: var(--sapFontBoldFamily, '72-Bold', '72', Arial, sans-serif); font-weight: 700; border-bottom-color: var(--sapList_HeaderBorderColor, #a9b4be); }
+.hf-vh__table th + th, .hf-vh__table td + td { border-left: 1px solid var(--sapList_BorderColor, #e5e5e5); }
+.hf-vh-row { cursor: pointer; }
+.hf-vh-row:hover { background: var(--sapList_Hover_Background, #eaecee); }
+.hf-vh-row:focus-visible { outline: 2px solid var(--sapContent_FocusColor, #0032a5); outline-offset: -2px; }
+
+.hf-dialog__bar--add { border-top: 1px solid var(--sapList_BorderColor, #e5e5e5); border-bottom: 0; justify-content: flex-start; }
+.hf-dialog__bar--add .fd-select { width: 15.9375rem; }
+/* group header rows in the table */
+.hf-table tr.hf-group-row td { height: 2rem; padding: 0 1rem; background: var(--sapList_GroupHeaderBackground, #f5f6f7); border-bottom: 1px solid var(--sapList_BorderColor, #e5e5e5); font-family: var(--sapFontBoldFamily, '72-Bold', '72', Arial, sans-serif); font-weight: 700; }
+
+/* ---------- Define Conditions ---------- */
+.hf-conditions-form { flex: 1 1 auto; padding: 1.1875rem 2rem 1rem; gap: .5rem; }
+.hf-conditions__row { display: flex; gap: .5rem; align-items: center; margin-bottom: .5rem; }
+.hf-conditions__row .fd-select { flex: 0 0 15.6rem; }
+.hf-conditions__row .fd-input { flex: 1 1 auto; }
+.hf-conditions__add { display: flex; justify-content: flex-end; padding-right: 2.25rem; }
+.hf-conditions__title { margin: auto 0 0; font-family: var(--sapFontBoldFamily, '72-Bold', '72', Arial, sans-serif); font-size: .875rem; }
+.hf-conditions__summary { min-height: 2rem; border-bottom: 1px solid var(--sapField_BorderColor, #556b81); padding: .5rem; }
+
+/* ---------- value help field: editable input with the icon inside, type-ahead below ---------- */
+.hf-vh-field { position: relative; }
+.hf-vh-field .fd-input { padding-right: 2rem; }
+.hf-vh-field .hf-input-group__addon { z-index: 3; }
+.hf-suggest {
+  position: absolute; z-index: 30; top: calc(100% + .25rem); left: 0; width: max(100%, 31.25rem);
+  background: var(--sapGroup_ContentBackground, #fff); border-radius: .5rem; overflow: hidden;
+  box-shadow: var(--sapContent_Shadow2, 0 0 .125rem rgba(34, 53, 72, .2), 0 .25rem .5rem rgba(34, 53, 72, .3));
+  font-size: .875rem;
+}
+.hf-suggest table { width: 100%; border-collapse: collapse; }
+.hf-suggest th, .hf-suggest td { height: 2.125rem; padding: 0 1rem; text-align: left; white-space: nowrap; border-bottom: 1px solid var(--sapList_BorderColor, #e5e5e5); }
+.hf-suggest th { font-family: var(--sapFontBoldFamily, '72-Bold', '72', Arial, sans-serif); font-weight: 700; }
+.hf-suggest tr.hf-suggest-row { cursor: pointer; }
+.hf-suggest tr.hf-suggest-row:hover, .hf-suggest tr.hf-suggest-row.is-active { background: var(--sapList_Hover_Background, #eaecee); }
+.hf-suggest__empty { text-align: center !important; }
+.hf-suggest__more { display: block; width: 100%; padding: 0 1rem; height: 2.5rem; text-align: right; background: none; border: 0; border-top: 1px solid var(--sapList_BorderColor, #e5e5e5); font: inherit; font-family: var(--sapFontBoldFamily, '72-Bold', '72', Arial, sans-serif); font-weight: 700; color: var(--sapLinkColor, #0064d9); cursor: pointer; }

@@ -4,7 +4,9 @@ const i18n = require('../i18n')
  *  CSV export names). Sent once with the full page as JSON (`#hf-texts`) in the locale of the request. */
 const KEYS = [
   'ViewSettings', 'Columns', 'Sort', 'SortBy', 'Ascending', 'Descending', 'AdaptFilters', 'FilterValuesAndVisibility', 'Reset', 'OK',
-  'Cancel', 'Go', 'Search', 'ExportCsv', 'Standard', 'SaveAs', 'VariantName', 'NoSort', 'Show', 'Settings', 'Delete', 'Items'
+  'Cancel', 'Go', 'Search', 'ExportCsv', 'Standard', 'SaveAs', 'VariantName', 'NoSort', 'Show', 'Settings', 'Delete', 'Items', 'HideUnselected',
+  'DefineConditions', 'EqualTo', 'NotEqualTo', 'Contains', 'StartsWith', 'EndsWith', 'AddCondition', 'Value', 'NoConditions', 'Conditions',
+  'Between', 'GreaterThan', 'GreaterOrEqual', 'LessThan', 'LessOrEqual', 'GroupBy', 'NoGrouping', 'Group', 'AddFilter', 'Paste'
 ]
 
 function textsFor(bundle) {
