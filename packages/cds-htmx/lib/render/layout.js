@@ -1,5 +1,6 @@
 const { html, raw } = require('./html')
 const { config } = require('../config')
+const { asScriptJson } = require('./texts')
 
 function headAssets(theme, base = '') {
   return html`
@@ -11,11 +12,12 @@ function headAssets(theme, base = '') {
     <script src="${base}/htmx/-/htmx.org/htmx.min.js"></script>
     <script src="${base}/htmx/-/htmx.org/ext/hx-sse.min.js"></script>
     <script src="${base}/htmx/-/public/htmx-fiori.js" defer></script>
+    <script src="${base}/htmx/-/public/htmx-tables.js" defer></script>
   `
 }
 
 /** Renders the full HTML document shell around a page fragment. */
-function page({ title, clientId, basePath, assetBase = '', body }) {
+function page({ title, clientId, basePath, assetBase = '', body, texts = {} }) {
   const { theme } = config()
   return html`<!doctype html>
 <html lang="en">
@@ -32,6 +34,7 @@ function page({ title, clientId, basePath, assetBase = '', body }) {
   <div id="messages"></div>
   <div id="toast"></div>
   <div id="dialogs"></div>
+  <script type="application/json" id="hf-texts">${raw(asScriptJson(texts))}</script>
   ${clientId ? raw(`<div id="sse" hx-sse:connect="${basePath}/$events?client=${clientId}" hx-swap="none"></div>`) : ''}
 </body>
 </html>`

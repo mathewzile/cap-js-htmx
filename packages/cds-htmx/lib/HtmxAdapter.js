@@ -20,8 +20,10 @@ const valueListLib = require('./data/value-list')
 const messageRender = require('./render/messages')
 const playgroundRender = require('./render/playground')
 const draftMessages = require('./data/draft-messages')
+const { textsFor } = require('./render/texts')
 const toastRender = require('./render/toast')
 const listReportRender = require('./render/list-report')
+const { cellText } = require('./render/table')
 const objectPageRender = require('./render/object-page')
 const valueHelpRender = require('./render/value-help')
 const { loadObjectPage } = require('./data/page')
@@ -56,6 +58,7 @@ class HtmxAdapter extends HttpAdapter {
     router.post('/$playground/watch', this.handle(this.playgroundWatch))
     router.post('/$playground/action/:name', this.handle(this.playgroundAction))
     router.get('/:Set/$new', this.handle(this.newObject))
+    router.get('/:Set/$export', this.handle(this.exportCsv))
     router.get('/:Set/$table', this.handle(this.tablePartial))
     router.post('/:Set/$delete', this.handle(this.deleteSelected))
     router.post('/:Set/$edit', this.handle(this.editDraft))
@@ -548,6 +551,7 @@ class HtmxAdapter extends HttpAdapter {
     if (!entity) return res.sendStatus(404)
     const path = req.params.path
     const search = String(req.query.$search || '')
+    const target = /^[\w.]+$/.test(String(req.query.target || '')) ? String(req.query.target) : path
 
     const store = cache.storeFor(cds.model, this.service.name, this.odataServicePath(), this.appOpts(req))
     const fieldsLib = require('./model/fields')
@@ -571,7 +575,7 @@ class HtmxAdapter extends HttpAdapter {
       return res.type('html').send(String(valueHelpRender.valueHelpResults(columns, rows, { valueProp, t })))
     }
     const entitySetPath = keyRaw ? `${set}(${keyRaw})` : set
-    res.type('html').send(String(valueHelpRender.valueHelpDialog({ ...field, label: labelOf(field.label) }, columns, rows, { basePath: this.basePath(req), entitySetPath, valueProp, search, searchSupported, t })))
+    res.type('html').send(String(valueHelpRender.valueHelpDialog({ ...field, label: labelOf(field.label) }, columns, rows, { basePath: this.basePath(req), entitySetPath, valueProp, search, searchSupported, t, target })))
   }
 
   /** `POST /:Set/$action/:name` (§routes Phase 5d): Invoke a bound action and re-render the OP with the result. */
@@ -777,6 +781,46 @@ class HtmxAdapter extends HttpAdapter {
     this.render(req, res, { title: lrLayout.header.typeNamePlural, body: toasted })
   }
 
+  /** `GET /:Set/$export`: the List Report's rows as a CSV file, for the filters, search and sort in the query
+   *  string (the page passes its own URL state) and the columns named by `cols` (their positions in the
+   *  table; all when absent), like FE's export of the table. Values are the displayed texts. */
+  async exportCsv(req, res, tx) {
+    const entity = this.entitySet(req.params.Set)
+    if (!entity) return res.sendStatus(404)
+    const edit = this.editOf(req, entity.name)
+    if (edit.mode === 'node') return this.reject(req, res, 405, 'NotAllowed')
+    const opts = this.appOpts(req)
+    const lrLayout = cache.listReportFor(cds.model, this.service.name, this.odataServicePath(), entity.name, `/${req.params.Set}`, opts)
+    const parsedFilters = filtersLib.parseFilters(req.query, lrLayout)
+    const search = filtersLib.parseSearch(req.query)
+    const columnsSelected = queryLib.selectColumns(cds.model, entity.name, lrLayout)
+    const orderByTerms = queryLib.parseOrderBy(req.query, columnsSelected)
+    const q = queryLib.listReportQuery(cds.model, entity.name, entity.name, lrLayout, { filters: parsedFilters, search, query: req.query, limit: 5000 })
+    const rows = await tx.run(q)
+
+    const wanted = typeof req.query.cols === 'string' ? new Set(req.query.cols.split(',').map(Number)) : null
+    const columns = lrLayout.table.columns
+      .map((col, index) => ({ col, index }))
+      .filter(({ col, index }) => col.field && (!wanted || wanted.has(index)))
+    const cell = value => {
+      let text = String(value ?? '')
+      // Spreadsheet formula injection: a cell starting with = + - @ would be run by Excel
+      if (/^[=+\-@\t\r]/.test(text) && Number.isNaN(Number(text))) text = `'${text}`
+      return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
+    }
+    const bundle = cache.bundleFor(opts)
+    const resolve = text => i18n.resolveText(text, bundle)
+    const lines = [columns.map(({ col }) => cell(resolve(col.label ?? col.field?.label ?? ''))).join(',')]
+    for (const row of rows) lines.push(columns.map(({ col }) => cell(cellText(col, row))).join(','))
+    const name = String(resolve(lrLayout.header.typeNamePlural || req.params.Set)).replace(/[^\w .-]/g, '_')
+    res.set({
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': `attachment; filename="${req.params.Set}.csv"; filename*=UTF-8''${encodeURIComponent(name)}.csv`
+    })
+    void orderByTerms // sort comes from the query itself (listReportQuery reads `$orderby`)
+    res.send('﻿' + lines.join('\r\n') + '\r\n')
+  }
+
   /** Table body partial (§routes: `GET /:Set/$table`): sort (header click), search/filter ("Go"),
    *  and growing ("More") all land here and get just the `<tr>` rows (+ an `<hx-partial>` count
    *  refresh) back -- never a full page, since this is only ever reached via `hx-get`. */
@@ -844,7 +888,7 @@ class HtmxAdapter extends HttpAdapter {
     } else {
       const clientId = channels.newClientId()
       channels.rememberView(clientId, req.hfView)
-      res.set('Content-Type', 'text/html').send(String(layout.page({ title, clientId, basePath: this.basePath(req), assetBase: req.htmxBase || '', body })))
+      res.set('Content-Type', 'text/html').send(String(layout.page({ title, clientId, basePath: this.basePath(req), assetBase: req.htmxBase || '', body, texts: textsFor(cache.bundleFor(this.appOpts(req))) })))
     }
   }
 

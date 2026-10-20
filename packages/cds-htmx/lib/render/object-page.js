@@ -107,6 +107,10 @@ function tableBlock(facet, ctx) {
     <div class="hf-table-toolbar hf-table-toolbar--section">
       <h2 class="hf-section__title">${facet.label} (${rows.length})</h2>
       <div class="hf-spacer"></div>
+      <div class="hf-input-group hf-section-search">
+        <input type="search" class="fd-input" data-hf-table-search placeholder="${t('Search')}" aria-label="${t('Search')}">
+        <span class="hf-input-group__addon"><span class="hf-input-icon"><i class="sap-icon--search" aria-hidden="true"></i></span></span>
+      </div>
       ${editing ? html`
         <button class="fd-button fd-button--transparent" hx-post="${ctx.basePath}/${ctx.entitySetPath}/${nav}"
           hx-target="#app" hx-push-url="false" hx-swap="innerHTML show:window:top">${t('Create')}</button>
@@ -114,6 +118,9 @@ function tableBlock(facet, ctx) {
           hx-post="${ctx.basePath}/${entitySetPath}/$delete" hx-include="#${sectionId}" hx-target="#app" hx-push-url="false" hx-swap="innerHTML show:window:top"
           hx-confirm="${t('ConfirmDeleteSelected')}" data-hf-confirm-count="#${sectionId} tbody .hf-checkbox:checked"
           data-hf-confirm-title="${t('Delete')}" data-hf-confirm-ok="${t('Delete')}" data-hf-confirm-cancel="${t('Cancel')}" data-hf-confirm-critical>${t('Delete')}</button>` : html``}
+      <span class="hf-toolbar-separator"></span>
+      <button type="button" class="fd-button fd-button--transparent hf-icon-button" data-hf-action="export-dom" data-hf-filename="${facet.label}" aria-label="${t('ExportCsv')}" title="${t('ExportCsv')}"><i class="sap-icon--excel-attachment" aria-hidden="true"></i></button>
+      <button type="button" class="fd-button fd-button--transparent hf-icon-button" data-hf-action="settings" aria-label="${t('ViewSettings')}" title="${t('ViewSettings')}"><i class="sap-icon--action-settings" aria-hidden="true"></i></button>
     </div>
     ${columnVisibilityStyle(`#${sectionId}`, facet.content.columns, rows, { selectable: editing })}
     <table class="fd-table hf-table" role="table">
@@ -167,7 +174,7 @@ function facetBlock(facet, row, ctx, { asSection } = {}) {
   if (!asSection) return html`<div class="hf-header-facet">${body}</div>`
   if (facet.content?.kind === 'table') {
     return html`
-      <section id="${ids.opSection(facet.id)}" class="hf-section hf-section--table" aria-label="${facet.label}">${body}</section>`
+      <section id="${ids.opSection(facet.id)}" class="hf-section hf-section--table" aria-label="${facet.label}" data-hf-view="section:${facet.content.targetEntityType}:${facet.id}">${body}</section>`
   }
   return html`
     <section id="${ids.opSection(facet.id)}" class="hf-section">

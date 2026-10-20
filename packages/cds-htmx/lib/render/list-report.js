@@ -27,7 +27,10 @@ function toolbar({ typeNamePlural, count, basePath, entitySetPath, bundle, t, ed
         hx-confirm="${t(bundle, 'ConfirmDeleteSelected')}" data-hf-confirm-count="#${ids.lrTableBody()} .hf-checkbox:checked"
         data-hf-confirm-title="${t(bundle, 'Delete')}" data-hf-confirm-ok="${t(bundle, 'Delete')}" data-hf-confirm-cancel="${t(bundle, 'Cancel')}" data-hf-confirm-critical>${t(bundle, 'Delete')}</button>` : html``}
       <span class="hf-toolbar-separator"></span>
-      <button type="button" class="fd-button fd-button--transparent hf-icon-button" aria-label="Settings" title="Settings"><i class="sap-icon--action-settings" aria-hidden="true"></i></button>
+      <button type="button" class="fd-button fd-button--transparent hf-icon-button" data-hf-action="export" data-hf-export="${basePath}/${entitySetPath}/$export"
+        aria-label="${t(bundle, 'ExportCsv')}" title="${t(bundle, 'ExportCsv')}"><i class="sap-icon--excel-attachment" aria-hidden="true"></i></button>
+      <button type="button" class="fd-button fd-button--transparent hf-icon-button" data-hf-action="settings"
+        aria-label="${t(bundle, 'ViewSettings')}" title="${t(bundle, 'ViewSettings')}"><i class="sap-icon--action-settings" aria-hidden="true"></i></button>
     </div>
   `
 }
@@ -47,12 +50,15 @@ function headerToggle() {
 function listReportFragment(layout, rows, { basePath, entitySetPath, keyNames, count, hasMore, skip, orderBy, query, bundle, t, filterOptions }) {
   const ctx = { basePath, entitySetPath, keyNames, orderBy, skip, hasMore, bundle, t, query }
   return html`
-    <div class="hf-page hf-page--lr" data-entity-type="${layout.entityType}">
+    <div class="hf-page hf-page--lr" data-entity-type="${layout.entityType}" data-hf-set="${entitySetPath}">
       <header class="hf-page__header">
         <div class="hf-page__title">
-          <div class="hf-vm">
-            <h2 class="hf-vm__title">${t(bundle, 'Standard')}</h2>
-            <span class="hf-vm__arrow"><i class="sap-icon--slim-arrow-down" aria-hidden="true"></i></span>
+          <div class="hf-vm hf-popover" id="hf-variants" data-hf-default="${t(bundle, 'Standard')}">
+            <button type="button" class="hf-vm__button" data-hf-popover-toggle aria-haspopup="true" aria-expanded="false">
+              <span class="hf-vm__title" data-hf-variant-title>${t(bundle, 'Standard')}</span>
+              <span class="hf-vm__arrow"><i class="sap-icon--slim-arrow-down" aria-hidden="true"></i></span>
+            </button>
+            <div class="fd-popover__body"><ul class="hf-popover__list" data-hf-variant-list></ul></div>
           </div>
         </div>
         <div class="hf-page__header-content">
@@ -61,7 +67,7 @@ function listReportFragment(layout, rows, { basePath, entitySetPath, keyNames, c
         ${headerToggle()}
       </header>
       <div class="hf-page__content">
-        <div class="hf-table-card">
+        <div class="hf-table-card" data-hf-view="lr:${entitySetPath}">
           ${raw(toolbar({ typeNamePlural: layout.header.typeNamePlural, count, basePath, entitySetPath, bundle, t, edit: layout.edit }).value)}
           ${raw(table(layout, rows, ctx).value)}
         </div>

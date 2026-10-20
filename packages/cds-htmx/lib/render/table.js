@@ -103,7 +103,7 @@ function headerCell(col, { basePath, entitySetPath, orderBy, numeric, sortable, 
   const isCurrent = orderBy?.path === path
   const nextDesc = isCurrent ? !orderBy.desc : false
   const sortParam = `${path}${nextDesc ? ' desc' : ''}`
-  return html`<th class="${cls}" role="columnheader" ${isCurrent ? raw(`aria-sort="${orderBy.desc ? 'descending' : 'ascending'}"`) : html``}>
+  return html`<th class="${cls}" role="columnheader" data-hf-sort="${path}" data-hf-label="${col.label ?? ''}" ${isCurrent ? raw(`aria-sort="${orderBy.desc ? 'descending' : 'ascending'}"`) : html``}>
     <a class="hf-th__text hf-th__sort" href="#"
        hx-get="${basePath}/${entitySetPath}/$table?$orderby=${encodeURIComponent(sortParam)}"
        hx-target="#${ids.lrTableBody()}" hx-swap="innerHTML">${col.label}${isCurrent ? html` <i class="sap-icon--${orderBy.desc ? 'sort-descending' : 'sort-ascending'}" aria-hidden="true"></i>` : html``}</a>

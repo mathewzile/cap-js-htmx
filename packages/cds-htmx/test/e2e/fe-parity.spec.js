@@ -82,7 +82,7 @@ test.describe('draft flow and history (Books)', () => {
     await page.getByRole('button', { name: 'Edit', exact: true }).first().click()
     await expect(page).toHaveURL(/IsActiveEntity=false/)
 
-    const input = page.locator('input[name=title]')
+    const input = page.locator('[data-hf-field=title] input[name=title]')
     await input.click()
     await input.press('End')
     await input.pressSequentially(' XX')

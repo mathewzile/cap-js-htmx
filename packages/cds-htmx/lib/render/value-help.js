@@ -37,11 +37,11 @@ function valueHelpResults(columns, rows, ctx) {
     </div>`
 }
 
-function valueHelpDialog(field, columns, rows, { basePath, entitySetPath, valueProp, search, searchSupported, t }) {
-  const url = `${basePath}/${entitySetPath}/$vh/${field.path}`
+function valueHelpDialog(field, columns, rows, { basePath, entitySetPath, valueProp, search, searchSupported, t, target }) {
+  const url = `${basePath}/${entitySetPath}/$vh/${field.path}?target=${encodeURIComponent(target ?? field.path)}`
   return html`
     <div class="hf-overlay" data-hf-dialog>
-      <div class="hf-dialog" role="dialog" aria-modal="true" aria-labelledby="vh-title" data-hf-path="${field.path}">
+      <div class="hf-dialog" role="dialog" aria-modal="true" aria-labelledby="vh-title" data-hf-path="${field.path}" data-hf-target="${target ?? field.path}">
         <header class="hf-dialog__header"><h2 class="fd-title fd-title--h5" id="vh-title">${t('Select')}: ${field.label}</h2></header>
         <div class="hf-dialog__body">
           ${searchSupported ? html`

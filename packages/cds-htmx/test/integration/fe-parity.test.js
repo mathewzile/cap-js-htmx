@@ -348,6 +348,88 @@ describe('FE parity: capabilities, direct editing, history, confirmations (round
     })
   })
 
+  describe('table tools: export, view settings hooks, adapt filters, filter value help', () => {
+    const get = (url, headers = {}) => api.axios.get(url, { headers: { ...HX, ...headers } })
+
+    test('the List Report carries the hooks the page script needs (view key, settings, export, adapt filters, saved views)', async () => {
+      const page = (await get('/htmx/catalog/Books')).data
+      assert.match(page, /data-hf-set="Books"/)
+      assert.match(page, /class="hf-table-card" data-hf-view="lr:Books"/)
+      assert.match(page, /data-hf-action="settings"/)
+      assert.match(page, /data-hf-action="export" data-hf-export="\/htmx\/catalog\/Books\/\$export"/)
+      assert.match(page, /data-hf-action="adapt-filters"/)
+      assert.match(page, /id="hf-variants"[\s\S]*data-hf-variant-list/)
+      assert.match(page, /<th[^>]*data-hf-sort="stock"[^>]*data-hf-label="Stock"/)
+      assert.match(page, /data-hf-filter="author_ID" data-hf-label="Author"/)
+    })
+
+    test('a full page brings the dialog texts (in the request locale) as JSON', async () => {
+      const full = (await api.axios.get('/htmx/catalog/Books')).data
+      const json = JSON.parse(/<script type="application\/json" id="hf-texts">([\s\S]*?)<\/script>/.exec(full)[1])
+      assert.equal(json.ViewSettings, 'View Settings')
+      assert.equal(json.AdaptFilters, 'Adapt Filters')
+      assert.match(full, /htmx-tables\.js/)
+    })
+
+    test('filter fields with a value list open the value help for their own filter input', async () => {
+      const page = (await get('/htmx/catalog/Books')).data
+      assert.match(page, /hx-get="\/htmx\/catalog\/Books\/\$vh\/author_ID\?target=f\.author_ID"/)
+      const dialog = (await get('/htmx/catalog/Books/$vh/author_ID?target=f.author_ID')).data
+      assert.match(dialog, /data-hf-target="f\.author_ID"/)
+      assert.match(dialog, /\$vh\/author_ID\?target=f\.author_ID/) // searching keeps the target
+      // anything that is not a plain name falls back to the field itself
+      assert.match((await get('/htmx/catalog/Books/$vh/author_ID?target=%22%3E%3Cscript')).data, /data-hf-target="author_ID"/)
+    })
+
+    test('a table section has a search box, export and view settings; its view key names the child type', async () => {
+      const page = (await get("/htmx/catalog/Books(ID='3d2d2d2d-1c1c-4b4b-8a8a-000000000002',IsActiveEntity=true)")).data
+      assert.match(page, /data-hf-view="section:CatalogService\.Chapters:Chapters"/)
+      assert.match(page, /data-hf-table-search/)
+      assert.match(page, /data-hf-action="export-dom" data-hf-filename="Chapters"/)
+      assert.match(page, /data-hf-action="settings"/)
+    })
+
+    test('$export answers a CSV file: BOM, header, every matching row, the displayed values', async () => {
+      const res = await get('/htmx/catalog/Books/$export')
+      assert.equal(res.status, 200)
+      assert.match(res.headers['content-type'], /^text\/csv; charset=utf-8/)
+      assert.match(res.headers['content-disposition'], /attachment; filename="Books\.csv"; filename\*=UTF-8''Books\.csv/)
+      // the UTF-8 BOM (EF BB BF) makes Excel read the file as UTF-8; HTTP clients strip it from the decoded text
+      const raw = await api.axios.get('/htmx/catalog/Books/$export', { headers: HX, responseType: 'arraybuffer' })
+      assert.deepEqual([...Buffer.from(raw.data).subarray(0, 3)], [0xEF, 0xBB, 0xBF])
+      const lines = res.data.trim().split('\r\n')
+      assert.equal(lines.length, 6)
+      assert.match(lines[0], /^Book Title \(XML override\),Stock,Status,Author,Price$/)
+      assert.ok(lines.some(l => /^Wuthering Heights,12,In Stock,Emily Brontë,11\.50 EUR$/.test(l)), lines.join('\n'))
+    })
+
+    test('$export follows the page state: filters, search, sort and the visible columns', async () => {
+      const filtered = await get('/htmx/catalog/Books/$export?f.author_ID=9d703c23-7cf7-4cad-9f2b-0e1e1a8c0003&cols=0,4&$orderby=price%20desc')
+      const lines = filtered.data.trim().split('\r\n')
+      assert.equal(lines.length, 3, 'two books by Poe plus the header')
+      assert.match(lines[0], /^Book Title \(XML override\),Price$/)
+      assert.match(lines[1], /^Eleonora,6\.75 USD$/) // price descending: 6.75 before 4.50
+      assert.match(lines[2], /^The Raven,4\.50 USD$/)
+      const searched = await get('/htmx/catalog/Books/$export?$search=Raven')
+      assert.equal(searched.data.trim().split('\r\n').length, 2)
+    })
+
+    test('$export quotes what needs quoting and defuses spreadsheet formulas', async () => {
+      const { POST } = api
+      const created = (await POST('/odata/v4/catalog/Authors', { name: '=1+1,"x"' })).data
+      try {
+        const csv = (await get('/htmx/catalog/Authors/$export?$search=1%2B1')).data
+        assert.match(csv, /"'=1\+1,""x"""/)
+      } finally {
+        await api.axios.delete(`/odata/v4/catalog/Authors(${created.ID})`)
+      }
+    })
+
+    test('$export is not offered for a draft node on its own', async () => {
+      assert.equal((await api.axios.get('/htmx/catalog/Chapters/$export', { headers: HX, validateStatus: () => true })).status, 405)
+    })
+  })
+
   describe('navigation and history', () => {
     test('the pages no longer inherit "push the URL" from #app; rows and links push explicitly', async () => {
       const { GET, expect } = api
