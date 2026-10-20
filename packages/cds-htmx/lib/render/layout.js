@@ -26,7 +26,7 @@ function page({ title, clientId, basePath, body }) {
   <meta name="htmx-config" content='{"extensions":"sse"}'>
   ${headAssets(theme)}
 </head>
-<body class="htmx-fiori is-compact">
+<body class="htmx-fiori is-compact"${clientId ? raw(` hx-headers:inherited='{"X-Htmx-Client":"${clientId}"}'`) : ''}>
   <div id="shell"></div>
   <div id="app" hx-target:inherited="#app" hx-swap:inherited="innerHTML show:window:top" hx-push-url:inherited="true">${raw(body)}</div>
   <div id="messages"></div>

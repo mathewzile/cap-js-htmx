@@ -1,6 +1,6 @@
 const cds = require('@sap/cds')
 
-/** @type {Map<string, { res: import('express').Response, user: any, locale: string, view: object }>} */
+/** @type {Map<string, { res: import('express').Response, user: any, locale: string, app: string|null, view: object }>} */
 const clients = new Map()
 
 function add(clientId, client) {

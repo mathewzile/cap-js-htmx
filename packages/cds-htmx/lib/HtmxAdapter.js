@@ -21,30 +21,8 @@ const toastRender = require('./render/toast')
 const listReportRender = require('./render/list-report')
 const objectPageRender = require('./render/object-page')
 const valueHelpRender = require('./render/value-help')
-
-/** Finds every `content.kind === 'table'` facet (recursing into `CollectionFacet` nesting) so the
- *  Object Page route can fetch each sub-section's child rows with its own query (§3.4: "Table
- *  subsections reuse `table.js`"). */
-function collectTableFacets(facets, out = []) {
-  for (const facet of facets || []) {
-    if (facet.kind === 'CollectionFacet') collectTableFacets(facet.facets, out)
-    else if (facet.content?.kind === 'table') out.push(facet)
-  }
-  return out
-}
-
-/** Finds every `content.kind === 'form'` facet's fields (recursing into `CollectionFacet` nesting)
- *  so the Object Page route can fetch `Common.ValueListWithFixedValues` options once per request
- *  (§3.4 field renderer table: "ValueListWithFixedValues -> fd-select/native select"). */
-function collectFormFields(facets, out = []) {
-  for (const facet of facets || []) {
-    if (facet.kind === 'CollectionFacet') collectFormFields(facet.facets, out)
-    else if (facet.content?.kind === 'form') {
-      for (const col of facet.content.fields) if (col.field) out.push(col.field)
-    }
-  }
-  return out
-}
+const { loadObjectPage } = require('./data/page')
+const engine = require('./sse/side-effects-engine')
 
 /** `query.js#parseOrderBy()` returns CQL `orderBy` terms (`['stock desc']`); the table header
  *  renderer wants just the first term as `{path, desc}` to know which column's sort icon to show. */
@@ -122,8 +100,15 @@ class HtmxAdapter extends HttpAdapter {
    *  match `$metadata` exactly"). Falls back to this adapter's own path if the service isn't also
    *  served over OData. */
   odataServicePath() {
-    const odata = this.service.endpoints?.find(e => e.kind === 'odata' || e.kind === 'odata-v4')
-    return odata ? odata.path.replace(/\/?$/, '/') : this.path.replace(/\/?$/, '/')
+    return engine.servicePaths(this.service).odata
+  }
+
+  /** Remembers what this browser page is looking at (the `X-Htmx-Client` header every request of a
+   *  page carries, §4.1), so side effects and server events know which clients to push to. */
+  trackView(req, view) {
+    const clientId = req.headers['x-htmx-client']
+    if (!clientId) return
+    channels.setView(clientId, { service: this.service.name, servicePath: this.odataServicePath(), basePath: req.baseUrl, ...view })
   }
 
   entitySet(name) {
@@ -177,37 +162,11 @@ class HtmxAdapter extends HttpAdapter {
     const locale = cds.context.locale
     const servicePath = this.odataServicePath()
 
-    const opLayout = cache.objectPageFor(cds.model, this.service.name, servicePath, entityType, contextPath, { appRoot: root, locale })
-    const bundle = i18n.bundleFor(root, locale)
-
-    const columns = queryLib.objectPageColumns(cds.model, entityType, opLayout)
-    const row = await tx.run(queryLib.objectPageQuery(entityType, keys, columns))
-    if (!row) return res.sendStatus(404)
-
-    let valueLists
-    if (row.IsActiveEntity === false) {
-      const fixedFields = collectFormFields([...(opLayout.headerFacets || []), ...(opLayout.sections || [])])
-        .filter(f => f.fixedValues && f.valueList)
-      if (fixedFields.length) {
-        valueLists = {}
-        for (const field of fixedFields) {
-          valueLists[field.path] = await valueListLib.fixedValueOptions(tx, field.valueList)
-        }
-      }
-    }
-
-    const tableFacets = collectTableFacets([...(opLayout.headerFacets || []), ...(opLayout.sections || [])])
-    const children = {}
-    for (const facet of tableFacets) {
-      const { targetEntityType, columns: childFacetColumns } = facet.content
-      const childLayout = { table: { columns: childFacetColumns }, filterBar: { fields: [] } }
-      const childColumns = queryLib.selectColumns(cds.model, targetEntityType, childLayout)
-      const childKeyNames = keyElements(entityDef(cds.model, targetEntityType)).map(k => k.name)
-      const childRows = await tx.run(queryLib.objectPageChildQuery(cds.model, entityType, keys, targetEntityType, childColumns))
-      children[facet.id] = { rows: childRows, keyNames: childKeyNames }
-    }
-
+    const page = await loadObjectPage(tx, { service: this.service.name, servicePath, entityType, keys, contextPath, appRoot: root, locale })
+    if (!page) return res.sendStatus(404)
+    const { layout: opLayout, row, bundle, valueLists, children } = page
     const entitySetPath = segments.map(s => `${s.set}${s.raw ? `(${s.raw})` : ''}`).join('/')
+    this.trackView(req, { entityType, keys, contextPath, entitySetPath })
     const title = evaluate(opLayout.header?.title?.Value, row) ?? opLayout.header?.typeName ?? segments[segments.length - 1].set
     const trail = [
       { label: i18n.t(bundle, 'Home'), href: '' },
@@ -288,6 +247,12 @@ class HtmxAdapter extends HttpAdapter {
     const value = req.body?.[path]
     await draftLib.patch(tx, entity.name, keys, { [path]: value })
     res.sendStatus(204)
+    // The response is out; the re-render is pushed over SSE inside this same transaction, so it sees the patch
+    const clientId = req.headers['x-htmx-client']
+    if (!clientId) return
+    const view = { service: this.service.name, servicePath: this.odataServicePath(), entityType: entity.name, keys, contextPath: `/${set}`, basePath: req.baseUrl, entitySetPath: `${set}(${raw})` }
+    await engine.onChange(tx, view, { clientId, properties: [path] })
+      .catch(err => console.error('[sse] side effects for', path, 'failed:', err.message))
   }
 
   /** `GET /:Set/$vh/:path?$search=...` (§routes): Value-help dialog for @Common.ValueList (unbounded, searchable). */
@@ -298,7 +263,7 @@ class HtmxAdapter extends HttpAdapter {
     const path = req.params.path
     const search = req.query.$search || ''
 
-    const store = cache.annotationStoreFor(cds.model, this.service.name, this.odataServicePath(), { appRoot: appRoot(), locale: cds.context.locale })
+    const store = cache.storeFor(cds.model, this.service.name, this.odataServicePath(), { appRoot: appRoot(), locale: cds.context.locale })
     const fieldsLib = require('./model/fields')
     const field = fieldsLib.buildField(store, entity.name, path)
     const valueList = field?.valueList
@@ -400,6 +365,7 @@ class HtmxAdapter extends HttpAdapter {
     const servicePath = this.odataServicePath()
 
     const lrLayout = cache.listReportFor(cds.model, this.service.name, servicePath, entityType, `/${req.params.Set}`, { appRoot: root, locale })
+    this.trackView(req, { entityType, list: true, set: req.params.Set })
     const bundle = i18n.bundleFor(root, locale)
     const keyNames = keyElements(entityDef(cds.model, entityType)).map(k => k.name)
 
@@ -511,7 +477,7 @@ class HtmxAdapter extends HttpAdapter {
     const clientId = req.query.client
     if (!clientId) return res.sendStatus(400)
     openSse(res)
-    channels.add(clientId, { res, user: cds.context.user, locale: cds.context.locale, view: null })
+    channels.add(clientId, { res, user: cds.context.user, locale: cds.context.locale, app: req.query.app || req.headers['x-htmx-app'] || null, view: null })
     writeSse(res, { event: 'connected', data: clientId })
     req.on('close', () => channels.remove(clientId))
   }
