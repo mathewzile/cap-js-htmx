@@ -1,6 +1,6 @@
 # Frontend deployment, Work Zone integration and extensibility for `cds-htmx`
 
-Companion to `IMPLEMENTATION_PLAN.md`. It adds Phases 7, 9 and 10. Phase 8 is FE feature parity (see `IMPLEMENTATION_PLAN.md` §8): the shell/Work Zone and extensibility work comes after the htmx app behaves like standard Fiori elements, and the old end-to-end/visual-parity phase is now Phase 11. Phase 7 is implemented; 9 and 10 are not.
+Companion to `IMPLEMENTATION_PLAN.md`. It adds Phases 7, 9 and 10. Phase 8 is FE feature parity (see `IMPLEMENTATION_PLAN.md` §8): the shell/Work Zone and extensibility work comes after the htmx app behaves like standard Fiori elements, Custom Pages (non-standard floorplans) are Phase 11 and need their own design first, and the end-to-end/visual-parity phase is now Phase 12. Phase 7 is implemented; 9 and 10 are not.
 
 ## 0. Decisions
 
@@ -116,7 +116,7 @@ Three layers. Manifest keys are the FE V4 keys.
 | OP custom **sections/subsections** (`content.body.sections`: `template`, `title`, `position`, `subSections`, `actions`, `visible`) | section from fragment in `render/object-page.js` |
 | OP custom **header facets** (`content.header.facets`: `template`, `title`, `stashed`, `position`) | header block from fragment |
 | Custom **form elements** (`FieldGroup` `fields` with `template`, `position`) | fragment field in form grid |
-| **Custom page** (`sap.fe.core.fpm` target) | `sap.htmx.pages.<id>` fragment page at `GET /$page/<id>` built from building blocks |
+| **Custom page** (`sap.fe.core.fpm` target) | **Phase 11, not designed yet** (a first idea was a `sap.htmx.pages.<id>` fragment page at `GET /$page/<id>` built from building blocks; to be designed and documented for developers before any work) |
 | Page settings (§3.2b: `initialLoad`, `tableSettings`, `sectionLayout`, …) | unchanged |
 
 ### 6B. Client controller extensions (one htmx extension `hx-fiori`)
@@ -159,8 +159,9 @@ mta.yaml                                  # srv + html5 deployer + destination c
 - **7. App bundles and app-scoped rendering**: `lib/apps/*`, `local` + `destination` providers, store/cache refactor, `X-Htmx-App`/`X-Htmx-Base` handling, version-skew trigger, shell-mode fragment-only responses. Spike: html5-repo URL. Tests: two apps on one service render different LineItems; bad/unknown ids rejected; base prefix in every rendered URL; `destination` provider against an in-process HTTP stub.
 - **8. FE feature parity** comes first (rounds; see the implementation plan).
 - **9. Shell + Work Zone + deployment**: `cds-htmx-shell`, CSS scoping, versioned assets, sticky cookie, `app/manage-books-htmx`, `xs-app.json`, `mta.yaml`, deploy guide. Spike: SSE through `@sap/approuter` locally. Tests: Playwright standalone behind a local approuter (deep link, back/forward, CSRF); FLP sandbox for in-place hash and IBN.
-- **10. Frontend extensibility**: `template.js` + sanitizer, building blocks, all §6A points, `hx-fiori` façade + ExtensionAPI, custom page, server SPI, coverage entries. Sample uses each point once (column, filter field, section, header facet, form element, action with handler, `onBeforeSave` veto, custom page). Tests: sanitizer XSS, path collection, fragment rendering and SELECT, E2E handler + veto.
-- **11. E2E + visual parity + README** (former Phase 7), also covering shell mode.
+- **10. Frontend extensibility**: `template.js` + sanitizer, building blocks, all §6A points, `hx-fiori` façade + ExtensionAPI, server SPI, coverage entries. Sample uses each point once (column, filter field, section, header facet, form element, action with handler, `onBeforeSave` veto). Tests: sanitizer XSS, path collection, fragment rendering and SELECT, E2E handler + veto.
+- **11. Custom Pages (non-standard floorplans)**: not started; needs a design and developer documentation first.
+- **12. E2E + visual parity + README** (former Phase 7), also covering shell mode.
 
 ## 9. Config additions (`cds.htmx`)
 `apps: { sources: [{ kind: "local" }], allow: ["*"] (production: explicit list), ttl: 60000, refetchInterval: 5000, localRecheck: 1000, maxApps: 50, maxBundleBytes: 2097152, fetchTimeout: 5000 }`, `extensions: []`, `assetsVersioned: true`, `stickySessions: true`.
