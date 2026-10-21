@@ -13,6 +13,7 @@ const lrTableBody = () => 'lr-table-body'
 const lrFilterBar = () => 'lr-filter-bar'
 const lrToolbar = () => 'lr-toolbar'
 const lrCount = () => 'lr-count'
+const lrGrowing = () => 'lr-growing'
 const lrRow = key => `lr-row--${sanitize(key)}`
 const lrColumnSort = path => `lr-sort--${sanitize(path)}`
 
@@ -29,4 +30,4 @@ const opFooter = () => 'op-footer'
 const messages = () => 'messages'
 const toast = () => 'toast'
 
-module.exports = { sanitize, lrTable, lrTableBody, lrFilterBar, lrToolbar, lrCount, lrRow, lrColumnSort, opSection, opField, opHeaderFacet, opAnchor, opHeader, opPage, opTitle, opMessages, opDraftStatus, opFooter, messages, toast }
+module.exports = { sanitize, lrTable, lrTableBody, lrFilterBar, lrToolbar, lrCount, lrGrowing, lrRow, lrColumnSort, opSection, opField, opHeaderFacet, opAnchor, opHeader, opPage, opTitle, opMessages, opDraftStatus, opFooter, messages, toast }

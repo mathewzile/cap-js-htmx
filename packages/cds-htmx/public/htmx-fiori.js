@@ -15,11 +15,12 @@ function hfSyncStream() {
     el.id = 'sse'
     el.setAttribute('hx-sse:connect', url)
     el.setAttribute('hx-swap', 'none')
-    document.body.append(el)
+    ;(document.querySelector('.hf-root') || document.body).append(el)
     htmx.process(el)
   }
 }
 document.addEventListener('DOMContentLoaded', hfSyncStream)
+document.addEventListener('hf:ready', hfSyncStream) // the shell (a page the plugin does not own) loads these scripts after DOMContentLoaded
 document.addEventListener('htmx:after:swap', hfSyncStream)
 
 document.addEventListener('click', e => {
@@ -239,6 +240,7 @@ document.addEventListener('hf:messages', e => {
 })
 document.addEventListener('htmx:after:swap', hfLoadMessages)
 document.addEventListener('DOMContentLoaded', hfLoadMessages)
+document.addEventListener('hf:ready', hfLoadMessages)
 
 // ---------- draft status in the footer ("Saving..." while a field PATCH is on its way) ----------
 document.addEventListener('htmx:before:request', e => {
@@ -398,4 +400,54 @@ document.addEventListener('htmx:config:request', e => {
     }
     return hfLastPatch.then(() => send(url, init))
   }
+})
+
+// ---------- busy state and failed requests ----------
+// Like Fiori elements: a request that takes longer than a second (UI5's busy indicator delay) puts a busy overlay on what is
+// being replaced -- the List Report's table card, or the whole page for a navigation. The delay is a CSS animation, so a quick
+// response never shows anything. The overlay also keeps a second click from queuing another request.
+const hfBusyCounts = new WeakMap()
+function hfBusyHost(ctx) {
+  const target = ctx?.target
+  if (!target || !target.closest) return null
+  return target.id === 'app' ? target : target.closest('.hf-table-card')
+}
+document.addEventListener('htmx:before:request', e => {
+  const host = hfBusyHost(e.detail?.ctx)
+  if (!host) return
+  hfBusyCounts.set(host, (hfBusyCounts.get(host) || 0) + 1)
+  host.classList.add('hf-busy')
+  host.setAttribute('aria-busy', 'true')
+})
+document.addEventListener('htmx:finally:request', e => {
+  const host = hfBusyHost(e.detail?.ctx)
+  if (!host || !hfBusyCounts.has(host)) return
+  const left = hfBusyCounts.get(host) - 1
+  if (left > 0) return hfBusyCounts.set(host, left)
+  hfBusyCounts.delete(host)
+  host.classList.remove('hf-busy')
+  host.removeAttribute('aria-busy')
+})
+
+// A request that cannot be answered (network down, timeout) or that the server fails (5xx) says so in a message strip; the
+// page stays as it was (a 5xx body is not swapped in).
+function hfRequestFailed() {
+  let text = 'The request could not be completed. Please try again.'
+  try { text = JSON.parse(document.getElementById('hf-texts')?.textContent || '{}').RequestFailed || text } catch { /* keep the default */ }
+  const holder = document.getElementById('messages')
+  if (!holder) return
+  holder.replaceChildren()
+  const strip = document.createElement('div')
+  strip.className = 'fd-message-strip fd-message-strip--error'
+  strip.setAttribute('role', 'alert')
+  strip.innerHTML = '<div class="fd-message-strip__content"><div class="fd-message-strip__text"></div></div><button type="button" class="fd-message-strip__close" aria-label="Close"></button>'
+  strip.querySelector('.fd-message-strip__text').textContent = text
+  strip.querySelector('button').addEventListener('click', () => strip.remove())
+  holder.append(strip)
+}
+document.addEventListener('htmx:error', hfRequestFailed)
+document.addEventListener('htmx:after:request', e => {
+  if ((e.detail?.ctx?.response?.status ?? 0) < 500) return
+  e.preventDefault()
+  hfRequestFailed()
 })

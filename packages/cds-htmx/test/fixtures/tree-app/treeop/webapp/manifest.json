@@ -1,0 +1,30 @@
+{
+  "sap.app": {
+    "id": "fixture.treeop",
+    "type": "application",
+    "applicationVersion": { "version": "1.0.0" },
+    "dataSources": {
+      "mainService": { "uri": "/admin/", "type": "OData", "settings": { "annotations": ["annotation"], "odataVersion": "4.0" } },
+      "annotation": { "type": "ODataAnnotation", "uri": "annotations/annotation.xml", "settings": { "localUri": "annotations/annotation.xml" } }
+    }
+  },
+  "sap.ui5": {
+    "routing": {
+      "targets": {
+        "GenresObjectPage": {
+          "name": "sap.fe.templates.ObjectPage",
+          "options": {
+            "settings": {
+              "contextPath": "/Genres",
+              "controlConfiguration": {
+                "children/@com.sap.vocabularies.UI.v1.LineItem": {
+                  "tableSettings": { "type": "TreeTable", "hierarchyQualifier": "GenresHierarchy" }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

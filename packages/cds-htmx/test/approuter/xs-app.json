@@ -1,0 +1,7 @@
+{
+  "authenticationMethod": "none",
+  "routes": [
+    { "source": "^/wz/mb/htmx/(.*)$", "target": "/htmx/$1", "destination": "cap-htmx-srv" },
+    { "source": "^/wz/mb/(.*)$", "target": "$1", "localDir": "resources" }
+  ]
+}

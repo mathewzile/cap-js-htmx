@@ -7,7 +7,9 @@ const channels = require('./sse/channels')
 const { open: openSse, write: writeSse } = require('./sse/stream')
 const cache = require('./model/cache')
 const i18n = require('./i18n')
-const { appRoot } = require('./config')
+const { appRoot, config } = require('./config')
+const assets = require('./assets')
+const crypto = require('node:crypto')
 const apps = require('./apps')
 const { keyElements, entityDef, resolveElement, backlinkElement } = require('./annotations/edm')
 const { evaluate } = require('./annotations/expressions')
@@ -30,6 +32,8 @@ const { loadObjectPage } = require('./data/page')
 const { formValues, InputError, invalidValueListKeys, childRowValues } = require('./data/form')
 const { editCapabilities, canCreate, canEdit, canDelete } = require('./model/edit-capabilities')
 const engine = require('./sse/side-effects-engine')
+const treeLib = require('./data/tree')
+const { buildHierarchy } = require('./model/hierarchy')
 
 /** `query.js#parseOrderBy()` returns CQL `orderBy` terms (`['stock desc']`); the table header
  *  renderer wants just the first term as `{path, desc}` to know which column's sort icon to show. */
@@ -38,6 +42,9 @@ function orderByFromTerms(terms) {
   const [path, dir] = terms[0].split(' ')
   return { path, desc: dir === 'desc' }
 }
+
+/** Most rows of one CSV export. */
+const EXPORT_LIMIT = 5000
 
 /** `X-Htmx-Base`: absolute path segments only. */
 const BASE_PATH = /^\/[\w.\-/~]*$/
@@ -49,10 +56,13 @@ class HtmxAdapter extends HttpAdapter {
     router.use(express.urlencoded({ extended: true, ...this.body_parser_options }))
     router.use(express.json(this.body_parser_options))
     router.use(this.logRequest.bind(this))
+    router.use(this.requireHtmx.bind(this))
+    router.use(this.stickySession.bind(this))
     router.use(this.resolveApp.bind(this))
 
     router.get('/', this.handle(this.home))
     router.get('/$events', this.handle(this.events))
+    router.get('/$shell', this.handle(this.shellInfo))
     router.get('/$playground', this.handle(this.playground))
     router.get('/$playground/clients', this.handle(this.playgroundClients))
     router.post('/$playground/watch', this.handle(this.playgroundWatch))
@@ -60,6 +70,7 @@ class HtmxAdapter extends HttpAdapter {
     router.get('/:Set/$new', this.handle(this.newObject))
     router.get('/:Set/$export', this.handle(this.exportCsv))
     router.get('/:Set/$table', this.handle(this.tablePartial))
+    router.get('/:Set/$children', this.handle(this.treeChildren))
     router.post('/:Set/$delete', this.handle(this.deleteSelected))
     router.post('/:Set/$edit', this.handle(this.editDraft))
     router.post('/:Set/$save', this.handle(this.saveDraft))
@@ -77,6 +88,44 @@ class HtmxAdapter extends HttpAdapter {
     router.post('/*splat', this.handle(this.postNested))
 
     return router
+  }
+
+  /** Writes (anything but GET/HEAD/OPTIONS) must come from htmx: the `HX-Request` header cannot be set by a form or an
+   *  image on another site, so together with the approuter's CSRF token it keeps cross-site requests out
+   *  (`requireHxRequestForMutations`). */
+  requireHtmx(req, res, next) {
+    if (!config().requireHxRequestForMutations || /^(GET|HEAD|OPTIONS)$/.test(req.method) || req.headers['hx-request']) return next()
+    res.status(403).type('text/plain').send('Forbidden: write requests need the HX-Request header')
+  }
+
+  /** Server-sent-event channels live in the memory of one CAP instance, so a browser has to keep talking to the same
+   *  instance. Cloud Foundry's router makes requests sticky when the app sets a `JSESSIONID` cookie. The cookie
+   *  holds nothing: it is a random value, set on page loads and on the event stream. */
+  stickySession(req, res, next) {
+    const { stickySessions } = config()
+    const name = stickySessions === true ? 'JSESSIONID' : stickySessions
+    const wanted = name && req.method === 'GET' && (req.path === '/$events' || req.path === '/$shell' || !this.isFragmentRequest(req))
+    if (wanted && !(req.headers.cookie || '').split(/;s*/).some(c => c.startsWith(`${name}=`))) {
+      const secure = req.secure || req.headers['x-forwarded-proto'] === 'https'
+      res.append('Set-Cookie', `${name}=${crypto.randomUUID()}; Path=/; HttpOnly; SameSite=Lax${secure ? '; Secure' : ''}`)
+    }
+    next()
+  }
+
+  /** `GET /$shell`: what the generic frontend shell (`cds-htmx-shell`) needs to start the app in a page it does not
+   *  own (Work Zone, `index.html`): the versioned asset URLs under the shell's own base, the theme CSS per UI5 theme and the UI
+   *  texts. Never cached: it is how a shell learns about a new asset version. */
+  async shellInfo(req, res) {
+    const { styles, scripts, version, root } = assets.urls(req.htmxBase || '')
+    const themeCss = ['sap_horizon', 'sap_horizon_dark', 'sap_horizon_hcb', 'sap_horizon_hcw']
+    res.set('Cache-Control', 'no-cache').json({
+      version, root, theme: config().theme,
+      themes: Object.fromEntries(themeCss.map(name => [name, styles.theme(name)])),
+      styles: { variables: styles.variables(config().theme), common: styles.common, fundamental: styles.fundamental, own: styles.own },
+      scripts,
+      texts: textsFor(cache.bundleFor(this.appOpts(req))),
+      servicePath: this.basePath(req)
+    })
   }
 
   /** Logs incoming htmx and SSE requests (§logging: match OData's `[odata] -` format). */
@@ -856,13 +905,7 @@ class HtmxAdapter extends HttpAdapter {
     const threshold = lrLayout.table.growingThreshold
     const columns = queryLib.selectColumns(cds.model, entityType, lrLayout)
     const orderByTerms = queryLib.parseOrderBy(req.query, columns)
-    const q = queryLib.listReportQuery(cds.model, entityType, entityType, lrLayout, { filters: parsedFilters, search, query: req.query, limit: threshold })
-    const countQ = queryLib.listReportCountQuery(entityType, { filters: parsedFilters, search })
-
-    const [rows, countResult] = await Promise.all([tx.run(q), tx.run(countQ)])
-    const hasMore = rows.length > threshold
-    const pageRows = hasMore ? rows.slice(0, threshold) : rows
-    await queryLib.markDraftOwners(tx, entityType, lrLayout, pageRows, cds.context.user.id)
+    const { rows: pageRows, hasMore, count } = await this.listRows(tx, entityType, lrLayout, { filters: parsedFilters, search, query: req.query, limit: threshold })
     const orderBy = orderByFromTerms(orderByTerms)
 
     const filterOptions = {}
@@ -871,13 +914,13 @@ class HtmxAdapter extends HttpAdapter {
     }
 
     const body = listReportRender.listReportFragment(lrLayout, pageRows, {
-      basePath: base, entitySetPath: req.params.Set, keyNames, count: countResult.count,
-      hasMore, skip: threshold, orderBy, query: req.query, bundle, t: i18n.t, filterOptions
+      basePath: base, entitySetPath: req.params.Set, keyNames, count,
+      hasMore, skip: threshold, orderBy, query: req.query, bundle, t: i18n.t, filterOptions, locale: cds.context.locale
     })
     const toasted = req.successMessage
       ? html`<hx-partial hx-target="#toast" hx-swap="outerHTML">${toastRender.toast(req.successMessage)}</hx-partial>${body}`
       : body
-    this.render(req, res, { title: lrLayout.header.typeNamePlural, body: toasted })
+    this.render(req, res, { title: lrLayout.header.typeNamePlural || req.params.Set, body: toasted })
   }
 
   /** `GET /:Set/$export`: the List Report's rows as a CSV file, for the filters, search and sort in the query
@@ -894,8 +937,16 @@ class HtmxAdapter extends HttpAdapter {
     const search = filtersLib.parseSearch(req.query)
     const columnsSelected = queryLib.selectColumns(cds.model, entity.name, lrLayout)
     const orderByTerms = queryLib.parseOrderBy(req.query, columnsSelected)
-    const q = queryLib.listReportQuery(cds.model, entity.name, entity.name, lrLayout, { filters: parsedFilters, search, query: req.query, limit: 5000 })
-    const rows = await tx.run(q)
+    // A query returns at most `cds.query.limit.max` rows (1000 by default), so a long list is read page by page; each page
+    // asks for one row more than it keeps (the has-more probe), which must still fit under that maximum
+    const pageSize = Math.max((cds.env.query?.limit?.max ?? 1000) - 1, 1)
+    const rows = []
+    for (let skip = 0; rows.length < EXPORT_LIMIT; skip += pageSize) {
+      const batch = await tx.run(queryLib.listReportQuery(cds.model, entity.name, entity.name, lrLayout, { filters: parsedFilters, search, query: req.query, skip, limit: pageSize }))
+      rows.push(...batch.slice(0, pageSize))
+      if (batch.length <= pageSize) break
+    }
+    rows.length = Math.min(rows.length, EXPORT_LIMIT)
 
     const wanted = typeof req.query.cols === 'string' ? new Set(req.query.cols.split(',').map(Number)) : null
     const columns = lrLayout.table.columns
@@ -946,25 +997,63 @@ class HtmxAdapter extends HttpAdapter {
     const skip = Number(req.query.$skip) || 0
     const columns = queryLib.selectColumns(cds.model, entityType, lrLayout)
     const orderByTerms = queryLib.parseOrderBy(req.query, columns)
-    const q = queryLib.listReportQuery(cds.model, entityType, entityType, lrLayout, { filters: parsedFilters, search, query: req.query, skip, limit: threshold })
-    const countQ = queryLib.listReportCountQuery(entityType, { filters: parsedFilters, search })
-
-    const [rows, countResult] = await Promise.all([tx.run(q), tx.run(countQ)])
-    const hasMore = rows.length > threshold
-    const pageRows = hasMore ? rows.slice(0, threshold) : rows
-    await queryLib.markDraftOwners(tx, entityType, lrLayout, pageRows, cds.context.user.id)
+    const { rows: pageRows, hasMore, count } = await this.listRows(tx, entityType, lrLayout, { filters: parsedFilters, search, query: req.query, skip, limit: threshold })
     const orderBy = orderByFromTerms(orderByTerms)
+    // a tree pages over its top-level nodes: that is what the growing trigger counts
+    const loaded = lrLayout.table.hierarchy ? skip + pageRows.filter(r => r._level === 0).length : skip + pageRows.length
 
     const body = listReportRender.tablePartial(lrLayout, pageRows, {
       basePath: base, entitySetPath: req.params.Set, keyNames, orderBy,
-      skip: skip + threshold, hasMore, count: countResult.count, query: req.query, bundle, t: i18n.t
+      skip: skip + threshold, loaded, hasMore, count, query: req.query, bundle, t: i18n.t, locale: cds.context.locale
     })
     // Go/sort keep the filter state in the (replaced, not pushed) URL, so Back from an object lands on the same list
     if (!req.query.$skip) {
       const params = new URLSearchParams(Object.entries(req.query).filter(([k, v]) => v !== '' && !(k === 'f.EditingStatus' && v === 'ALL')))
       res.set('HX-Replace-Url', `${base}/${req.params.Set}${params.size ? '?' + params : ''}`)
+      // the header (outside the swapped rows) shows which column the rows are sorted by
+      res.set('HX-Trigger', JSON.stringify({ 'hf:sorted': { path: orderBy?.path ?? '', desc: !!orderBy?.desc } }))
     }
     res.set('Content-Type', 'text/html').send(String(body))
+  }
+
+  /** One page of the List Report's rows, with the total: a flat table's (`$skip` + `limit`), or a tree table's top-level
+   *  nodes (with their expanded descendants when a filter or search is active, `data/tree.js`). */
+  async listRows(tx, entityType, lrLayout, { filters, search, query, skip = 0, limit }) {
+    if (lrLayout.table.hierarchy) {
+      return filters.length || search
+        ? treeLib.matching(tx, cds.model, entityType, lrLayout, { filters, search, query, skip, limit })
+        : treeLib.topLevel(tx, cds.model, entityType, lrLayout, { query, skip, limit })
+    }
+    const [rows, counted] = await Promise.all([
+      tx.run(queryLib.listReportQuery(cds.model, entityType, entityType, lrLayout, { filters, search, query, skip, limit })),
+      tx.run(queryLib.listReportCountQuery(entityType, { filters, search }))
+    ])
+    const hasMore = rows.length > limit
+    const pageRows = hasMore ? rows.slice(0, limit) : rows
+    await queryLib.markDraftOwners(tx, entityType, lrLayout, pageRows, cds.context.user.id)
+    return { rows: pageRows, hasMore, count: counted.count }
+  }
+
+  /** `GET /:Set/$children?node=<id>&level=<n>&hq=<qualifier>` (tree tables): the rows to insert below an expanded node.
+   *  The hierarchy is the one the List Report's manifest names or, for a tree in an Object Page section (whose entity
+   *  has no List Report of its own here), the `hq` qualifier -- which must be declared on the entity type. */
+  async treeChildren(req, res, tx) {
+    const entity = this.entitySet(req.params.Set)
+    const node = req.query.node
+    if (!entity || typeof node !== 'string' || !node) return res.sendStatus(404)
+    const entityType = entity.name
+    const opts = this.appOpts(req)
+    const servicePath = this.odataServicePath()
+    const lrLayout = cache.listReportFor(cds.model, this.service.name, servicePath, entityType, `/${req.params.Set}`, opts)
+    const hierarchy = lrLayout.table.hierarchy ?? buildHierarchy(cache.storeFor(cds.model, this.service.name, servicePath, opts), entityType, req.query.hq)
+    if (!treeLib.isUsable(cds.model, entityType, hierarchy)) return res.sendStatus(404)
+    const layout = { ...lrLayout, table: { ...lrLayout.table, hierarchy } }
+    const level = Math.min(Math.max(Number(req.query.level) || 1, 1), 100)
+    const rows = await treeLib.childrenOf(tx, cds.model, entityType, layout, { node, level, query: req.query })
+    const keyNames = keyElements(entityDef(cds.model, entityType)).map(k => k.name)
+    res.set('Content-Type', 'text/html').send(String(listReportRender.rowsOnly(layout, rows, {
+      basePath: this.basePath(req), entitySetPath: req.params.Set, keyNames, bundle: cache.bundleFor(opts), t: i18n.t
+    })))
   }
 
   /** Wraps a handler so it runs inside a service transaction and errors reach the HttpAdapter error handler. */

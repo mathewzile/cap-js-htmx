@@ -1,6 +1,6 @@
 const cds = require('@sap/cds')
 const path = require('node:path')
-const api = cds.test(path.join(__dirname, '..', '..', '..', '..'))
+const api = require('../support/hx-writes')(cds.test(path.join(__dirname, '..', '..', '..', '..')))
 
 describe('List Report routes (Phase 3)', () => {
 

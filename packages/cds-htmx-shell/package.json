@@ -1,0 +1,13 @@
+{
+  "name": "cds-htmx-shell",
+  "version": "0.1.0",
+  "description": "Generic frontend shell for cds-htmx apps: boots the htmx runtime in a page it does not own (SAP Build Work Zone launchpad, or a plain index.html), keeps the URL and the launchpad hash in step, and adds the approuter's CSRF token.",
+  "private": true,
+  "files": [
+    "shell",
+    "scripts"
+  ],
+  "dependencies": {
+    "adm-zip": "^0.5.16"
+  }
+}

@@ -1,7 +1,7 @@
 const cds = require('@sap/cds')
 const path = require('node:path')
 const zlib = require('node:zlib')
-const api = cds.test(path.join(__dirname, '..', '..', '..', '..'))
+const api = require('../support/hx-writes')(cds.test(path.join(__dirname, '..', '..', '..', '..')))
 
 const CSS = '/htmx/-/fundamental-styles/fundamental-styles.css'
 const get = (url, encoding) => fetch(`${api.url}${url}`, { headers: encoding ? { 'Accept-Encoding': encoding } : {} })

@@ -1,6 +1,6 @@
 const cds = require('@sap/cds')
 const path = require('node:path')
-const api = cds.test(path.join(__dirname, '..', '..', '..', '..'))
+const api = require('../support/hx-writes')(cds.test(path.join(__dirname, '..', '..', '..', '..')))
 
 const WUTHERING_HEIGHTS = "ID='3d2d2d2d-1c1c-4b4b-8a8a-000000000001',IsActiveEntity=true"
 
@@ -108,8 +108,8 @@ describe('Draft lifecycle routes (Phase 5)', () => {
     const res = await GET(`/htmx/catalog/Books(${editedDraftRaw})`)
     expect(res.status).to.equal(200)
     expect(res.data).to.match(/<select class="fd-select"[^>]*name="genre_ID"/)
-    expect(res.data).to.match(/<option value="1"[^>]* selected[^>]*>Fiction<\/option>/)
-    expect(res.data).to.match(/<option value="2"[^>]*>Poetry<\/option>/)
+    expect(res.data).to.match(/<option value="10aaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"[^>]* selected[^>]*>Fiction<\/option>/)
+    expect(res.data).to.match(/<option value="12aaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"[^>]*>Poetry<\/option>/)
   })
 
   test('POST /:Set(keys)/$discard on an edited draft returns to the (still existing) active Object Page', async () => {

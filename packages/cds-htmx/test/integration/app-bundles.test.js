@@ -3,7 +3,7 @@ const path = require('node:path')
 const fs = require('node:fs')
 const http = require('node:http')
 const assert = require('node:assert/strict')
-const api = cds.test(path.join(__dirname, '..', '..', '..', '..'))
+const api = require('../support/hx-writes')(cds.test(path.join(__dirname, '..', '..', '..', '..')))
 
 const apps = require('../../lib/apps')
 const { checkRel } = require('../../lib/apps/bundle')

@@ -158,7 +158,7 @@ test.describe('table tools', () => {
     const csv = fs.readFileSync(file, 'utf8')
     expect(csv.startsWith('﻿')).toBe(true)
     expect(csv.split('\r\n')[0]).toContain('Book Title (XML override),Status,Author,Price')
-    expect(csv.trim().split('\r\n')).toHaveLength(6)
+    expect(csv.trim().split('\r\n')).toHaveLength(1006) // the header and all 1005 books, more than one query returns
 
     await page.locator('[data-hf-action=settings]').click()
     await page.getByRole('button', { name: 'Reset' }).click() // back to all columns, applied with OK
@@ -174,7 +174,8 @@ test.describe('table tools', () => {
     await page.locator('.hf-vh-row', { hasText: 'Poe' }).click()
     await expect(page.locator('[name="f.author_ID"]')).toHaveValue(/0003$/)
     await page.getByRole('button', { name: 'Go' }).click()
-    await expect(page.locator('#lr-table-body tr')).toHaveCount(2)
+    await expect(page.locator('#lr-table-body tr')).toHaveCount(20) // a page of Poe's books
+    await expect(page.locator('#lr-table-body td.hf-col-3').filter({ hasNotText: 'Edgar Allan Poe' })).toHaveCount(0)
 
     await page.locator('#hf-variants [data-hf-popover-toggle]').click()
     await page.getByRole('button', { name: /Save As/ }).click()
@@ -183,11 +184,12 @@ test.describe('table tools', () => {
     await expect(page.locator('[data-hf-variant-title]')).toHaveText('Poe only')
     await page.locator('#hf-variants [data-hf-popover-toggle]').click()
     await page.locator('#hf-variants .hf-popover__item', { hasText: /^Standard$/ }).click()
-    await expect(page.locator('#lr-table-body tr')).toHaveCount(5)
+    await expect(page.locator('#lr-table-body td.hf-col-3').filter({ hasNotText: 'Edgar Allan Poe' })).not.toHaveCount(0) // all authors again
     await expect(page.locator('[data-hf-filter=genre_ID]')).toBeVisible()
     await page.locator('#hf-variants [data-hf-popover-toggle]').click()
     await page.locator('#hf-variants .hf-popover__item', { hasText: 'Poe only' }).click()
-    await expect(page.locator('#lr-table-body tr')).toHaveCount(2)
+    await expect(page.locator('#lr-table-body tr')).toHaveCount(20) // a page of Poe's books
+    await expect(page.locator('#lr-table-body td.hf-col-3').filter({ hasNotText: 'Edgar Allan Poe' })).toHaveCount(0)
     await expect(page.locator('[data-hf-filter=genre_ID]')).toBeHidden()
   })
 

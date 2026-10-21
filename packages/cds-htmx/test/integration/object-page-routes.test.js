@@ -1,6 +1,6 @@
 const cds = require('@sap/cds')
 const path = require('node:path')
-const api = cds.test(path.join(__dirname, '..', '..', '..', '..'))
+const api = require('../support/hx-writes')(cds.test(path.join(__dirname, '..', '..', '..', '..')))
 
 const WUTHERING_HEIGHTS = "ID='3d2d2d2d-1c1c-4b4b-8a8a-000000000001',IsActiveEntity=true"
 

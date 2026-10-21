@@ -8,6 +8,13 @@ function formatNumber(value, { scale } = {}) {
   return scale != null ? n.toFixed(scale) : String(n)
 }
 
+/** Row counts with the locale's grouping separator ("1,005"), like FE's table title and growing trigger. */
+function formatCount(value, locale) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return String(value ?? '')
+  try { return new Intl.NumberFormat(locale || 'en').format(n) } catch { return String(n) }
+}
+
 function formatAmount(value, currency) {
   if (value == null) return ''
   const n = Number(value)
@@ -44,4 +51,4 @@ function columnValue(row, cqlPath) {
   return row[cqlPath] ?? row[cqlPath.replace(/\./g, '_')]
 }
 
-module.exports = { formatNumber, formatAmount, formatBoolean, criticalityClass, criticalityIcon, columnValue }
+module.exports = { formatCount, formatNumber, formatAmount, formatBoolean, criticalityClass, criticalityIcon, columnValue }

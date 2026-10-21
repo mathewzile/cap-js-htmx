@@ -3,7 +3,7 @@ const { config } = require('../config')
 function open(res) {
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
+    'Cache-Control': 'no-cache, no-transform', // no-transform: proxies (the BTP approuter) must not compress, and so buffer, the stream
     Connection: 'keep-alive',
     'X-Accel-Buffering': 'no'
   })

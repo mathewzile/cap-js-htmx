@@ -23,7 +23,8 @@ const DEFAULT_ALIASES = {
   'Org.OData.Measures.V1': 'Measures',
   'Org.OData.Validation.V1': 'Validation',
   'Org.OData.Capabilities.V1': 'Capabilities',
-  'Org.OData.Aggregation.V1': 'Aggregation'
+  'Org.OData.Aggregation.V1': 'Aggregation',
+  'com.sap.vocabularies.Hierarchy.v1': 'Hierarchy'
 }
 
 /** The default record $Type for members of well-known annotation collections, used when a

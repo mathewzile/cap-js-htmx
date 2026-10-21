@@ -1,0 +1,141 @@
+_schema-version: "3.3.0"
+ID: cap-htmx
+version: 1.0.0
+description: "CAP bookshop with cds-htmx (htmx List Report and Object Page) and an HTML5 app for SAP Build Work Zone"
+
+parameters:
+  enable-parallel-deployments: true
+
+build-parameters:
+  before-all:
+    - builder: custom
+      commands:
+        - npm ci
+        # the HTML5 app zip (webapp + generic htmx shell + xs-app.json), see app/manage-books-htmx
+        - npm run build:htmx-app
+        # the CAP service (gen/srv) and the HANA artifacts (gen/db) ...
+        - npx cds build --production
+        # ... and what the service needs to run on its own: the plugin packed as a file, the app manifests it reads
+        - node scripts/prepare-srv.mjs
+
+modules:
+  # ---- the CAP service: the OData API under /odata and the htmx UI under /htmx -------------------------------------------------
+  - name: cap-htmx-srv
+    type: nodejs
+    path: gen/srv
+    parameters:
+      buildpack: nodejs_buildpack
+      memory: 512M
+      # Server-sent-event channels live in the memory of one instance, so a browser must keep talking to the same one. The service
+      # sets a JSESSIONID cookie (what Cloud Foundry's router keys on) and the approuter keeps a backend's JSESSIONID in the user's
+      # session and sends it with every request, so more instances should work. That is read from the approuter's source, not yet
+      # seen on a landscape: start with one instance and raise it after checking live updates with two.
+      instances: 1
+    build-parameters:
+      # the Cloud Foundry buildpack installs the dependencies (npm install) when the module is staged
+      builder: custom
+      commands: []
+      ignore:
+        - node_modules/
+    provides:
+      - name: srv-api
+        properties:
+          srv-url: ${default-url}
+    requires:
+      - name: cap-htmx-db
+      - name: cap-htmx-auth
+
+  # ---- HANA tables, views and the sample data (CSV) ----------------------------------------------------------------------------
+  - name: cap-htmx-db-deployer
+    type: hdb
+    path: gen/db
+    parameters:
+      buildpack: nodejs_buildpack
+    requires:
+      - name: cap-htmx-db
+
+  # ---- the HTML5 app (built by the before-all step above) ----------------------------------------------------------------------
+  - name: cap-htmx-managebooks
+    type: html5
+    path: app/manage-books-htmx
+    build-parameters:
+      builder: custom
+      commands: []
+      build-result: dist
+      supported-platforms: []
+
+  # ---- uploads the HTML5 app zip to the HTML5 Application Repository ---------------------------------------------------------
+  - name: cap-htmx-app-content
+    type: com.sap.application.content
+    path: .
+    requires:
+      - name: cap-htmx-repo-host
+        parameters:
+          content-target: true
+    build-parameters:
+      build-result: gen/app
+      requires:
+        - name: cap-htmx-managebooks
+          artifacts:
+            - managebookshtmx.zip
+          target-path: gen/app
+
+  # ---- the destination the approuter route sends /htmx/** to: the URL of the CAP service -------------------------------------
+  - name: cap-htmx-destination-content
+    type: com.sap.application.content
+    requires:
+      - name: srv-api
+      - name: cap-htmx-destination
+        parameters:
+          content-target: true
+    build-parameters:
+      no-source: true
+    parameters:
+      content:
+        instance:
+          existing_destinations_policy: update
+          destinations:
+            - Name: cap-htmx-srv
+              Description: CAP service with the htmx UI (cds-htmx)
+              URL: ~{srv-api/srv-url}
+              Type: HTTP
+              ProxyType: Internet
+              Authentication: NoAuthentication
+              # the approuter forwards the user's token; CAP validates it with the XSUAA instance below
+              HTML5.ForwardAuthToken: true
+              HTML5.DynamicDestination: true
+
+resources:
+  - name: cap-htmx-db
+    type: com.sap.xs.hdi-container
+    parameters:
+      service: hana
+      service-plan: hdi-shared
+    properties:
+      hdi-service-name: ${service-name}
+
+  - name: cap-htmx-auth
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: xsuaa
+      service-plan: application
+      path: ./xs-security.json
+      config:
+        xsappname: cap-htmx-${org}-${space}
+        tenant-mode: dedicated
+
+  - name: cap-htmx-destination
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: destination
+      service-plan: lite
+      config:
+        # lets the managed approuter (HTML5 runtime) read this instance's destinations
+        HTML5Runtime_enabled: true
+        version: 1.0.0
+
+  - name: cap-htmx-repo-host
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: html5-apps-repo
+      service-plan: app-host

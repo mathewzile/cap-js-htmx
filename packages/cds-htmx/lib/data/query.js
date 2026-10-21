@@ -47,6 +47,8 @@ function selectColumns(model, entityType, layout) {
   const entity = entityDef(model, entityType)
   for (const key of keyElements(entity)) cols.add(key.name)
   if (isDraftRoot(entity)) cols.add('HasDraftEntity')
+  // a tree table reads the parent link of every node
+  if (layout.table.hierarchy) { cols.add(layout.table.hierarchy.nodeProperty); cols.add(layout.table.hierarchy.parentKey) }
   for (const col of layout.table.columns) {
     if (col.field?.cqlPath) cols.add(col.field.cqlPath)
     for (const p of pathsOf(col)) cols.add(cqlPath(p))
@@ -102,7 +104,11 @@ function listReportQuery(model, entitySet, entityType, layout, { filters = [], s
   if (filters.length) q = q.where(filters)
   if (search) q = q.search(search)
   const orderBy = parseOrderBy(query, columns) || defaultOrderBy(layout)
-  if (orderBy.length) q = q.orderBy(...orderBy)
+  if (orderBy.length) {
+    // Paging with `$skip` needs a total order: rows that tie on the sort column would otherwise repeat or go missing between pages
+    const keys = keyElements(entityDef(model, entityType)).map(k => k.name).filter(k => k !== 'IsActiveEntity' && !orderBy.some(t => t.split(' ')[0] === k))
+    q = q.orderBy(...orderBy, ...keys)
+  }
   q = q.limit((limit ?? layout.table.growingThreshold) + 1, skip) // +1: cheap has-more-rows probe, trimmed by the caller
   return q
 }
