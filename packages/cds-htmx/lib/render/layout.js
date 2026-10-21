@@ -1,19 +1,21 @@
 const { html, raw } = require('./html')
 const { config } = require('../config')
 const { asScriptJson } = require('./texts')
+const assets = require('../assets')
 
 function headAssets(theme, base = '') {
+  const { styles, scripts } = assets.urls(base)
   return html`
-    <link rel="stylesheet" href="${base}/htmx/-/theming-base-content/content/Base/baseLib/${theme}/css_variables.css">
-    <link rel="stylesheet" href="${base}/htmx/-/fundamental-styles/theming/${theme}.css">
-    <link rel="stylesheet" href="${base}/htmx/-/common-css/common-css.css">
-    <link rel="stylesheet" href="${base}/htmx/-/fundamental-styles/fundamental-styles.css">
-    <link rel="stylesheet" href="${base}/htmx/-/public/htmx-fiori.css">
-    <link rel="stylesheet" href="${base}/htmx/-/public/htmx-dialogs.css">
-    <script src="${base}/htmx/-/htmx.org/htmx.min.js"></script>
-    <script src="${base}/htmx/-/htmx.org/ext/hx-sse.min.js"></script>
-    <script src="${base}/htmx/-/public/htmx-fiori.js" defer></script>
-    <script src="${base}/htmx/-/public/htmx-tables.js" defer></script>
+    <link rel="stylesheet" href="${styles.variables(theme)}">
+    <link rel="stylesheet" href="${styles.theme(theme)}">
+    <link rel="stylesheet" href="${styles.common}">
+    <link rel="stylesheet" href="${styles.fundamental}">
+    <link rel="stylesheet" href="${styles.own[0]}">
+    <link rel="stylesheet" href="${styles.own[1]}">
+    <script src="${scripts.htmx}"></script>
+    <script src="${scripts.sse}"></script>
+    <script src="${scripts.own[0]}" defer></script>
+    <script src="${scripts.own[1]}" defer></script>
   `
 }
 

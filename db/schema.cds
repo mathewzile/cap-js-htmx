@@ -38,7 +38,7 @@ entity Awards : cuid {
   year   : Integer;
 }
 
-entity Genres : CodeList {
-  key ID : Integer;
-  parent : Association to Genres;
+entity Genres : cuid, CodeList {
+  parent   : Association to Genres;
+  children : Composition of many Genres on children.parent = $self;
 }

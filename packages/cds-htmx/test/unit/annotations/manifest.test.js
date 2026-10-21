@@ -12,8 +12,9 @@ test('findManifests() locates the manage-books app under app/**/webapp/manifest.
 
 test('scanService() matches the manifest whose dataSource uri equals the service path', () => {
   const result = scanService(appRoot, '/odata/v4/catalog/')
-  assert.equal(result.annotationFiles.length, 1)
-  assert.ok(result.annotationFiles[0].endsWith(path.join('annotations', 'annotation.xml')))
+  // manage-books and manage-books-htmx (the Work Zone app) both use this service; each has its own annotation.xml
+  assert.equal(result.annotationFiles.length, 2)
+  assert.ok(result.annotationFiles.every(file => file.endsWith(path.join('annotations', 'annotation.xml'))))
 
   assert.ok(result.listReports['/Books'])
   assert.equal(result.listReports['/Books'].variantManagement, 'Page')
@@ -32,5 +33,5 @@ test('scanService() ignores manifests pointing at a different service', () => {
 
 test('trailing-slash differences between manifest uri and servicePath do not break the match', () => {
   const result = scanService(appRoot, '/odata/v4/catalog')
-  assert.equal(result.annotationFiles.length, 1)
+  assert.equal(result.annotationFiles.length, 2)
 })

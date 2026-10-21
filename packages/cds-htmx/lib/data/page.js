@@ -2,6 +2,7 @@ const cds = require('@sap/cds')
 const cache = require('../model/cache')
 const queryLib = require('./query')
 const valueListLib = require('./value-list')
+const treeLib = require('./tree')
 const { keyElements, entityDef } = require('../annotations/edm')
 
 /** Finds every `content.kind === 'table'` facet (recursing into `CollectionFacet` nesting) so the
@@ -54,7 +55,15 @@ async function loadObjectPage(tx, { service, servicePath, entityType, keys, cont
 
   const children = {}
   for (const facet of keys ? collectTableFacets(facets) : []) {
-    const { targetEntityType, columns: childFacetColumns } = facet.content
+    const { targetEntityType, columns: childFacetColumns, hierarchy } = facet.content
+    // A tree table section lists the object's own sub-tree (display mode, an entity composed of itself): the top level is
+    // the object's children, deeper levels are fetched when a node is expanded
+    if (hierarchy && !editing && row.IsActiveEntity !== false && targetEntityType === entityType && treeLib.isUsable(cds.model, targetEntityType, hierarchy)) {
+      const treeLayout = { table: { columns: childFacetColumns, hierarchy }, filterBar: { fields: [] } }
+      const top = await treeLib.topLevel(tx, cds.model, targetEntityType, treeLayout, { rootParent: row[hierarchy.nodeProperty], limit: treeLib.LIMIT })
+      children[facet.id] = { rows: top.rows, keyNames: keyElements(entityDef(cds.model, targetEntityType)).map(k => k.name), tree: { set: targetEntityType.split('.').pop() } }
+      continue
+    }
     const childLayout = { table: { columns: childFacetColumns }, filterBar: { fields: [] } }
     const childColumns = queryLib.selectColumns(cds.model, targetEntityType, childLayout)
     const childKeyNames = keyElements(entityDef(cds.model, targetEntityType)).map(k => k.name)

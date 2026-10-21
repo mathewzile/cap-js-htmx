@@ -2,7 +2,7 @@ const { html, raw } = require('./html')
 const ids = require('./ids')
 const { evaluate, paths: pathsOf } = require('../annotations/expressions')
 const { formField, fieldLabel } = require('./field')
-const { rowsHtml, tableHead, columnVisibilityStyle, rowHref } = require('./table')
+const { rowsHtml, tableHead, columnVisibilityStyle, rowHref, treeAttributes } = require('./table')
 const { criticalityClass } = require('../data/format')
 const { toast } = require('./toast')
 const { canEdit, canDelete } = require('../model/edit-capabilities')
@@ -96,10 +96,13 @@ function tableBlock(facet, ctx) {
   const nav = facet.content.nav
   const entitySetPath = `${ctx.entitySetPath}/${nav}`
   const sectionId = ids.opSection(facet.id)
-  const miniLayout = { table: { columns: facet.content.columns } }
   // A composition of a non-draft object being edited/created: rows are plain inputs saved with the object
   const direct = !ctx.isDraft && (ctx.editMode === 'direct' || ctx.editMode === 'create') && !!facet.content.composition
   const editing = !!ctx.isDraft || direct
+  // A tree table (display mode): its rows and the children of an expanded node are the hierarchy entity's own set
+  const tree = !editing && child?.tree
+  const miniLayout = { table: { columns: facet.content.columns, hierarchy: tree ? facet.content.hierarchy : undefined } }
+  const rowSetPath = tree ? tree.set : entitySetPath
   const keyNames = child?.keyNames || []
   const bundle = ctx.bundle
   const t = key => ctx.t(bundle, key)
@@ -108,7 +111,7 @@ function tableBlock(facet, ctx) {
     : editing ? { nav, rowPath: row => rowHref(ctx.basePath, entitySetPath, keyNames, row) } : undefined
   return html`
     <div class="hf-table-toolbar hf-table-toolbar--section">
-      <h2 class="hf-section__title">${facet.label} (${rows.length})</h2>
+      <h2 class="hf-section__title">${facet.label}${tree ? html`` : html` (${rows.length})`}</h2>
       <div class="hf-spacer"></div>
       <div class="hf-input-group hf-section-search">
         <input type="search" class="fd-input" data-hf-table-search placeholder="${t('Search')}" aria-label="${t('Search')}">
@@ -129,9 +132,9 @@ function tableBlock(facet, ctx) {
       <button type="button" class="fd-button fd-button--transparent hf-icon-button" data-hf-action="settings" aria-label="${t('ViewSettings')}" title="${t('ViewSettings')}"><i class="sap-icon--action-settings" aria-hidden="true"></i></button>
     </div>
     ${columnVisibilityStyle(`#${sectionId}`, facet.content.columns, rows, { selectable: editing })}
-    <table class="fd-table hf-table" role="table">
+    <table class="fd-table hf-table" role="${tree ? 'treegrid' : 'table'}"${treeAttributes(miniLayout, ctx.basePath, rowSetPath)}>
       ${tableHead(facet.content.columns, rows, { selectable: editing, sortable: false, editing })}
-      <tbody>${rowsHtml(miniLayout, rows, { basePath: ctx.basePath, entitySetPath, keyNames, bundle, t: ctx.t, selectable: editing, edit })}</tbody>
+      <tbody>${rowsHtml(miniLayout, rows, { basePath: ctx.basePath, entitySetPath: rowSetPath, keyNames, bundle, t: ctx.t, selectable: editing, edit })}</tbody>
     </table>
     ${direct ? html`
       <input type="hidden" name="${nav}:present" value="1">

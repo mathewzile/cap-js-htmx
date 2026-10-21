@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manage Books (htmx)</title>
+  <style>html, body { height: 100%; margin: 0; }</style>
+</head>
+<body>
+  <!-- Standalone start (a Work Zone "URL app", or opening the app's URL directly): the same shell, with the hash as the route. -->
+  <div id="root" style="height:100%"></div>
+  <script src="shell/hx-csrf.js"></script>
+  <script src="shell/standalone.js"></script>
+  <script src="shell/shell.js"></script>
+  <script>
+    (async () => {
+      const manifest = await (await fetch('manifest.json')).json()
+      // the URL this page is served from is the base of everything below it (the approuter serves the app under a prefix)
+      const base = location.pathname.replace(/\/[^/]*$/, '')
+      await HtmxShell.start({
+        root: document.getElementById('root'),
+        base,
+        app: manifest['sap.app'].id + '@' + manifest['sap.app'].applicationVersion.version,
+        service: manifest['sap.htmx'].service,
+        entry: manifest['sap.htmx'].entry,
+        adapter: HtmxShellAdapters.standalone()
+      })
+    })()
+  </script>
+</body>
+</html>

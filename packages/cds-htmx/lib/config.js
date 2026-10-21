@@ -10,6 +10,7 @@ const DEFAULTS = {
   sse: { heartbeat: 15000 },
   liveListReport: true,
   requireHxRequestForMutations: true,
+  stickySessions: true, // cookie name, or true for JSESSIONID (what Cloud Foundry's router keys on), or false
   apps: { sources: [{ kind: 'local' }], allow: ['*'], ttl: 60000, refetchInterval: 5000, localRecheck: 1000, maxApps: 50, maxBundleBytes: 2097152, fetchTimeout: 5000 }
 }
 

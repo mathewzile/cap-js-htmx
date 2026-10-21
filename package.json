@@ -8,13 +8,16 @@
     "app/*"
   ],
   "dependencies": {
+    "@cap-js/hana": "^3.1.2",
     "@sap/cds": "^10",
+    "@sap/xssec": "^4.15.0",
     "cds-htmx": "*"
   },
   "devDependencies": {
     "@cap-js/cds-test": "^1",
     "@cap-js/sqlite": "^3",
     "@playwright/test": "^1.64.1",
+    "@sap/approuter": "^23.3.0",
     "cds-plugin-ui5": "^0.17.0",
     "node-html-parser": "^6"
   },
@@ -24,9 +27,29 @@
     "test": "node --env-file=packages/cds-htmx/test/test.env --test \"packages/cds-htmx/test/**/*.test.js\"",
     "test:e2e": "playwright test -c packages/cds-htmx/test/e2e/playwright.config.js",
     "test:parity": "playwright test test/e2e/parity.spec.ts",
-    "watch-manage-books": "cds watch --open managebooks/index.html?sap-ui-xx-viewCache=false --livereload false"
+    "watch-manage-books": "cds watch --open managebooks/index.html?sap-ui-xx-viewCache=false --livereload false",
+    "watch-browse-genres": "cds watch --open browsegenres/index.html?sap-ui-xx-viewCache=false --livereload false",
+    "watch-manage-authors": "cds watch --open manageauthors/index.html?sap-ui-xx-viewCache=false --livereload false",
+    "build:htmx-app": "npm run build --workspace=managebooks-htmx",
+    "build:mta": "mbt build -t ./"
   },
   "sapux": [
-    "app/manage-books"
-  ]
+    "app/manage-books",
+    "app/browse-genres",
+    "app/manage-authors"
+  ],
+  "cds": {
+    "requires": {
+      "db": {
+        "[production]": {
+          "kind": "hana"
+        }
+      },
+      "auth": {
+        "[production]": {
+          "kind": "xsuaa"
+        }
+      }
+    }
+  }
 }

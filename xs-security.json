@@ -1,0 +1,11 @@
+{
+  "xsappname": "cap-htmx",
+  "tenant-mode": "dedicated",
+  "description": "Security profile of cap-htmx. No scopes yet: every user the subaccount authenticates may use the app; add scopes and role templates here when services get @requires / @restrict.",
+  "scopes": [],
+  "role-templates": [],
+  "oauth2-configuration": {
+    "token-validity": 3600,
+    "redirect-uris": ["https://*.hana.ondemand.com/**", "https://*.cloud.sap/**"]
+  }
+}

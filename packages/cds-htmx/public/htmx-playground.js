@@ -14,7 +14,7 @@
     add('connected as ' + clientId)
     // act as a List Report of one set, so live row pushes reach this log as well
     if (log.dataset.watch) {
-      fetch(log.dataset.watchUrl, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ client: clientId, set: log.dataset.watch }) })
+      fetch(log.dataset.watchUrl, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'HX-Request': 'true' }, body: new URLSearchParams({ client: clientId, set: log.dataset.watch }) })
         .then(r => add(r.ok ? `watching ${log.dataset.watch} (List Report)` : 'could not register a view'))
     }
   }

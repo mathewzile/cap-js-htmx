@@ -293,12 +293,12 @@
   const extrasKey = set => 'extra-filters:' + set
   const availableFilters = lr => { try { return JSON.parse(lr.querySelector('form.hf-filter-bar')?.dataset.hfAvailable || '[]') } catch { return [] } }
 
-  function extraFilterItem({ path, label }) {
+  function extraFilterItem({ path, label, type }) {
     const id = `f-${path.replace(/\W/g, '_')}`
     const input = el('input', { id, name: `f.${path}`, type: 'text', class: 'fd-input', value: '' })
     const button = el('button', { type: 'button', class: 'fd-button fd-button--compact fd-button--transparent', 'data-hf-action': 'conditions', 'aria-haspopup': 'dialog', 'aria-label': T('DefineConditions') },
       el('i', { class: 'sap-icon--value-help', 'aria-hidden': 'true' }))
-    return el('div', { class: 'fd-form-item hf-filter hf-filter--extra', 'data-hf-filter': path, 'data-hf-label': label },
+    return el('div', { class: 'fd-form-item hf-filter hf-filter--extra', 'data-hf-filter': path, 'data-hf-label': label, 'data-hf-type': type },
       el('label', { class: 'fd-form-label hf-filter__label', for: id, text: label }),
       el('div', { class: 'hf-input-group' }, input, el('span', { class: 'hf-input-group__addon' }, button)))
   }
@@ -462,8 +462,22 @@
   // The field holds FE's condition syntax: `a;b` any of, `*a*` contains, `a*` starts with, `*a` ends with, `!a` not equal.
   const OPERATORS = [['eq', 'EqualTo'], ['ne', 'NotEqualTo'], ['co', 'Contains'], ['sw', 'StartsWith'], ['ew', 'EndsWith'],
     ['bt', 'Between'], ['gt', 'GreaterThan'], ['ge', 'GreaterOrEqual'], ['lt', 'LessThan'], ['le', 'LessOrEqual']]
-  function parseConditions(text) {
+  // Date fields add FE's date operators; the ones without a value (Today ...) are spelled out in the field as typed text
+  const DATE_OPERATORS = [['eq', 'EqualTo'], ['ne', 'NotEqualTo'], ['bt', 'Between'], ['lt', 'LessThan'], ['le', 'LessOrEqual'], ['gt', 'GreaterThan'], ['ge', 'GreaterOrEqual'],
+    ['today', 'Today'], ['yesterday', 'Yesterday'], ['tomorrow', 'Tomorrow'], ['thisweek', 'ThisWeek'], ['thismonth', 'ThisMonth'], ['thisyear', 'ThisYear'], ['lastdays', 'LastDays'], ['nextdays', 'NextDays']]
+  const FIXED_DATES = { today: 'Today', yesterday: 'Yesterday', tomorrow: 'Tomorrow', thisweek: 'This week', thismonth: 'This month', thisyear: 'This year' }
+  const needsValue = op => !(op in FIXED_DATES)
+  function parseDateOperator(token) {
+    const text = token.trim().toLowerCase().replace(/\s+/g, ' ')
+    const fixed = Object.entries(FIXED_DATES).find(([, label]) => label.toLowerCase() === text)
+    if (fixed) return { op: fixed[0], value: '' }
+    const relative = /^(last|next) (\d+) days$/.exec(text)
+    return relative ? { op: relative[1] + 'days', value: relative[2] } : null
+  }
+  function parseConditions(text, isDate) {
     return text.split(';').filter(Boolean).map(token => {
+      const dateOperator = isDate ? parseDateOperator(token) : null
+      if (dateOperator) return dateOperator
       if (token.startsWith('!')) return { op: 'ne', value: token.slice(1) }
       const compare = /^(<=|>=|<|>)(.+)$/.exec(token)
       if (compare) return { op: { '<': 'lt', '<=': 'le', '>': 'gt', '>=': 'ge' }[compare[1]], value: compare[2] }
@@ -473,28 +487,38 @@
       return { op: starts && ends ? 'co' : ends ? 'sw' : starts ? 'ew' : 'eq', value }
     })
   }
-  const formatCondition = ({ op, value }) => ({ eq: value, ne: `!${value}`, co: `*${value}*`, sw: `${value}*`, ew: `*${value}`, bt: value, gt: `>${value}`, ge: `>=${value}`, lt: `<${value}`, le: `<=${value}` })[op]
+  const formatCondition = ({ op, value }) => FIXED_DATES[op] ?? ({ lastdays: `Last ${value} days`, nextdays: `Next ${value} days`, eq: value, ne: `!${value}`, co: `*${value}*`, sw: `${value}*`, ew: `*${value}`, bt: value, gt: `>${value}`, ge: `>=${value}`, lt: `<${value}`, le: `<=${value}` })[op]
 
   function openConditions(button) {
     const filter = button.closest('[data-hf-filter]')
-    const input = filter.querySelector('input')
+    const input = filter.querySelector('input:not([type=date])') ?? filter.querySelector('input')
+    const isDate = filter.dataset.hfType === 'date'
+    const operators = isDate ? DATE_OPERATORS : OPERATORS
     const rows = el('div', { class: 'hf-conditions' })
     const summary = el('div', { class: 'hf-conditions__summary' })
     const sync = () => {
-      const entered = [...rows.children].map(r => ({ op: r.querySelector('select').value, value: r.querySelector('input').value.trim() })).filter(c => c.value)
+      const entered = [...rows.children].map(r => ({ op: r.querySelector('select').value, value: r.querySelector('input').value.trim() })).filter(c => !needsValue(c.op) || c.value)
       summary.textContent = entered.length ? entered.map(formatCondition).join('; ') : ''
       return entered
     }
     const addRow = (condition = { op: 'eq', value: '' }) => {
-      const select = el('select', { class: 'fd-select' }, OPERATORS.map(([op, key]) => el('option', { value: op, text: T(key), selected: op === condition.op })))
+      const select = el('select', { class: 'fd-select' }, operators.map(([op, key]) => el('option', { value: op, text: T(key), selected: op === condition.op })))
       const value = el('input', { type: 'text', class: 'fd-input', placeholder: T('Value'), value: condition.value })
+      // a date operator picks a day (`Between` takes `a...b`, `Last n days` a number, `Today` and friends none)
+      const syncType = () => {
+        value.hidden = isDate && !needsValue(select.value)
+        value.type = isDate && ['eq', 'ne', 'lt', 'le', 'gt', 'ge'].includes(select.value) ? 'date' : isDate && /days$/.test(select.value) ? 'number' : 'text'
+        value.placeholder = isDate && select.value === 'bt' ? 'YYYY-MM-DD...YYYY-MM-DD' : T('Value')
+      }
+      select.addEventListener('change', () => { syncType(); sync() })
+      syncType()
       const remove = el('button', { type: 'button', class: 'fd-button fd-button--compact fd-button--transparent', 'aria-label': T('Delete') }, el('i', { class: 'sap-icon--decline', 'aria-hidden': 'true' }))
       const row = el('div', { class: 'hf-conditions__row' }, select, value, remove)
       remove.addEventListener('click', () => { row.remove(); if (!rows.children.length) addRow(); sync() })
       row.addEventListener('input', sync)
       rows.append(row)
     }
-    const existing = parseConditions(input.value)
+    const existing = parseConditions(input.value, isDate)
     for (const c of existing.length ? existing : [undefined]) addRow(c)
     const add = el('button', { type: 'button', class: 'fd-button fd-button--compact', text: T('AddCondition') })
     add.addEventListener('click', () => { addRow(); rows.lastChild.querySelector('input').focus() })
@@ -555,6 +579,212 @@
     remove?.setAttribute('disabled', '')
   })
 
+  // ---------------------------------------------------------------- tree table
+  // A node's children are fetched when it is first expanded (`$children`, inserted below its row) and kept afterwards:
+  // collapsing only hides them, so expanding again is instant. Rows carry `data-hf-level` and `data-hf-state`.
+  const levelOf = row => Number(row.dataset.hfLevel)
+
+  function setTreeState(row, state) {
+    row.dataset.hfState = state
+    const toggle = row.querySelector('.hf-tree-toggle')
+    if (!toggle) return
+    toggle.setAttribute('aria-expanded', String(state === 'expanded'))
+    toggle.setAttribute('aria-label', T(state === 'expanded' ? 'CollapseNode' : 'ExpandNode'))
+    toggle.querySelector('i').className = state === 'expanded' ? 'sap-icon--navigation-down-arrow' : 'sap-icon--navigation-right-arrow'
+  }
+
+  /** The rows below a node, in order, as long as they are deeper than it. */
+  function descendantsOf(row) {
+    const result = []
+    for (let next = row.nextElementSibling; next && next.dataset.hfLevel != null && levelOf(next) > levelOf(row); next = next.nextElementSibling) result.push(next)
+    return result
+  }
+
+  /** Shows the descendants whose ancestors (up to `row`) are all expanded, hides the others. */
+  function showDescendants(row) {
+    const open = { [levelOf(row)]: true }
+    for (const child of descendantsOf(row)) {
+      const level = levelOf(child)
+      const visible = !!open[level - 1]
+      child.hidden = !visible
+      open[level] = visible && child.dataset.hfState === 'expanded'
+    }
+  }
+
+  async function expandNode(row) {
+    if (!row.hasAttribute('data-hf-loaded')) {
+      const table = row.closest('table')
+      const url = new URL(table.dataset.hfTree, location.href)
+      url.searchParams.set('node', row.dataset.hfNode)
+      url.searchParams.set('level', String(levelOf(row) + 1))
+      const sorted = table.querySelector('thead th[aria-sort]')
+      if (sorted) url.searchParams.set('$orderby', sorted.dataset.hfSort + (sorted.getAttribute('aria-sort') === 'descending' ? ' desc' : ''))
+      const toggle = row.querySelector('.hf-tree-toggle')
+      row.setAttribute('aria-busy', 'true')
+      toggle.disabled = true
+      try {
+        await htmx.ajax('GET', url.pathname + url.search, { source: toggle, target: row, swap: 'afterend' })
+        row.setAttribute('data-hf-loaded', '')
+      } finally {
+        row.removeAttribute('aria-busy')
+        toggle.disabled = false
+      }
+    }
+    setTreeState(row, 'expanded')
+    showDescendants(row)
+  }
+
+  function collapseNode(row) {
+    setTreeState(row, 'collapsed')
+    for (const child of descendantsOf(row)) child.hidden = true
+  }
+
+  document.addEventListener('click', e => {
+    const toggle = e.target.closest?.('.hf-tree-toggle')
+    if (!toggle) return
+    e.stopPropagation()
+    const row = toggle.closest('tr')
+    if (row.dataset.hfState === 'expanded') collapseNode(row); else expandNode(row)
+  })
+
+  // ---------------------------------------------------------------- sort indicator
+  // A header click sorts like the menu does: through the filter bar's state (the header link alone would drop the filters).
+  document.addEventListener('click', e => {
+    const link = e.target.closest?.('a.hf-th__sort')
+    const th = link?.closest('th[data-hf-sort]')
+    const lr = th?.closest('.hf-page--lr')
+    if (!lr) return
+    e.preventDefault()
+    e.stopPropagation()
+    sortList(lr, th.dataset.hfSort + (th.getAttribute('aria-sort') === 'ascending' ? ' desc' : ''))
+  }, true)
+
+  // The rows were sorted on the server (`HX-Trigger: hf:sorted`): move the arrow in the header
+  document.addEventListener('hf:sorted', e => {
+    const { path, desc } = e.detail ?? {}
+    for (const th of document.querySelectorAll('.hf-page--lr thead th[data-hf-sort]')) {
+      const on = !!path && th.dataset.hfSort === path
+      if (on) th.setAttribute('aria-sort', desc ? 'descending' : 'ascending'); else th.removeAttribute('aria-sort')
+      const link = th.querySelector('a.hf-th__sort')
+      link?.querySelector('i')?.remove()
+      if (on) link?.append(' ', el('i', { class: desc ? 'sap-icon--sort-descending' : 'sap-icon--sort-ascending', 'aria-hidden': 'true' }))
+    }
+  })
+
+  // ---------------------------------------------------------------- column menu
+  // A right click (or the context-menu key) on a column header opens FE's column menu: sort, group, filter, hide and the
+  // column settings. The List Report sorts and groups on the server (the same `$table` request the header link uses);
+  // a section table only has the rows on the page, so it sorts those.
+  let columnMenu = null
+  const closeColumnMenu = () => { columnMenu?.remove(); columnMenu = null }
+  const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
+
+  function sortRows(container, index, direction) {
+    const table = tableOf(container)
+    const body = table.querySelector('tbody')
+    const cellText = row => row.querySelector(`td.hf-col-${index}`)?.textContent.replace(/\s+/g, ' ').trim() ?? ''
+    const rows = [...body.querySelectorAll(':scope > tr:not(.hf-table__nodata):not(.hf-group-row)')]
+    rows.sort((a, b) => collator.compare(cellText(a), cellText(b)) * (direction === 'desc' ? -1 : 1))
+    body.querySelectorAll(':scope > tr.hf-group-row').forEach(r => r.remove())
+    body.append(...rows)
+    for (const th of table.querySelectorAll('thead th.hf-th')) {
+      if (colIndex(th) === index) th.setAttribute('aria-sort', direction === 'desc' ? 'descending' : 'ascending'); else th.removeAttribute('aria-sort')
+    }
+    applyGroups(container)
+  }
+
+  function updateView(container, change) {
+    const key = 'view:' + container.dataset.hfView
+    const state = { ...(store.get(key) ?? {}), ...change }
+    for (const k of Object.keys(state)) if (state[k] == null || (Array.isArray(state[k]) && !state[k].length)) delete state[k]
+    if (Object.keys(state).length) store.set(key, state); else store.remove(key)
+    applyView(container)
+  }
+
+  /** Shows the filter field of a column in the filter bar (adding it through "Add Filter" if it isn't there) and focuses it. */
+  function focusFilter(lr, path) {
+    const form = lr.querySelector('form.hf-filter-bar')
+    const find = () => form.querySelector(`.hf-filter[data-hf-filter="${CSS.escape(path)}"]`)
+    const set = lr.dataset.hfSet
+    if (!find()) {
+      store.set(extrasKey(set), [...(store.get(extrasKey(set)) ?? []), path])
+      applyFilters()
+    }
+    const hidden = new Set(store.get(filtersKey(set)) ?? [])
+    if (hidden.delete(path)) { store.set(filtersKey(set), [...hidden]); applyFilters() }
+    if (lr.classList.contains('hf-page--collapsed')) lr.querySelector('[data-hf-toggle-header]')?.click()
+    find()?.querySelector('input:not([type=hidden]), select')?.focus()
+  }
+
+  function openColumnMenu(th, x, y) {
+    closeColumnMenu()
+    const container = th.closest('[data-hf-view]')
+    if (!container) return
+    const lr = container.closest('.hf-page--lr')
+    const index = colIndex(th)
+    const sortKey = th.dataset.hfSort
+    const current = th.getAttribute('aria-sort')
+    const editing = !!container.querySelector('tbody input:not([type=checkbox]):not([type=hidden])')
+    const canSort = lr ? !!sortKey : !editing && !!container.querySelector('tbody tr') && !tableOf(container).dataset.hfTree
+    const canGroup = canSort && !tableOf(container).dataset.hfTree
+    const grouped = groupOf(container) === index
+    const canFilter = !!lr && !!sortKey && (!!lr.querySelector(`.hf-filter[data-hf-filter="${CSS.escape(sortKey)}"]`) || availableFilters(lr).some(f => f.path === sortKey))
+
+    const sortBy = direction => lr ? sortList(lr, sortKey + (direction === 'desc' ? ' desc' : '')) : sortRows(container, index, direction)
+    const setGroup = value => {
+      updateView(container, { group: value })
+      if (value == null) return
+      if (lr) sortList(lr, sortKey); else sortRows(container, index, 'asc') // a group's rows sit together
+    }
+    const entries = [
+      canSort && { text: T('SortAscending'), icon: 'sort-ascending', selected: current === 'ascending', run: () => sortBy('asc') },
+      canSort && { text: T('SortDescending'), icon: 'sort-descending', selected: current === 'descending', run: () => sortBy('desc') },
+      canSort && lr && current && { text: T('ResetSort'), icon: 'decline', run: () => sortList(lr, '') },
+      canGroup && { text: grouped ? T('Ungroup') : T('Group'), icon: 'group-2', run: () => setGroup(grouped ? null : index) },
+      canFilter && { text: T('FilterColumn'), icon: 'filter', run: () => focusFilter(lr, sortKey) },
+      'separator',
+      { text: T('HideColumn'), icon: 'hide', disabled: visibleColumns(container).length <= 1, run: () => updateView(container, { hidden: [...new Set([...hiddenCols(container), index])] }) },
+      { text: T('ColumnSettings'), icon: 'action-settings', run: () => openViewSettings(container) }
+    ].filter(Boolean)
+
+    const list = el('ul', { class: 'hf-popover__list', role: 'menu' }, entries.map(entry => {
+      if (entry === 'separator') return el('li', { class: 'hf-colmenu__separator', role: 'separator' })
+      const button = el('button', { type: 'button', role: 'menuitem', class: 'hf-popover__item hf-colmenu__item', disabled: !!entry.disabled, 'aria-current': entry.selected ? 'true' : false },
+        el('i', { class: `sap-icon--${entry.icon}`, 'aria-hidden': 'true' }), el('span', { text: entry.text }))
+      button.addEventListener('click', () => { closeColumnMenu(); entry.run() })
+      return el('li', { role: 'none' }, button)
+    }))
+    columnMenu = el('div', { class: 'hf-colmenu', 'aria-label': th.dataset.hfLabel || th.textContent.trim() }, list)
+    document.body.append(columnMenu)
+    const box = columnMenu.getBoundingClientRect()
+    columnMenu.style.left = `${Math.max(4, Math.min(x, innerWidth - box.width - 4))}px`
+    columnMenu.style.top = `${Math.max(4, Math.min(y, innerHeight - box.height - 4))}px`
+    columnMenu.querySelector('button:not([disabled])')?.focus()
+  }
+
+  document.addEventListener('contextmenu', e => {
+    const th = e.target.closest?.('thead th.hf-th')
+    if (!th || !th.closest('[data-hf-view]')) return
+    e.preventDefault()
+    // the context-menu key has no pointer position: open the menu under the header cell
+    const keyboard = e.clientX === 0 && e.clientY === 0
+    const rect = th.getBoundingClientRect()
+    openColumnMenu(th, keyboard ? rect.left : e.clientX, keyboard ? rect.bottom : e.clientY)
+  })
+  document.addEventListener('mousedown', e => { if (columnMenu && !columnMenu.contains(e.target)) closeColumnMenu() })
+  document.addEventListener('keydown', e => {
+    if (!columnMenu) return
+    if (e.key === 'Escape') { closeColumnMenu(); return }
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+    e.preventDefault()
+    const items = [...columnMenu.querySelectorAll('button:not([disabled])')]
+    const at = items.indexOf(document.activeElement)
+    items[(at + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length]?.focus()
+  })
+  window.addEventListener('resize', closeColumnMenu)
+  window.addEventListener('scroll', closeColumnMenu, true)
+  document.addEventListener('htmx:before:request', closeColumnMenu)
+
   // ---------------------------------------------------------------- wiring
   document.addEventListener('click', e => {
     const paste = e.target.closest('[data-hf-action=paste]')
@@ -592,6 +822,7 @@
     document.querySelectorAll('#hf-variants').forEach(renderVariants)
   }
   document.addEventListener('DOMContentLoaded', applyAll)
+  document.addEventListener('hf:ready', applyAll)
   // A table body swap (sort, Go, More) brings new cells that need the saved column settings again
   document.addEventListener('htmx:after:swap', applyAll)
 })()

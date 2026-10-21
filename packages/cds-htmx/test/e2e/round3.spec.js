@@ -144,7 +144,10 @@ test.describe('gaps', () => {
     await expect(field).toBeVisible()
     await field.fill('>10')
     await page.getByRole('button', { name: 'Go' }).click()
-    await expect(page.locator('#lr-table-body tr')).toHaveCount(1) // only Wuthering Heights costs more than 10
+    await expect(page.locator('#lr-count')).not.toHaveText('1,005') // the rows that cost 10 or less are gone
+    await expect(page.locator('#lr-table-body tr')).toHaveCount(20) // one page of the rest
+    const prices = await page.locator('#lr-table-body td.hf-col-4').allTextContents()
+    expect(prices.every(p => parseFloat(p) > 10)).toBe(true)
     await page.reload()
     await expect(page.locator('[data-hf-filter=price]')).toBeVisible() // remembered
     await page.getByRole('button', { name: /Adapt Filters/ }).click()
@@ -213,10 +216,11 @@ test.describe('table details', () => {
     await page.locator('.hf-dialog__tab', { hasText: 'Group' }).click()
     await page.locator('.hf-dialog__panel:not([hidden]) select').selectOption({ label: 'Author' })
     await page.getByRole('button', { name: 'OK' }).click()
-    await expect(page.locator('tr.hf-group-row')).toHaveCount(4) // 4 authors in 5 books
+    // grouping sorts by the column on the server: the first page of 20 books is all by the first author
+    await expect(page.locator('tr.hf-group-row')).toHaveCount(1)
     await expect(page.locator('tr.hf-group-row').first()).toContainText('Author: ')
     await page.reload()
-    await expect(page.locator('tr.hf-group-row')).toHaveCount(4)
+    await expect(page.locator('tr.hf-group-row')).toHaveCount(1)
     await page.locator('[data-hf-action=settings]').click()
     await page.getByRole('button', { name: 'Reset' }).click()
     await page.getByRole('button', { name: 'OK' }).click()

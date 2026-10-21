@@ -2,6 +2,7 @@ const { buildColumn } = require('./list-report')
 const feDefaults = require('./fe-defaults')
 const { typeFromUrl } = require('../annotations/vocab')
 const { resolveElement } = require('../annotations/edm')
+const { buildHierarchy } = require('./hierarchy')
 
 /** `@UI.FieldGroup#Extra` / `@Communication.Contact` -> `{ termKey: 'UI.FieldGroup', qualifier: 'Extra' }`,
  *  the shape `AnnotationStore.get(target, term, qualifier)` expects. Returns `undefined` for anything
@@ -23,7 +24,7 @@ function parseNavigationLineItemTarget(target) {
 /** One `Facets`/`HeaderFacets` entry -> a section/subsection content descriptor (§3.2: Facets row).
  *  `model` is CSN, used only to resolve a navigation facet's target entity type (structural typing,
  *  not annotation data -- the layout model itself still comes only from the store). */
-function buildFacet(model, store, entityType, facet) {
+function buildFacet(model, store, entityType, facet, pageSettings) {
   const kind = typeFromUrl(facet['@type']) || 'UI.ReferenceFacet'
   const base = {
     id: facet.ID,
@@ -34,7 +35,7 @@ function buildFacet(model, store, entityType, facet) {
   }
 
   if (kind === 'UI.CollectionFacet') {
-    return { ...base, kind: 'CollectionFacet', facets: (facet.Facets || []).map(f => buildFacet(model, store, entityType, f)) }
+    return { ...base, kind: 'CollectionFacet', facets: (facet.Facets || []).map(f => buildFacet(model, store, entityType, f, pageSettings)) }
   }
 
   const nav = parseNavigationLineItemTarget(facet.Target)
@@ -44,7 +45,10 @@ function buildFacet(model, store, entityType, facet) {
     const columns = targetEntityType
       ? (store.get(targetEntityType, 'UI.LineItem') || []).map(r => buildColumn(store, targetEntityType, r))
       : []
-    return { ...base, kind: 'ReferenceFacet', content: { kind: 'table', nav, targetEntityType, columns, composition: element?.type === 'cds.Composition' } }
+    // a section table is a tree when the manifest says so for this navigation's line item (`<nav>/@com.sap.vocabularies.UI.v1.LineItem`)
+    const tableSettings = pageSettings?.controlConfiguration?.[`${nav}/@com.sap.vocabularies.UI.v1.LineItem`]?.tableSettings || {}
+    const hierarchy = targetEntityType && tableSettings.type === 'TreeTable' ? buildHierarchy(store, targetEntityType, tableSettings.hierarchyQualifier) : undefined
+    return { ...base, kind: 'ReferenceFacet', content: { kind: 'table', nav, targetEntityType, columns, composition: element?.type === 'cds.Composition', hierarchy } }
   }
 
   const ref = parseAnnotationPathTarget(facet.Target)
@@ -93,9 +97,9 @@ function buildObjectPage(model, store, entityType, { pageSettings } = {}) {
       imageUrl: headerInfo.ImageUrl,
       initials: headerInfo.Initials
     },
-    headerFacets: headerFacets.map(f => buildFacet(model, store, entityType, f)),
+    headerFacets: headerFacets.map(f => buildFacet(model, store, entityType, f, pageSettings)),
     headerActions: (identification || []).map(r => buildColumn(store, entityType, r)),
-    sections: facets.map(f => buildFacet(model, store, entityType, f)),
+    sections: facets.map(f => buildFacet(model, store, entityType, f, pageSettings)),
     editableHeaderContent: pageSettings?.editableHeaderContent ?? feDefaults.objectPage.editableHeaderContent,
     sectionLayout: pageSettings?.sectionLayout || feDefaults.objectPage.sectionLayout,
     edit: require('./edit-capabilities').editCapabilities(store, entityType)

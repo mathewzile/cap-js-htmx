@@ -1,7 +1,7 @@
 const cds = require('@sap/cds')
 const path = require('node:path')
 const assert = require('node:assert/strict')
-const api = cds.test(path.join(__dirname, '..', '..', '..', '..'))
+const api = require('../support/hx-writes')(cds.test(path.join(__dirname, '..', '..', '..', '..')))
 
 const { editCapabilities, canCreate, canEdit, canDelete } = require('../../lib/model/edit-capabilities')
 const { coerce, InputError } = require('../../lib/data/form')
@@ -74,13 +74,13 @@ describe('FE parity: capabilities, direct editing, history, confirmations (round
       expect((await call('get', '/htmx/catalog/Genres/$new')).status).to.equal(405)
       expect((await call('post', '/htmx/catalog/Genres/$save')).status).to.equal(405)
       expect((await call('post', '/htmx/catalog/Genres/$delete')).status).to.equal(405)
-      expect((await call('delete', '/htmx/catalog/Genres(ID=1)')).status).to.equal(405)
+      expect((await call('delete', '/htmx/catalog/Genres(ID=10aaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa)')).status).to.equal(405)
       expect((await call('get', '/htmx/catalog/Genres')).status).to.equal(200) // still serving
     })
 
     test("a Genre's page has no Edit and no Delete", async () => {
       const { GET, expect } = api
-      const res = await GET('/htmx/catalog/Genres(ID=1)', { headers: HX })
+      const res = await GET('/htmx/catalog/Genres(ID=10aaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa)', { headers: HX })
       expect(res.status).to.equal(200)
       expect(res.data).not.to.match(/aria-label="Edit"/)
       expect(res.data).not.to.match(/aria-label="Delete"/)
@@ -246,11 +246,13 @@ describe('FE parity: capabilities, direct editing, history, confirmations (round
       expect(paths).to.include('price')
       expect(paths).not.to.include('genre_ID') // already a SelectionField
       expect(paths).not.to.include('IsActiveEntity')
+      // the table body holds one page of the rows: the total is in the count the response refreshes
+      const total = res => Number(/hx-target="#lr-count"[^>]*>([\d,]+)</.exec(res.data)[1].replace(/,/g, ''))
       const all = await GET('/htmx/catalog/Books/$table', { headers: HX })
       const filtered = await GET('/htmx/catalog/Books/$table?f.price=>10', { headers: HX })
-      expect((filtered.data.match(/<tr id="lr-row/g) || []).length).to.be.lessThan((all.data.match(/<tr id="lr-row/g) || []).length)
+      expect(total(filtered)).to.be.lessThan(total(all))
       const unknown = await GET('/htmx/catalog/Books/$table?f.nonsense=1', { headers: HX })
-      expect((unknown.data.match(/<tr id="lr-row/g) || []).length).to.equal((all.data.match(/<tr id="lr-row/g) || []).length)
+      expect(total(unknown)).to.equal(total(all))
     })
 
     test('Edit on an object that already has your own draft resumes it', async () => {
@@ -492,18 +494,21 @@ describe('FE parity: capabilities, direct editing, history, confirmations (round
       const raw = await api.axios.get('/htmx/catalog/Books/$export', { headers: HX, responseType: 'arraybuffer' })
       assert.deepEqual([...Buffer.from(raw.data).subarray(0, 3)], [0xEF, 0xBB, 0xBF])
       const lines = res.data.trim().split('\r\n')
-      assert.equal(lines.length, 6)
+      assert.equal(lines.length, 1006, 'the header and all 1005 books, although a query returns at most 1000 rows')
       assert.match(lines[0], /^Book Title \(XML override\),Stock,Status,Author,Price$/)
       assert.ok(lines.some(l => /^Wuthering Heights,12,In Stock,Emily Brontë,11\.50 EUR$/.test(l)), lines.join('\n'))
     })
 
     test('$export follows the page state: filters, search, sort and the visible columns', async () => {
-      const filtered = await get('/htmx/catalog/Books/$export?f.author_ID=9d703c23-7cf7-4cad-9f2b-0e1e1a8c0003&cols=0,4&$orderby=price%20desc')
+      const poe = '9d703c23-7cf7-4cad-9f2b-0e1e1a8c0003'
+      const filtered = await get(`/htmx/catalog/Books/$export?f.author_ID=${poe}&cols=0,4&$orderby=price%20desc`)
       const lines = filtered.data.trim().split('\r\n')
-      assert.equal(lines.length, 3, 'two books by Poe plus the header')
+      const expected = (await api.GET(`/odata/v4/catalog/Books/$count?$filter=author_ID eq ${poe}`)).data
+      assert.equal(lines.length, Number(expected) + 1, 'every book by Poe plus the header')
       assert.match(lines[0], /^Book Title \(XML override\),Price$/)
-      assert.match(lines[1], /^Eleonora,6\.75 USD$/) // price descending: 6.75 before 4.50
-      assert.match(lines[2], /^The Raven,4\.50 USD$/)
+      const prices = lines.slice(1).map(l => Number(/,(\d+\.\d+) \w+$/.exec(l)[1]))
+      assert.deepEqual(prices, [...prices].sort((a, b) => b - a), 'price descending')
+      assert.ok(lines.some(l => /^Eleonora,6\.75 USD$/.test(l)) && lines.some(l => /^The Raven,4\.50 USD$/.test(l)))
       const searched = await get('/htmx/catalog/Books/$export?$search=Raven')
       assert.equal(searched.data.trim().split('\r\n').length, 2)
     })

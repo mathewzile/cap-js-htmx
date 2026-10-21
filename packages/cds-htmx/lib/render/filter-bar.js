@@ -4,12 +4,32 @@ const ids = require('./ids')
 /** One filter-bar field: label above input (Horizon convention, §3.4 `form-item.md`). Fixed-value
  *  lists render as a select, other value lists as an input with a value-help icon (FE look); all
  *  other types stay plain text inputs. */
+/** A date filter restricted to one value or one range (`Capabilities.FilterRestrictions/FilterExpressionRestrictions`
+ *  `SingleValue`/`SingleRange`) is a date picker, as in FE: the browser's own calendar popup in an input of the
+ *  Fiori look. A range is one control holding "from – to"; it sends `f.<path>.ge` and `f.<path>.le`. (A
+ *  `DateTimeOffset` property with these restrictions stays a text field for now.) */
+function datePicker(field, query, id, name) {
+  if (field.filterExpression === 'SingleValue') {
+    return html`<input id="${id}" name="${name}" type="date" class="fd-input hf-date-input" value="${query?.[name] ?? ''}" data-hf-picker="value">`
+  }
+  return html`
+    <div class="fd-input hf-date-range" role="group" aria-labelledby="${id}--label" data-hf-picker="range">
+      <input id="${id}" name="${name}.ge" type="date" class="hf-date-range__input" value="${query?.[`${name}.ge`] ?? ''}" aria-label="${field.label} (from)">
+      <span class="hf-date-range__dash" aria-hidden="true">–</span>
+      <input name="${name}.le" type="date" class="hf-date-range__input" value="${query?.[`${name}.le`] ?? ''}" aria-label="${field.label} (to)">
+    </div>`
+}
+
+const isDatePicker = field => field.edmType === 'Edm.Date' && (field.filterExpression === 'SingleValue' || field.filterExpression === 'SingleRange')
+
 function filterField(field, query, options, ctx) {
   const name = `f.${field.path}`
   const id = ids.sanitize(name)
   const value = query?.[name] ?? ''
   let control
-  if (field.fixedValues && options) {
+  if (isDatePicker(field)) {
+    control = datePicker(field, query, id, name)
+  } else if (field.fixedValues && options) {
     control = html`
       <span class="hf-select">
         <select id="${id}" name="${name}" class="fd-select">
@@ -30,8 +50,8 @@ function filterField(field, query, options, ctx) {
       </div>`
   }
   return html`
-    <div class="fd-form-item hf-filter" data-hf-filter="${field.path}" data-hf-label="${field.label}">
-      <label class="fd-form-label hf-filter__label" for="${id}">${field.label}</label>
+    <div class="fd-form-item hf-filter" data-hf-filter="${field.path}" data-hf-label="${field.label}"${field.edmType === 'Edm.Date' ? raw(' data-hf-type="date"') : html``}>
+      <label class="fd-form-label hf-filter__label" id="${id}--label" for="${id}">${field.label}</label>
       ${control}
     </div>
   `
@@ -61,7 +81,7 @@ function editingStatusField(query, { bundle, t }) {
  *  count via `<hx-partial>`. */
 function filterBar(layout, { basePath, entitySetPath, query, bundle, t, filterOptions = {} }) {
   return html`
-    <form id="${ids.lrFilterBar()}" class="hf-filter-bar" data-hf-available="${JSON.stringify((layout.filterBar.available || []).map(f => ({ path: f.path, label: f.label || f.path })))}"
+    <form id="${ids.lrFilterBar()}" class="hf-filter-bar" data-hf-available="${JSON.stringify((layout.filterBar.available || []).map(f => ({ path: f.path, label: f.label || f.path, type: f.edmType === 'Edm.Date' ? 'date' : undefined })))}"
       hx-get="${basePath}/${entitySetPath}/$table" hx-target="#${ids.lrTableBody()}" hx-swap="innerHTML">
       <div class="fd-form-item hf-filter hf-filter--search">
         <label class="fd-form-label hf-filter__label hf-sr-only" for="lr-search">${t(bundle, 'Search')}</label>
@@ -82,4 +102,4 @@ function filterBar(layout, { basePath, entitySetPath, query, bundle, t, filterOp
   `
 }
 
-module.exports = { filterBar, filterField }
+module.exports = { filterBar, filterField, isDatePicker }

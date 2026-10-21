@@ -21,3 +21,7 @@ mta_archives/
 # Playwright output
 test-results/
 playwright-report/
+
+# built frontend (HTML5 zip)
+app/*/dist/
+packages/cds-htmx/test/approuter/resources/

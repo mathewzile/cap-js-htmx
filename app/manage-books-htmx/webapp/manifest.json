@@ -1,0 +1,71 @@
+{
+  "_version": "1.89.0",
+  "sap.app": {
+    "id": "managebooks.htmx",
+    "type": "application",
+    "i18n": "i18n/i18n.properties",
+    "applicationVersion": { "version": "1.0.0" },
+    "title": "{{appTitle}}",
+    "description": "{{appDescription}}",
+    "dataSources": {
+      "mainService": {
+        "uri": "/odata/v4/catalog/",
+        "type": "OData",
+        "settings": { "annotations": ["annotation"], "odataVersion": "4.0" }
+      },
+      "annotation": {
+        "type": "ODataAnnotation",
+        "uri": "annotations/annotation.xml",
+        "settings": { "localUri": "annotations/annotation.xml" }
+      }
+    },
+    "crossNavigation": {
+      "inbounds": {
+        "Books-manageHtmx": {
+          "semanticObject": "Books",
+          "action": "manageHtmx",
+          "title": "{{tileTitle}}",
+          "signature": { "parameters": {}, "additionalParameters": "allowed" }
+        }
+      }
+    }
+  },
+  "sap.ui": {
+    "technology": "UI5",
+    "deviceTypes": { "desktop": true, "tablet": true, "phone": true }
+  },
+  "sap.ui5": {
+    "dependencies": { "minUI5Version": "1.120.0", "libs": { "sap.ui.core": {} } },
+    "contentDensities": { "compact": true, "cozy": true },
+    "resourceRoots": { "cds.htmx.shell": "./shell" },
+    "services": { "ShellUIService": { "factoryName": "sap.ushell.ui5service.ShellUIService", "lazy": false } },
+    "models": { "i18n": { "type": "sap.ui.model.resource.ResourceModel", "settings": { "bundleName": "managebooks.htmx.i18n.i18n" } } },
+    "routing": {
+      "targets": {
+        "BooksList": {
+          "name": "sap.fe.templates.ListReport",
+          "options": {
+            "settings": {
+              "contextPath": "/Books",
+              "variantManagement": "Page",
+              "controlConfiguration": { "@com.sap.vocabularies.UI.v1.LineItem": { "tableSettings": { "type": "ResponsiveTable" } } }
+            }
+          }
+        },
+        "BooksObjectPage": {
+          "name": "sap.fe.templates.ObjectPage",
+          "options": { "settings": { "editableHeaderContent": false, "contextPath": "/Books" } }
+        },
+        "ChaptersObjectPage": {
+          "name": "sap.fe.templates.ObjectPage",
+          "options": { "settings": { "editableHeaderContent": false, "contextPath": "/Books/chapters" } }
+        }
+      }
+    }
+  },
+  "sap.htmx": {
+    "service": "/htmx/catalog",
+    "entry": "/htmx/catalog/Books"
+  },
+  "sap.cloud": { "public": true, "service": "cap.htmx" }
+}

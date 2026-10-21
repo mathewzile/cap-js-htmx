@@ -1,6 +1,6 @@
 const { html, raw } = require('./html')
 const { evaluate } = require('../annotations/expressions')
-const { criticalityClass, criticalityIcon, formatAmount, formatNumber, formatBoolean, columnValue } = require('../data/format')
+const { criticalityClass, criticalityIcon, formatAmount, formatNumber, formatBoolean, formatCount, columnValue } = require('../data/format')
 const { formatKeys } = require('../keys')
 const ids = require('./ids')
 const { canDelete } = require('../model/edit-capabilities')
@@ -102,13 +102,14 @@ function headerCell(col, { basePath, entitySetPath, orderBy, numeric, sortable, 
     return html`<th class="${cls}" role="columnheader"${pasteTarget ? html` data-hf-paste-path="${col.field.path}"` : html``}><span class="hf-th__text">${col.label ?? col.field?.label ?? ''}</span>${editing && col.field && require('./field').isMandatory(col.field, {}) ? html`<span class="hf-field__required" aria-hidden="true">*</span>` : html``}</th>`
   }
   const path = col.field.cqlPath
+  const label = col.label ?? col.field.label ?? ''
   const isCurrent = orderBy?.path === path
   const nextDesc = isCurrent ? !orderBy.desc : false
   const sortParam = `${path}${nextDesc ? ' desc' : ''}`
-  return html`<th class="${cls}" role="columnheader" data-hf-sort="${path}" data-hf-label="${col.label ?? ''}" ${isCurrent ? raw(`aria-sort="${orderBy.desc ? 'descending' : 'ascending'}"`) : html``}>
+  return html`<th class="${cls}" role="columnheader" data-hf-sort="${path}" data-hf-label="${label}" ${isCurrent ? raw(`aria-sort="${orderBy.desc ? 'descending' : 'ascending'}"`) : html``}>
     <a class="hf-th__text hf-th__sort" href="#"
        hx-get="${basePath}/${entitySetPath}/$table?$orderby=${encodeURIComponent(sortParam)}"
-       hx-target="#${ids.lrTableBody()}" hx-swap="innerHTML">${col.label}${isCurrent ? html` <i class="sap-icon--${orderBy.desc ? 'sort-descending' : 'sort-ascending'}" aria-hidden="true"></i>` : html``}</a>
+       hx-target="#${ids.lrTableBody()}" hx-swap="innerHTML">${label}${isCurrent ? html` <i class="sap-icon--${orderBy.desc ? 'sort-descending' : 'sort-ascending'}" aria-hidden="true"></i>` : html``}</a>
   </th>`
 }
 
@@ -129,7 +130,16 @@ function editCell(col, row, { rowPath, rowKey, cls, numeric }) {
   </td>`
 }
 
-function dataCell(col, row, { bundle, t, isSemanticKey, numeric, index, edit, rowKey } = {}) {
+/** The tree table's node control in the first column: indentation by level, then the expand/collapse arrow
+ *  (or the space of one for a leaf). Expanding is done by the page script, which asks `$children` for the rows. */
+function treeNode({ level, state }, { bundle, t }) {
+  const expanded = state === 'expanded'
+  return html`<span class="hf-tree-node" style="--hf-level:${level}">${state === 'leaf'
+    ? html`<span class="hf-tree-spacer"></span>`
+    : html`<button type="button" class="hf-tree-toggle" aria-expanded="${expanded}" aria-label="${t(bundle, expanded ? 'CollapseNode' : 'ExpandNode')}"><i class="${expanded ? 'sap-icon--navigation-down-arrow' : 'sap-icon--navigation-right-arrow'}" aria-hidden="true"></i></button>`}</span>`
+}
+
+function dataCell(col, row, { bundle, t, isSemanticKey, numeric, index, edit, rowKey, tree } = {}) {
   const cls = `fd-table__cell hf-col-${index}${numeric ? ' hf-cell--end' : ''}${isSemanticKey ? ' hf-semantic-key' : ''}`
   if (col.hidden && evaluate(col.hidden, row) === true) return html`<td class="${cls}"></td>`
   if (col.kind === 'UI.DataFieldForAction' || col.kind === 'UI.DataFieldForAnnotation') {
@@ -142,7 +152,7 @@ function dataCell(col, row, { bundle, t, isSemanticKey, numeric, index, edit, ro
   const text = cellText(col, row)
   const badge = isSemanticKey ? draftStatusBadge(row, bundle, t) : html``
   const crit = col.criticality ? criticalityClass(evaluate(col.criticality, row)) : ''
-  return html`<td class="${cls}">${objectStatus(crit, text)}${raw(badge.value)}</td>`
+  return html`<td class="${cls}">${tree && index === 0 ? treeNode(tree, { bundle, t }) : html``}${objectStatus(crit, text)}${raw(badge.value)}</td>`
 }
 
 /** A draft-root row's "Draft" (own draft shown in place of the active row, FE's "All" default view)
@@ -198,12 +208,14 @@ function rowMarkup(layout, row, { basePath, entitySetPath, keyNames, bundle, t, 
   if (edit?.direct) return directRowMarkup(layout, row, { keyNames, bundle, t, numeric, edit })
   const href = rowHref(basePath, entitySetPath, keyNames, row)
   const rowKey = edit ? `${edit.nav}(${formatKeys(keyValues(keyNames, row))})` : undefined
+  const hierarchy = layout.table.hierarchy
+  const tree = hierarchy && !edit ? { level: row._level ?? 0, state: row._state ?? 'leaf' } : undefined
   return html`
-    <tr id="${rowId(keyNames, row)}" class="fd-table__row fd-table__row--activable fd-table__row--hoverable"
+    <tr id="${rowId(keyNames, row)}" class="fd-table__row fd-table__row--activable fd-table__row--hoverable"${tree ? html` data-hf-level="${tree.level}" data-hf-state="${tree.state}" data-hf-node="${row[hierarchy.nodeProperty]}"${row._loaded ? raw(' data-hf-loaded') : html``}` : html``}
         hx-get="${href}" hx-trigger="click[!event.target.closest('.fd-table__cell--checkbox, input, select, textarea, button, a')]"
         hx-target="#app" hx-push-url="true" hx-swap="innerHTML show:window:top">
       ${selectable ? html`<td class="fd-table__cell fd-table__cell--checkbox">${checkbox('Select row', { name: 'keys', value: formatKeys(keyValues(keyNames, row)) })}</td>` : html``}
-      ${layout.table.columns.map((col, i) => dataCell(col, row, { bundle, t, isSemanticKey: !!layout.semanticKey?.includes(col.field?.path), numeric: numeric[i], index: i, edit, rowKey }))}
+      ${layout.table.columns.map((col, i) => dataCell(col, row, { bundle, t, isSemanticKey: !!layout.semanticKey?.includes(col.field?.path), numeric: numeric[i], index: i, edit, rowKey, tree }))}
       <td class="fd-table__cell hf-col-nav">
         <i class="sap-icon--slim-arrow-right" aria-hidden="true"></i>
       </td>
@@ -222,15 +234,19 @@ function rowsHtml(layout, rows, { basePath, entitySetPath, keyNames, bundle, t, 
   return html`${rows.map((row, index) => rowMarkup(layout, row, { basePath, entitySetPath, keyNames, bundle, t, numeric, selectable, edit: edit?.direct ? { index, ...edit } : edit }))}`
 }
 
-function growingButton(basePath, entitySetPath, { skip, hasMore, bundle, t, query }) {
-  if (!hasMore) return html``
+/** The growing trigger under the table (UI5 `growing`): "More" with the `[ loaded / total ]` description FE shows.
+ *  It is always rendered as the `#lr-growing` container -- empty once everything is loaded -- so every `$table`
+ *  response can replace it and the next click asks for the rows after the ones now on the page. */
+function growingButton(basePath, entitySetPath, { skip, hasMore, loaded, count, bundle, t, query, locale }) {
+  if (!hasMore) return html`<div id="${ids.lrGrowing()}" class="hf-table__growing"></div>`
   const params = new URLSearchParams({ ...query, $skip: String(skip) })
   return html`
-    <div class="hf-table__growing">
-      <button class="hf-table__growing-button"
+    <div id="${ids.lrGrowing()}" class="hf-table__growing">
+      <button type="button" class="hf-table__growing-button"
         hx-get="${basePath}/${entitySetPath}/$table?${params.toString()}"
         hx-target="#${ids.lrTableBody()}" hx-swap="beforeend">
-        ${t(bundle, 'More')}
+        <span class="hf-table__growing-title">${t(bundle, 'More')}</span>
+        <span class="hf-table__growing-info">[ ${formatCount(loaded ?? skip, locale)} / ${formatCount(count, locale)} ]</span>
       </button>
     </div>`
 }
@@ -247,6 +263,12 @@ function tableHead(columns, rows, { basePath, entitySetPath, orderBy, selectable
     </thead>`
 }
 
+/** What the page script needs to expand a node: where its children come from (`$children`, with the hierarchy's qualifier). */
+function treeAttributes(layout, basePath, entitySetPath) {
+  const hierarchy = layout.table.hierarchy
+  return hierarchy ? html` data-hf-tree="${basePath}/${entitySetPath}/$children?hq=${encodeURIComponent(hierarchy.qualifier)}"` : html``
+}
+
 /** The `fd-table` itself (§3.4 List Report checklist): checkbox column, sortable header cells,
  *  activable/hoverable rows with a navigation arrow cell. */
 function table(layout, rows, ctx) {
@@ -254,7 +276,7 @@ function table(layout, rows, ctx) {
   const selectable = isSelectable(layout)
   return html`
     ${columnVisibilityStyle(`#${ids.lrTable()}`, layout.table.columns, rows, { selectable })}
-    <table id="${ids.lrTable()}" class="fd-table hf-table" role="table">
+    <table id="${ids.lrTable()}" class="fd-table hf-table" role="${layout.table.hierarchy ? 'treegrid' : 'table'}"${treeAttributes(layout, basePath, entitySetPath)}>
       ${tableHead(layout.table.columns, rows, { basePath, entitySetPath, orderBy, selectable })}
       <tbody id="${ids.lrTableBody()}">${raw(rowsHtml(layout, rows, { ...ctx, selectable }).value)}</tbody>
     </table>
@@ -262,4 +284,4 @@ function table(layout, rows, ctx) {
   `
 }
 
-module.exports = { table, tableHead, isSelectable, rowsHtml, rowMarkup, rowId, isNumericColumn, cellText, rowHref, keyValues, objectStatus, columnBreakpoints, columnVisibilityStyle }
+module.exports = { table, treeAttributes, growingButton, tableHead, isSelectable, rowsHtml, rowMarkup, rowId, isNumericColumn, cellText, rowHref, keyValues, objectStatus, columnBreakpoints, columnVisibilityStyle }

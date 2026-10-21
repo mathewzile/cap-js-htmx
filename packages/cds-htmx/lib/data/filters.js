@@ -51,7 +51,7 @@ function parseFilters(query, layout) {
     if (!field) continue // whitelist: not a rendered filter-bar field -> ignore
     const rawValues = (Array.isArray(raw) ? raw : [raw]).filter(v => typeof v === 'string' && v !== '')
     if (!rawValues.length) continue
-    if (op === 'eq' && rawValues.some(isCondition)) {
+    if (op === 'eq' && rawValues.some(v => isCondition(v, field))) {
       const where = conditionsToWhere(field, rawValues.flatMap(v => v.split(';')).filter(v => v !== ''))
       if (where.length) { if (clauses.length) clauses.push('and'); clauses.push(...where) }
       continue
@@ -67,7 +67,9 @@ function parseFilters(query, layout) {
 
 /** The "Define Conditions" dialog and typing write FE's condition syntax into the field: `a;b` (any of),
  *  `*a*` contains, `a*` starts with, `*a` ends with, `!a` not equal. A plain value stays a plain equality. */
-const isCondition = v => /[;*<>]|\.\.\./.test(v) || v.startsWith('!')
+const { dateRange } = require('./date-operators')
+const isDate = field => field?.edmType === 'Edm.Date'
+const isCondition = (v, field) => (isDate(field) && !!dateRange(v)) || /[;*<>]|\.\.\./.test(v) || v.startsWith('!')
 const COMPARE = /^(<=|>=|<|>)(.+)$/
 const COMPARE_OP = { '<': '<', '<=': '<=', '>': '>', '>=': '>=' }
 
@@ -77,6 +79,8 @@ function conditionsToWhere(field, tokens) {
   const excluded = []
   for (const token of tokens) {
     if (token.startsWith('!')) { excluded.push(token.slice(1)); continue }
+    const days = isDate(field) ? dateRange(token) : undefined
+    if (days) { included.push([{ xpr: [column, '>=', val(days[0]), 'and', column, '<=', val(days[1])] }]); continue }
     const compare = COMPARE.exec(token)
     if (compare) { included.push([column, COMPARE_OP[compare[1]], val(coerce(compare[2]))]); continue }
     const between = /^(.+)\.\.\.(.+)$/.exec(token) // `a...b`

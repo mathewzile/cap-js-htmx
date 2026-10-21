@@ -1,6 +1,7 @@
 const { buildField } = require('./fields')
 const feDefaults = require('./fe-defaults')
 const { typeFromUrl } = require('../annotations/vocab')
+const { buildHierarchy } = require('./hierarchy')
 
 /** `CatalogService.Books` -> `CatalogService.EntityContainer/Books`, the container-member
  *  target `Capabilities.*Restrictions` annotations live under (§3.2: Capabilities row). */
@@ -58,12 +59,27 @@ function valueField(store, entityType, record, label) {
   return { expr: value, label }
 }
 
+/** CDS type -> the EDM type a filter control depends on. Only temporal types matter to the filter bar. */
+const EDM_TYPES = { 'cds.Date': 'Edm.Date', 'cds.DateTime': 'Edm.DateTimeOffset', 'cds.Timestamp': 'Edm.DateTimeOffset' }
+
+const enumName = value => String(value?.$EnumMember ?? value ?? '').split('/').pop()
+
+/** What a filter field accepts: `Capabilities.FilterRestrictions/FilterExpressionRestrictions` (container member)
+ *  or the property's `Common.FilterExpressionType`. `SingleValue`/`SingleRange` on a date field is what makes FE
+ *  render a date (range) picker instead of the free-text condition field. */
+function filterTraits(store, entityType, field, restrictions) {
+  const entry = (restrictions?.FilterExpressionRestrictions || []).find(r => (r.Property?.$PropertyPath ?? r.Property) === field.path)
+  const expression = enumName(entry?.AllowedExpressions ?? store.raw(`${entityType}/${field.path}`)['@Common.FilterExpressionType'])
+  const edmType = EDM_TYPES[require('../annotations/edm').resolveElement(require('@sap/cds').model, entityType, field.path)?.type]
+  return { ...field, edmType, filterExpression: expression || undefined }
+}
+
 /** `UI.SelectionFields` -> filter-bar fields, in annotation order, each resolved to its merged
  *  `FieldLayout` and excluding anything the property marks `@UI.HiddenFilter`. */
-function buildFilterBar(store, entityType, selectionFields = []) {
+function buildFilterBar(store, entityType, selectionFields = [], restrictions) {
   return selectionFields
     .filter(path => !store.raw(`${entityType}/${path}`)['@UI.HiddenFilter'])
-    .map(path => buildField(store, entityType, path))
+    .map(path => filterTraits(store, entityType, buildField(store, entityType, path), restrictions))
 }
 
 /** Properties a user may add through Adapt Filters ("Add Filter") beyond `UI.SelectionFields`: the entity's own
@@ -78,7 +94,7 @@ function buildAvailableFilters(store, entityType, selected, restrictions) {
     .filter(el => !el.isAssociation && !el.virtual && el.type !== 'cds.Association' && el.type !== 'cds.Composition')
     .filter(el => !TECHNICAL.has(el.name) && !taken.has(el.name) && !nonFilterable.has(el.name))
     .filter(el => !store.raw(`${entityType}/${el.name}`)['@UI.HiddenFilter'])
-    .map(el => buildField(store, entityType, el.name))
+    .map(el => filterTraits(store, entityType, buildField(store, entityType, el.name), restrictions))
 }
 
 /** Restriction terms live on the container-member target (`Capabilities.*Restrictions`, §3.2).
@@ -107,6 +123,9 @@ function buildListReport(store, entityType, { pageSettings } = {}) {
   const presentationVariant = bag['@UI.PresentationVariant'] || bag['@UI.SelectionPresentationVariant']?.PresentationVariant
 
   const tableSettings = pageSettings?.controlConfiguration?.['@com.sap.vocabularies.UI.v1.LineItem']?.tableSettings || {}
+  // `type: 'TreeTable'` needs the hierarchy the manifest names; without a usable one the table stays what FE would fall back to
+  const hierarchy = tableSettings.type === 'TreeTable' ? buildHierarchy(store, entityType, tableSettings.hierarchyQualifier) : undefined
+  const filterRestrictions = bag['@Capabilities.FilterRestrictions'] ?? store.raw(containerTarget(entityType))['@Capabilities.FilterRestrictions']
 
   return {
     entityType,
@@ -115,15 +134,16 @@ function buildListReport(store, entityType, { pageSettings } = {}) {
       typeNamePlural: headerInfo.TypeNamePlural
     },
     filterBar: {
-      fields: buildFilterBar(store, entityType, bag['@UI.SelectionFields']),
-      available: buildAvailableFilters(store, entityType, bag['@UI.SelectionFields'] || [], bag['@Capabilities.FilterRestrictions'] ?? store.raw(containerTarget(entityType))['@Capabilities.FilterRestrictions']),
+      fields: buildFilterBar(store, entityType, bag['@UI.SelectionFields'], filterRestrictions),
+      available: buildAvailableFilters(store, entityType, bag['@UI.SelectionFields'] || [], filterRestrictions),
       // FE shows the "Editing Status" filter for draft roots; it is not a model element, so it must
       // stay out of `fields` (those feed SELECT columns and the filter whitelist)
       editingStatus: !!store.raw(containerTarget(entityType))['@Common.DraftRoot']
     },
     table: {
       columns: lineItem.map(record => buildColumn(store, entityType, record)),
-      type: tableSettings.type || feDefaults.listReport.table.type,
+      type: hierarchy ? 'TreeTable' : tableSettings.type !== 'TreeTable' && tableSettings.type || feDefaults.listReport.table.type,
+      hierarchy,
       selectionMode: tableSettings.selectionMode || feDefaults.listReport.table.selectionMode,
       growingThreshold: tableSettings.growingThreshold || feDefaults.listReport.table.growingThreshold,
       condensedTableLayout: tableSettings.condensedTableLayout ?? feDefaults.listReport.table.condensedTableLayout,

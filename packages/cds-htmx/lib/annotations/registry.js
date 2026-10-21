@@ -6,19 +6,22 @@ const Core = require('./terms/core')
 const Measures = require('./terms/measures')
 const Validation = require('./terms/validation')
 const HTML5 = require('./terms/html5')
+const Aggregation = require('./terms/aggregation')
+const Hierarchy = require('./terms/hierarchy')
 
-const BY_ALIAS = { UI, Common, Communication, Capabilities, Core, Measures, Validation, HTML5 }
+const BY_ALIAS = { UI, Common, Communication, Capabilities, Core, Measures, Validation, HTML5, Aggregation, Hierarchy }
 
 /** Whole vocabularies out of scope for v1 (§3.2: "ignored v1"): any term under these aliases
  *  is `ignored` regardless of which specific term it is. */
-const IGNORED_ALIASES = new Set(['Analytics', 'Aggregation', 'Session'])
+const IGNORED_ALIASES = new Set(['Analytics', 'Session'])
 
 /** `supported | partial | ignored | unknown` for one `Alias.Term`. Unlisted terms under a known
  *  vocabulary, and terms under vocabularies we don't recognize at all, are `unknown`: the plugin
  *  found an annotation it has no opinion about and silently drops instead of rendering. */
 function statusOf(alias, term) {
   if (IGNORED_ALIASES.has(alias)) return 'ignored'
-  return BY_ALIAS[alias]?.[term] || 'unknown'
+  // the analytical terms of Aggregation stay out of scope; only the recursive hierarchy (tree table) is read
+  return BY_ALIAS[alias]?.[term] || (alias === 'Aggregation' ? 'ignored' : 'unknown')
 }
 
 /** Walks every target in the store and classifies each of its top-level terms, returning

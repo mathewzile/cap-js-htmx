@@ -1,0 +1,23 @@
+<edmx:Edmx xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx" Version="4.0">
+  <edmx:Reference Uri="https://sap.github.io/odata-vocabularies/vocabularies/UI.xml">
+    <edmx:Include Namespace="com.sap.vocabularies.UI.v1" Alias="UI"/>
+  </edmx:Reference>
+  <edmx:Reference Uri="/admin/$metadata">
+    <edmx:Include Namespace="AdminService"/>
+  </edmx:Reference>
+  <edmx:DataServices>
+    <Schema xmlns="http://docs.oasis-open.org/odata/ns/edm" Namespace="local">
+      <Annotations Target="AdminService.Genres">
+        <Annotation Term="UI.Facets">
+          <Collection>
+            <Record Type="UI.ReferenceFacet">
+              <PropertyValue Property="ID" String="SubGenres"/>
+              <PropertyValue Property="Label" String="Sub-Genres"/>
+              <PropertyValue Property="Target" AnnotationPath="children/@UI.LineItem"/>
+            </Record>
+          </Collection>
+        </Annotation>
+      </Annotations>
+    </Schema>
+  </edmx:DataServices>
+</edmx:Edmx>
