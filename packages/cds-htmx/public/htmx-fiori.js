@@ -242,6 +242,15 @@ document.addEventListener('htmx:after:swap', hfLoadMessages)
 document.addEventListener('DOMContentLoaded', hfLoadMessages)
 document.addEventListener('hf:ready', hfLoadMessages)
 
+// ---------- row click: ignore clicks on the row's own controls ----------
+// A bracketed `hx-trigger="click[...]"` filter makes htmx compile the expression with `new Function`, which a CSP
+// without 'unsafe-eval' (e.g. SAP Work Zone) blocks -- so the filter lives here, as plain code.
+document.addEventListener('htmx:config:request', e => {
+  const { sourceElement, sourceEvent } = e.detail.ctx
+  if (sourceElement.matches?.('tr.fd-table__row--activable') && sourceEvent?.type === 'click'
+    && sourceEvent.target.closest?.('.fd-table__cell--checkbox, input, select, textarea, button, a')) e.preventDefault()
+})
+
 // ---------- draft status in the footer ("Saving..." while a field PATCH is on its way) ----------
 document.addEventListener('htmx:before:request', e => {
   const status = document.getElementById('op-draft-status')

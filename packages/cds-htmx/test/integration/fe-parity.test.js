@@ -359,7 +359,7 @@ describe('FE parity: capabilities, direct editing, history, confirmations (round
     test('rows are inputs that PATCH the child draft, rows navigate only via the arrow, the mandatory header is marked', () => {
       assert.match(page, /<td[^>]*data-hf-field="chapters\(ID=(?:'|&#39;)7c7c7c7c-0002-4a4a-8a8a-000000000001(?:'|&#39;),IsActiveEntity=false\)\.title"/)
       assert.match(page, /hx-patch="[^"]*\/chapters\(ID=(?:'|&#39;)7c7c7c7c-0002-4a4a-8a8a-000000000001(?:'|&#39;),IsActiveEntity=false\)\/\$field\/title"/)
-      assert.match(page, /click\[!event\.target\.closest\('\.fd-table__cell--checkbox, input, select, textarea, button, a'\)\]/)
+      assert.match(page, /<tr [^>]*hx-trigger="click"/)
       assert.match(page, /hf-field__required/)
     })
 

@@ -212,7 +212,7 @@ function rowMarkup(layout, row, { basePath, entitySetPath, keyNames, bundle, t, 
   const tree = hierarchy && !edit ? { level: row._level ?? 0, state: row._state ?? 'leaf' } : undefined
   return html`
     <tr id="${rowId(keyNames, row)}" class="fd-table__row fd-table__row--activable fd-table__row--hoverable"${tree ? html` data-hf-level="${tree.level}" data-hf-state="${tree.state}" data-hf-node="${row[hierarchy.nodeProperty]}"${row._loaded ? raw(' data-hf-loaded') : html``}` : html``}
-        hx-get="${href}" hx-trigger="click[!event.target.closest('.fd-table__cell--checkbox, input, select, textarea, button, a')]"
+        hx-get="${href}" hx-trigger="click"
         hx-target="#app" hx-push-url="true" hx-swap="innerHTML show:window:top">
       ${selectable ? html`<td class="fd-table__cell fd-table__cell--checkbox">${checkbox('Select row', { name: 'keys', value: formatKeys(keyValues(keyNames, row)) })}</td>` : html``}
       ${layout.table.columns.map((col, i) => dataCell(col, row, { bundle, t, isSemanticKey: !!layout.semanticKey?.includes(col.field?.path), numeric: numeric[i], index: i, edit, rowKey, tree }))}
