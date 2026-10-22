@@ -88,6 +88,8 @@ modules:
       - name: cap-htmx-destination
         parameters:
           content-target: true
+      - name: cap-htmx-repo-host
+      - name: cap-htmx-auth
     build-parameters:
       no-source: true
     parameters:
@@ -95,15 +97,15 @@ modules:
         instance:
           existing_destinations_policy: update
           destinations:
-            - Name: cap-htmx-srv
-              Description: CAP service with the htmx UI (cds-htmx)
-              URL: ~{srv-api/srv-url}
-              Type: HTTP
-              ProxyType: Internet
-              Authentication: NoAuthentication
-              # the approuter forwards the user's token; CAP validates it with the XSUAA instance below
-              HTML5.ForwardAuthToken: true
-              HTML5.DynamicDestination: true
+            - Name: cap-htmx-html5-repo
+              ServiceInstanceName: cap-htmx-repo-host
+              ServiceKeyName: cap-htmx-repo-host-key
+              sap.cloud.service: cap.htmx
+            - Name: cap-htmx-uaa
+              Authentication: OAuth2UserTokenExchange
+              ServiceInstanceName: cap-htmx-auth
+              ServiceKeyName: cap-htmx-auth-key
+              sap.cloud.service: cap.htmx
 
 resources:
   - name: cap-htmx-db
@@ -126,6 +128,8 @@ resources:
 
   - name: cap-htmx-destination
     type: org.cloudfoundry.managed-service
+    requires:
+      - name: srv-api
     parameters:
       service: destination
       service-plan: lite
@@ -133,6 +137,19 @@ resources:
         # lets the managed approuter (HTML5 runtime) read this instance's destinations
         HTML5Runtime_enabled: true
         version: 1.0.0
+        init_data:
+          instance:
+            existing_destinations_policy: update
+            destinations:
+              - Name: cap-htmx-srv
+                Description: CAP service with the htmx UI (cds-htmx)
+                URL: ~{srv-api/srv-url}
+                Type: HTTP
+                ProxyType: Internet
+                Authentication: NoAuthentication
+                # the approuter forwards the user's token; CAP validates it with the XSUAA instance below
+                HTML5.ForwardAuthToken: true
+                HTML5.DynamicDestination: true
 
   - name: cap-htmx-repo-host
     type: org.cloudfoundry.managed-service
