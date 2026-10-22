@@ -1,6 +1,9 @@
 const cds = require('@sap/cds')
 const path = require('node:path')
 
+/** The themes the plugin ships (Horizon, as in the Work Zone), and `auto`: light or dark as the browser prefers. */
+const THEMES = ['sap_horizon', 'sap_horizon_dark', 'sap_horizon_hcb', 'sap_horizon_hcw']
+
 const DEFAULTS = {
   theme: 'sap_horizon',
   shell: true,
@@ -16,7 +19,9 @@ const DEFAULTS = {
 
 function config() {
   const env = cds.env.htmx
-  return { ...DEFAULTS, ...env, sse: { ...DEFAULTS.sse, ...env?.sse }, apps: { ...DEFAULTS.apps, ...env?.apps } }
+  const merged = { ...DEFAULTS, ...env, sse: { ...DEFAULTS.sse, ...env?.sse }, apps: { ...DEFAULTS.apps, ...env?.apps } }
+  if (merged.theme !== 'auto' && !THEMES.includes(merged.theme)) merged.theme = DEFAULTS.theme // an unknown name must not leave a page unstyled
+  return merged
 }
 
 /** The project's `app/` folder (manifest.json / annotation.xml / `_i18n` live here, §3.1/§3.2b),
@@ -25,4 +30,4 @@ function appRoot() {
   return path.join(cds.root, cds.env.folders?.app || 'app')
 }
 
-module.exports = { DEFAULTS, config, appRoot }
+module.exports = { DEFAULTS, THEMES, config, appRoot }

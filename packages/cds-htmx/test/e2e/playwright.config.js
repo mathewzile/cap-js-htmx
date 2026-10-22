@@ -19,7 +19,8 @@ module.exports = defineConfig({
     command: 'npx cds serve',
     cwd: path.join(__dirname, '..', '..', '..', '..'),
     url: 'http://localhost:4004/',
-    reuseExistingServer: true,
+    env: { ...process.env, CDS_HTMX_THEME: 'auto' }, // light or dark as the browser prefers; the specs pick with colorScheme
+    reuseExistingServer: true, // a running dev server is used as it is (the dark specs skip themselves unless it has theme auto)
     timeout: 120000
   }
 })

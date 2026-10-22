@@ -87,12 +87,25 @@
 
     // assets, at the versioned address the backend named. In the launchpad UI5 already defines the --sap* variables, and the
     // theme follows UI5's.
-    const theme = (adapter.theme() && info.themes[adapter.theme()]) ? adapter.theme() : info.theme
+    // The launchpad's theme is the user's setting (UI5 reports sap_horizon, sap_horizon_dark, the high contrast ones, or an older theme,
+    // which maps to the Horizon one of the same kind); outside the launchpad a configured theme wins and `auto` follows the browser.
+    const horizonFor = name => !name ? null : info.themes[name] ? name : /hcb/.test(name) ? 'sap_horizon_hcb' : /hcw/.test(name) ? 'sap_horizon_hcw' : /dark/.test(name) ? 'sap_horizon_dark' : 'sap_horizon'
+    const dark = global.matchMedia?.('(prefers-color-scheme: dark)')
+    const preferred = () => adapter.name !== 'flp' && info.auto ? (dark?.matches ? 'sap_horizon_dark' : 'sap_horizon') : null
+    const theme = horizonFor(adapter.theme()) || preferred() || info.theme
     const styles = []
-    if (adapter.name !== 'flp') styles.push(loadStyle(info.styles.variables))
+    if (adapter.name !== 'flp') styles.push(loadStyle(info.variables?.[theme] || info.styles.variables, 'hf-variables'))
     styles.push(loadStyle(info.themes[theme], 'hf-theme'), loadStyle(info.styles.common), loadStyle(info.styles.fundamental), ...info.styles.own.map(href => loadStyle(href)))
     await Promise.all(styles)
-    adapter.onTheme(name => { const href = info.themes[name]; if (href) document.getElementById('hf-theme').href = href })
+    const applyTheme = name => {
+      const horizon = horizonFor(name)
+      if (!horizon) return
+      document.getElementById('hf-theme').href = info.themes[horizon]
+      const variables = document.getElementById('hf-variables')
+      if (variables && info.variables?.[horizon]) variables.href = info.variables[horizon]
+    }
+    adapter.onTheme(applyTheme)
+    if (adapter.name !== 'flp' && info.auto) dark?.addEventListener?.('change', () => applyTheme(preferred()))
 
     if (!global.htmx) {
       const meta = document.createElement('meta')

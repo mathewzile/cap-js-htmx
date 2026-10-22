@@ -121,10 +121,13 @@ class HtmxAdapter extends HttpAdapter {
   async shellInfo(req, res) {
     const { styles, scripts, version, root } = assets.urls(req.htmxBase || '')
     const themeCss = ['sap_horizon', 'sap_horizon_dark', 'sap_horizon_hcb', 'sap_horizon_hcw']
+    // `auto` (light or dark as the browser prefers) is resolved by the shell; the light theme is what it starts from
+    const configured = config().theme
     res.set('Cache-Control', 'no-cache').json({
-      version, root, theme: config().theme,
+      version, root, theme: configured === 'auto' ? 'sap_horizon' : configured, auto: configured === 'auto',
       themes: Object.fromEntries(themeCss.map(name => [name, styles.theme(name)])),
-      styles: { variables: styles.variables(config().theme), common: styles.common, fundamental: styles.fundamental, own: styles.own },
+      variables: Object.fromEntries(themeCss.map(name => [name, styles.variables(name)])),
+      styles: { variables: styles.variables(configured === 'auto' ? 'sap_horizon' : configured), common: styles.common, fundamental: styles.fundamental, own: styles.own },
       scripts,
       texts: textsFor(cache.bundleFor(this.appOpts(req))),
       animations: this.animationsOf(req),

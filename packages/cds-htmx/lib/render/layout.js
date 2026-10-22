@@ -3,11 +3,20 @@ const { config } = require('../config')
 const { asScriptJson } = require('./texts')
 const assets = require('../assets')
 
+/** The stylesheets of one theme; `media` restricts them to what the browser prefers (theme `auto`: light and dark both, the browser picks). */
+function themeLinks(styles, theme, media) {
+  const attr = media ? raw(` media="${media}"`) : ''
+  return html`
+    <link rel="stylesheet" href="${styles.variables(theme)}"${attr}>
+    <link rel="stylesheet" href="${styles.theme(theme)}"${attr}>`
+}
+
 function headAssets(theme, base = '') {
   const { styles, scripts } = assets.urls(base)
   return html`
-    <link rel="stylesheet" href="${styles.variables(theme)}">
-    <link rel="stylesheet" href="${styles.theme(theme)}">
+    ${theme === 'auto'
+      ? html`${themeLinks(styles, 'sap_horizon', '(prefers-color-scheme: light)')}${themeLinks(styles, 'sap_horizon_dark', '(prefers-color-scheme: dark)')}`
+      : themeLinks(styles, theme)}
     <link rel="stylesheet" href="${styles.common}">
     <link rel="stylesheet" href="${styles.fundamental}">
     <link rel="stylesheet" href="${styles.own[0]}">

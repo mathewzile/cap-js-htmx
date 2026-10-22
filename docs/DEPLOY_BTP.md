@@ -56,6 +56,8 @@ The build runs `npm ci`, builds the HTML5 zips (`app/manage-books-htmx`, and `ap
 
 The app's inbound is `Books-manageHtmx`. Its first page and service come from `sap.htmx` in `app/manage-books-htmx/webapp/manifest.json`. The authors app's inbound is `Authors-manageHtmx` (`app/manage-authors-htmx/webapp/manifest.json`); its manifest declares the `sap.f` router and three routes, which is what opens List Report, Author and Book in columns.
 
+The theme follows the Work Zone user's setting (Settings > Appearance): the shell asks the launchpad's UI5 for the theme and updates when it changes. Standalone, `cds.htmx.theme` (`sap_horizon`, `sap_horizon_dark`, `sap_horizon_hcb`, `sap_horizon_hcw`, or `auto` for the browser's preference) decides.
+
 To turn every transition and animation off (for example for users or landscapes that dislike motion), set `"animations": false` in the `sap.htmx` block of the app's manifest; the default is on.
 
 ## 4. After the first deployment: check these
