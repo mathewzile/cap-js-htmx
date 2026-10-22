@@ -11,7 +11,7 @@ build-parameters:
     - builder: custom
       commands:
         - npm ci
-        # the HTML5 app zip (webapp + generic htmx shell + xs-app.json), see app/manage-books-htmx
+        # the HTML5 app zips (webapp + generic htmx shell + xs-app.json), see app/manage-books-htmx and app/manage-authors-htmx
         - npm run build:htmx-app
         # the CAP service (gen/srv) and the HANA artifacts (gen/db) ...
         - npx cds build --production
@@ -64,6 +64,15 @@ modules:
       build-result: dist
       supported-platforms: []
 
+  - name: cap-htmx-manageauthors
+    type: html5
+    path: app/manage-authors-htmx
+    build-parameters:
+      builder: custom
+      commands: []
+      build-result: dist
+      supported-platforms: []
+
   # ---- uploads the HTML5 app zip to the HTML5 Application Repository ---------------------------------------------------------
   - name: cap-htmx-app-content
     type: com.sap.application.content
@@ -78,6 +87,10 @@ modules:
         - name: cap-htmx-managebooks
           artifacts:
             - managebookshtmx.zip
+          target-path: gen/app
+        - name: cap-htmx-manageauthors
+          artifacts:
+            - manageauthorshtmx.zip
           target-path: gen/app
 
   # ---- the destination the approuter route sends /htmx/** to: the URL of the CAP service -------------------------------------

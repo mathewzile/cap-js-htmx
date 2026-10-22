@@ -8,7 +8,7 @@ const KEYS = [
   'DefineConditions', 'EqualTo', 'NotEqualTo', 'Contains', 'StartsWith', 'EndsWith', 'AddCondition', 'Value', 'NoConditions', 'Conditions',
   'Between', 'GreaterThan', 'GreaterOrEqual', 'LessThan', 'LessOrEqual', 'GroupBy', 'NoGrouping', 'Group', 'AddFilter', 'Paste',
   'Today', 'Yesterday', 'Tomorrow', 'ThisWeek', 'ThisMonth', 'ThisYear', 'LastDays', 'NextDays', 'SortAscending', 'SortDescending', 'Ungroup',
-  'FilterColumn', 'HideColumn', 'ColumnSettings', 'ResetSort', 'ExpandNode', 'CollapseNode', 'RequestFailed'
+  'FilterColumn', 'HideColumn', 'ColumnSettings', 'ResetSort', 'ExpandNode', 'CollapseNode', 'RequestFailed', 'ResizeColumns'
 ]
 
 function textsFor(bundle) {

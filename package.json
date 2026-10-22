@@ -30,7 +30,7 @@
     "watch-manage-books": "cds watch --open managebooks/index.html?sap-ui-xx-viewCache=false --livereload false",
     "watch-browse-genres": "cds watch --open browsegenres/index.html?sap-ui-xx-viewCache=false --livereload false",
     "watch-manage-authors": "cds watch --open manageauthors/index.html?sap-ui-xx-viewCache=false --livereload false",
-    "build:htmx-app": "npm run build --workspace=managebooks-htmx",
+    "build:htmx-app": "npm run build --workspace=managebooks-htmx --workspace=manageauthors-htmx",
     "build:mta": "mbt build -t ./"
   },
   "sapux": [

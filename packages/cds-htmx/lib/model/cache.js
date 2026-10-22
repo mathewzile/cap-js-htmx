@@ -26,11 +26,23 @@ function cachesFor(model, app) {
  *  when one is given, otherwise from every FE manifest in the `app/` folder. */
 function manifestScanFor(appRoot, servicePath, app) {
   if (app) return app.scanFor(servicePath)
-  if (!appRoot) return { annotationFiles: [], listReports: {}, objectPages: {} }
+  if (!appRoot) return { annotationFiles: [], listReports: {}, objectPages: {}, fcl: undefined, animations: true }
   const key = `${appRoot}:${servicePath}`
   let scan = manifestCache.get(key)
   if (!scan) manifestCache.set(key, scan = scanService(appRoot, servicePath))
   return scan
+}
+
+/** The Flexible Column Layout an entity set opens in (`{ two, three }`: the default layout types), or `undefined` when
+ *  no app of the service runs in one for that set (`set` is the root entity set of the page). */
+function fclFor(servicePath, set, { appRoot, app } = {}) {
+  const fcl = manifestScanFor(appRoot, servicePath, app).fcl
+  return fcl?.roots.includes(`/${set}`) ? fcl.layouts : undefined
+}
+
+/** Whether pages move (column layout, hover fades): `false` when an app of the service says `sap.htmx.animations: false`. */
+function animationsFor(servicePath, { appRoot, app } = {}) {
+  return manifestScanFor(appRoot, servicePath, app).animations !== false
 }
 
 function storeFor(model, service, servicePath, { appRoot, locale, app } = {}) {
@@ -56,7 +68,7 @@ function bundleFor({ appRoot, locale, app } = {}) {
  *  is the FE-manifest-style lookup key for that entity's page settings (`/Books`, `/Books/chapters`). */
 function listReportFor(model, service, servicePath, entityType, contextPath, { appRoot, locale, app } = {}) {
   const { layouts } = cachesFor(model, app)
-  const key = `LR:${entityType}:${locale || ''}`
+  const key = `LR:${contextPath}:${entityType}:${locale || ''}`
   let layout = layouts.get(key)
   if (!layout) {
     const store = storeFor(model, service, servicePath, { appRoot, locale, app })
@@ -70,7 +82,7 @@ function listReportFor(model, service, servicePath, entityType, contextPath, { a
 
 function objectPageFor(model, service, servicePath, entityType, contextPath, { appRoot, locale, app } = {}) {
   const { layouts } = cachesFor(model, app)
-  const key = `OP:${entityType}:${locale || ''}`
+  const key = `OP:${contextPath}:${entityType}:${locale || ''}`
   let layout = layouts.get(key)
   if (!layout) {
     const store = storeFor(model, service, servicePath, { appRoot, locale, app })
@@ -82,4 +94,4 @@ function objectPageFor(model, service, servicePath, entityType, contextPath, { a
   return layout
 }
 
-module.exports = { storeFor, manifestScanFor, listReportFor, objectPageFor, bundleFor }
+module.exports = { animationsFor, fclFor, storeFor, manifestScanFor, listReportFor, objectPageFor, bundleFor }

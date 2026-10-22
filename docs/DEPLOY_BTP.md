@@ -45,7 +45,7 @@ npm i -g mbt            # once
 mbt build -t ./ --mtar cap-htmx_1.0.0.mtar      # same as: npm run build:mta
 ```
 
-The build runs `npm ci`, builds the HTML5 zip (`app/manage-books-htmx`), `cds build --production`, and `scripts/prepare-srv.mjs`, which packs the `cds-htmx` workspace package into `gen/srv/vendor` (it is not on a registry) and copies the app manifests and annotation files the plugin reads at run time.
+The build runs `npm ci`, builds the HTML5 zips (`app/manage-books-htmx`, and `app/manage-authors-htmx`, the same shell with a Flexible Column Layout), `cds build --production`, and `scripts/prepare-srv.mjs`, which packs the `cds-htmx` workspace package into `gen/srv/vendor` (it is not on a registry) and copies the app manifests and annotation files the plugin reads at run time.
 
 ## 3. Make the app appear in Work Zone
 
@@ -54,7 +54,9 @@ The build runs `npm ci`, builds the HTML5 zip (`app/manage-books-htmx`), `cds bu
 3. Create a **Role** and a **Group**, add the app to both, add the role to your site (*Site Directory*).
 4. Open the site. The tile starts the app: `/htmx/catalog/Books` is requested through the approuter.
 
-The app's inbound is `Books-manageHtmx`. Its first page and service come from `sap.htmx` in `app/manage-books-htmx/webapp/manifest.json`.
+The app's inbound is `Books-manageHtmx`. Its first page and service come from `sap.htmx` in `app/manage-books-htmx/webapp/manifest.json`. The authors app's inbound is `Authors-manageHtmx` (`app/manage-authors-htmx/webapp/manifest.json`); its manifest declares the `sap.f` router and three routes, which is what opens List Report, Author and Book in columns.
+
+To turn every transition and animation off (for example for users or landscapes that dislike motion), set `"animations": false` in the `sap.htmx` block of the app's manifest; the default is on.
 
 ## 4. After the first deployment: check these
 

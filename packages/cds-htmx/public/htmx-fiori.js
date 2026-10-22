@@ -165,10 +165,13 @@ document.addEventListener('htmx:after:swap', () => {
 // a page loads, and `HX-Trigger: {"hf:messages": {set, clear, reset}}` after edits and failed saves.
 const hfMessages = { page: null, list: [] }
 
+// the page being worked on: the only Object Page, or in a flexible column layout the one in the right-most column (its ids carry a prefix there)
+const hfOpPage = () => [...document.querySelectorAll('[id$="op-page"]')].pop() ?? null
+
 const hfFieldControl = wrapper => wrapper.querySelector('input:not([type=hidden]), textarea, select')
 
 function hfRenderMessages() {
-  const page = document.getElementById('op-page')
+  const page = hfOpPage()
   if (!page) return
   const byPath = new Map()
   for (const m of hfMessages.list) if (m.path && (!byPath.has(m.path) || m.severity === 'error')) byPath.set(m.path, m)
@@ -183,7 +186,7 @@ function hfRenderMessages() {
     const bubble = wrapper.querySelector('.hf-field__message')
     if (bubble) bubble.textContent = m?.text ?? ''
   }
-  const holder = document.getElementById('op-messages')
+  const holder = page.querySelector('.hf-footer__messages')
   if (!holder) return
   const list = [...hfMessages.list].sort((a, b) => (b.severity === 'error') - (a.severity === 'error'))
   if (!list.length) { holder.replaceChildren(); return }
@@ -211,7 +214,7 @@ function hfRenderMessages() {
     li.querySelector('.hf-msg-item__label').textContent = m.label || ''
     li.querySelector('button').addEventListener('click', () => {
       hfClosePopovers()
-      const wrapper = m.path && document.querySelector(`[data-hf-field="${CSS.escape(m.path)}"]`)
+      const wrapper = m.path && hfOpPage()?.querySelector(`[data-hf-field="${CSS.escape(m.path)}"]`)
       const control = wrapper && hfFieldControl(wrapper)
       control?.scrollIntoView({ block: 'center' })
       control?.focus()
@@ -221,7 +224,7 @@ function hfRenderMessages() {
 }
 
 function hfLoadMessages() {
-  const page = document.getElementById('op-page')
+  const page = hfOpPage()
   if (page === hfMessages.page) return hfRenderMessages() // same page, e.g. a field morphed: keep the list
   hfMessages.page = page
   try { hfMessages.list = page?.dataset.hfMessages ? JSON.parse(page.dataset.hfMessages) : [] } catch { hfMessages.list = [] }
@@ -251,9 +254,145 @@ document.addEventListener('htmx:config:request', e => {
     && sourceEvent.target.closest?.('.fd-table__cell--checkbox, input, select, textarea, button, a')) e.preventDefault()
 })
 
+// ---------- flexible column layout (render/fcl.js) ----------
+// The server swaps one column at a time and says in #fcl-marker which layout that column asks for. The layout is applied
+// when the right-most column changes (a page opens or a column closes); edits inside a column leave the user's choice
+// (full screen) alone.
+const HF_FCL_FULLSCREEN = ['MidColumnFullScreen', 'EndColumnFullScreen']
+
+function hfFclSync() {
+  const fcl = document.getElementById('fcl')
+  if (!fcl) return
+  const present = [...fcl.querySelectorAll(':scope > .hf-fcl__col')].filter(col => !col.hidden && (col.hasChildNodes() || col.hasAttribute('hx-get')))
+  const deepest = String(Math.max(0, ...present.map(col => Number(col.dataset.hfCol))))
+  const marker = document.getElementById('fcl-marker')
+  if (deepest !== fcl.dataset.hfDeepest) {
+    const opened = Number(deepest) > Number(fcl.dataset.hfDeepest)
+    const column = fcl.querySelector(`:scope > [data-hf-col="${deepest}"]`)
+    // a column that opens grows from nothing: it is a new element, so it starts at zero width for one frame
+    if (opened && column) { column.style.setProperty('--hf-w', '0%'); void column.offsetWidth; requestAnimationFrame(() => column.style.removeProperty('--hf-w')) }
+    fcl.dataset.hfDeepest = deepest
+    hfFclResetSize(fcl)
+    if (marker?.dataset.hfLayout) fcl.dataset.hfLayout = marker.dataset.hfLayout
+  }
+  hfFclSeparators(fcl)
+  const full = HF_FCL_FULLSCREEN.includes(fcl.dataset.hfLayout)
+  for (const button of fcl.querySelectorAll('[data-hf-fcl-fullscreen]')) {
+    const label = full ? button.dataset.hfExit : button.dataset.hfEnter
+    button.setAttribute('aria-pressed', String(full))
+    button.setAttribute('aria-label', label)
+    button.title = label
+    button.querySelector('i').className = full ? 'sap-icon--exit-full-screen' : 'sap-icon--full-screen'
+  }
+  // the List Report row of the object that is open
+  const path = decodeURIComponent(location.pathname).replace(/,IsActiveEntity=(?:true|false)/g, '')
+  for (const row of fcl.querySelectorAll('.hf-fcl__col[data-hf-col="0"] tr[hx-get]')) {
+    const href = decodeURIComponent(row.getAttribute('hx-get')).replace(/,IsActiveEntity=(?:true|false)/g, '')
+    row.classList.toggle('is-selected', deepest !== '0' && (path === href || path.endsWith(href) || path.includes(`${href}/`)))
+  }
+}
+// the layout type decides the widths again (after a layout change, full screen or an arrow)
+function hfFclResetSize(fcl) {
+  fcl.removeAttribute('data-hf-custom')
+  for (const n of [0, 1, 2]) fcl.style.removeProperty(`--hf-c${n}`)
+}
+
+// the arrow on a separator: the two layouts of a pair swap which column is wide
+const HF_FCL_ARROWS = {
+  TwoColumnsMidExpanded: { column: '1', icon: 'right', to: 'TwoColumnsBeginExpanded' },
+  TwoColumnsBeginExpanded: { column: '1', icon: 'left', to: 'TwoColumnsMidExpanded' },
+  ThreeColumnsEndExpanded: { column: '2', icon: 'right', to: 'ThreeColumnsMidExpanded' },
+  ThreeColumnsMidExpanded: { column: '2', icon: 'left', to: 'ThreeColumnsEndExpanded' }
+}
+
+function hfFclSeparators(fcl) {
+  let label = ''
+  try { label = JSON.parse(document.getElementById('hf-texts')?.textContent || '{}').ResizeColumns || '' } catch { /* no texts */ }
+  const arrow = HF_FCL_ARROWS[fcl.dataset.hfLayout]
+  for (const sep of fcl.querySelectorAll('[data-hf-sep]')) {
+    if (label) sep.setAttribute('aria-label', label)
+    const button = sep.querySelector('[data-hf-fcl-arrow]')
+    const mine = arrow && sep.closest('.hf-fcl__col')?.dataset.hfCol === arrow.column
+    button.hidden = !mine
+    if (mine) { button.querySelector('i').className = `sap-icon--slim-arrow-${arrow.icon}`; if (label) button.title = label }
+  }
+}
+
+document.addEventListener('htmx:after:swap', hfFclSync)
+document.addEventListener('DOMContentLoaded', hfFclSync)
+document.addEventListener('hf:ready', hfFclSync)
+
+// a request made while the layout is on screen is answered with the column to swap, not the whole layout
+document.addEventListener('htmx:config:request', e => {
+  const headers = e.detail.ctx.request.headers
+  if (document.getElementById('fcl') && !headers['X-Hf-Fcl']) headers['X-Hf-Fcl'] = '1'
+})
+
+// resizing: dragging a separator (or the arrow keys on it) moves the border between two columns; neither gets narrower than 15%
+const HF_FCL_MIN = 0.15
+function hfFclResize(fcl, n, start, dx) {
+  const left = Math.min(Math.max(start.widths[n - 1] + dx, HF_FCL_MIN * start.total), start.widths[n - 1] + start.widths[n] - HF_FCL_MIN * start.total)
+  const widths = start.widths.map((w, i) => i === n - 1 ? left : i === n ? start.widths[n - 1] + start.widths[n] - left : w)
+  widths.forEach((w, i) => fcl.style.setProperty(`--hf-c${i}`, `${(w / start.total * 100).toFixed(2)}%`))
+  fcl.setAttribute('data-hf-custom', '')
+}
+
+function hfFclSizes(fcl) {
+  return { widths: [...fcl.querySelectorAll(':scope > .hf-fcl__col')].map(col => col.getBoundingClientRect().width), total: fcl.getBoundingClientRect().width }
+}
+
+let hfFclDrag = null
+document.addEventListener('pointerdown', e => {
+  const sep = e.target.closest?.('[data-hf-sep]')
+  if (!sep || e.button > 0 || e.target.closest('[data-hf-fcl-arrow]')) return
+  const fcl = document.getElementById('fcl')
+  hfFclDrag = { fcl, sep, n: Number(sep.closest('.hf-fcl__col').dataset.hfCol), x: e.clientX, ...hfFclSizes(fcl) }
+  fcl.classList.add('hf-fcl--dragging')
+  sep.classList.add('is-active')
+  sep.setPointerCapture?.(e.pointerId)
+  e.preventDefault()
+})
+document.addEventListener('pointermove', e => {
+  if (hfFclDrag) hfFclResize(hfFclDrag.fcl, hfFclDrag.n, hfFclDrag, (e.clientX - hfFclDrag.x) * (getComputedStyle(hfFclDrag.fcl).direction === 'rtl' ? -1 : 1))
+})
+const hfFclDragEnd = () => {
+  if (!hfFclDrag) return
+  hfFclDrag.fcl.classList.remove('hf-fcl--dragging')
+  hfFclDrag.sep.classList.remove('is-active')
+  hfFclDrag = null
+}
+document.addEventListener('pointerup', hfFclDragEnd)
+document.addEventListener('pointercancel', hfFclDragEnd)
+document.addEventListener('keydown', e => {
+  const sep = e.target.closest?.('[data-hf-sep]')
+  if (!sep || !['ArrowLeft', 'ArrowRight'].includes(e.key)) return
+  const fcl = document.getElementById('fcl')
+  const start = hfFclSizes(fcl)
+  hfFclResize(fcl, Number(sep.closest('.hf-fcl__col').dataset.hfCol), start, (e.key === 'ArrowRight' ? 1 : -1) * start.total * 0.02)
+  e.preventDefault()
+})
+
+document.addEventListener('click', e => {
+  if (e.target.closest?.('[data-hf-fcl-arrow]')) {
+    const layoutHolder = document.getElementById('fcl')
+    const to = layoutHolder && HF_FCL_ARROWS[layoutHolder.dataset.hfLayout]?.to
+    if (to) { hfFclResetSize(layoutHolder); layoutHolder.dataset.hfLayout = to; hfFclSync() }
+    return
+  }
+  const button = e.target.closest?.('[data-hf-fcl-fullscreen]')
+  const fcl = button && document.getElementById('fcl')
+  if (!fcl) return
+  const column = button.closest('.hf-fcl__col')?.dataset.hfCol
+  const target = column === '2' ? 'EndColumnFullScreen' : 'MidColumnFullScreen'
+  hfFclResetSize(fcl)
+  if (fcl.dataset.hfLayout === target) fcl.dataset.hfLayout = fcl.dataset.hfRestore || document.getElementById('fcl-marker')?.dataset.hfLayout || 'TwoColumnsMidExpanded'
+  else { fcl.dataset.hfRestore = fcl.dataset.hfLayout; fcl.dataset.hfLayout = target }
+  hfFclSync()
+})
+
 // ---------- draft status in the footer ("Saving..." while a field PATCH is on its way) ----------
 document.addEventListener('htmx:before:request', e => {
-  const status = document.getElementById('op-draft-status')
+  const status = hfOpPage()?.querySelector('.hf-draft-status')
   if (status && e.target?.hasAttribute?.('hx-patch')) status.textContent = status.dataset.saving || ''
 })
 

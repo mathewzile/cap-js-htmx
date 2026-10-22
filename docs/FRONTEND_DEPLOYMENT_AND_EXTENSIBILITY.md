@@ -1,6 +1,6 @@
 # Frontend deployment, Work Zone integration and extensibility for `cds-htmx`
 
-Companion to `IMPLEMENTATION_PLAN.md`. It adds Phases 7, 9 and 10. Phase 8 is FE feature parity (see `IMPLEMENTATION_PLAN.md` §8): the shell/Work Zone and extensibility work comes after the htmx app behaves like standard Fiori elements, Custom Pages (non-standard floorplans) are Phase 11 and need their own design first, and the end-to-end/visual-parity phase is now Phase 12. Phase 7 is implemented; 9 and 10 are not.
+Companion to `IMPLEMENTATION_PLAN.md`. It adds Phases 7 and 9 and the extensibility work. Phase 8 is FE feature parity (see `IMPLEMENTATION_PLAN.md` §8): the shell/Work Zone work comes after the htmx app behaves like standard Fiori elements. Frontend extensibility (§6) and Custom Pages (non-standard floorplans, which need their own design first) are items of the Roadmap section of the plan, not numbered phases. Phases 7 and 9 are implemented.
 
 ## 0. Decisions
 
@@ -116,7 +116,7 @@ Three layers. Manifest keys are the FE V4 keys.
 | OP custom **sections/subsections** (`content.body.sections`: `template`, `title`, `position`, `subSections`, `actions`, `visible`) | section from fragment in `render/object-page.js` |
 | OP custom **header facets** (`content.header.facets`: `template`, `title`, `stashed`, `position`) | header block from fragment |
 | Custom **form elements** (`FieldGroup` `fields` with `template`, `position`) | fragment field in form grid |
-| **Custom page** (`sap.fe.core.fpm` target) | **Phase 11, not designed yet** (a first idea was a `sap.htmx.pages.<id>` fragment page at `GET /$page/<id>` built from building blocks; to be designed and documented for developers before any work) |
+| **Custom page** (`sap.fe.core.fpm` target) | **Roadmap, not designed yet** (a first idea was a `sap.htmx.pages.<id>` fragment page at `GET /$page/<id>` built from building blocks; to be designed and documented for developers before any work) |
 | Page settings (§3.2b: `initialLoad`, `tableSettings`, `sectionLayout`, …) | unchanged |
 
 ### 6B. Client controller extensions (one htmx extension `hx-fiori`)
@@ -140,7 +140,7 @@ HtmxFiori.controllerExtension('managebooks::BooksObjectPage', {
 ### Out of scope (reported in `GET /$coverage`)
 Key-user UI adaptation, persisted variant management and table personalization (later via localStorage), app variants / adaptation projects. Every manifest extension key is reported as `supported | partial | ignored`.
 
-> The UI5 SDK pages were not reachable from the authoring environment. At the start of Phase 10, verify this matrix against ui5.sap.com (Extension Points, Controller Extensions, Building Blocks) and the Fiori elements Feature Showcase.
+> The UI5 SDK pages were not reachable from the authoring environment. At the start of the extensibility roadmap item, verify this matrix against ui5.sap.com (Extension Points, Controller Extensions, Building Blocks) and the Fiori elements Feature Showcase.
 
 ## 7. Sample frontend project layout
 ```
@@ -159,9 +159,9 @@ mta.yaml                                  # srv + html5 deployer + destination c
 - **7. App bundles and app-scoped rendering**: `lib/apps/*`, `local` + `destination` providers, store/cache refactor, `X-Htmx-App`/`X-Htmx-Base` handling, version-skew trigger, shell-mode fragment-only responses. Spike: html5-repo URL. Tests: two apps on one service render different LineItems; bad/unknown ids rejected; base prefix in every rendered URL; `destination` provider against an in-process HTTP stub.
 - **8. FE feature parity** comes first (rounds; see the implementation plan).
 - **9. Shell + Work Zone + deployment**: `cds-htmx-shell`, CSS scoping, versioned assets, sticky cookie, `app/manage-books-htmx`, `xs-app.json`, `mta.yaml`, deploy guide. Spike: SSE through `@sap/approuter` locally. Tests: Playwright standalone behind a local approuter (deep link, back/forward, CSRF); FLP sandbox for in-place hash and IBN.
-- **10. Frontend extensibility**: `template.js` + sanitizer, building blocks, all §6A points, `hx-fiori` façade + ExtensionAPI, server SPI, coverage entries. Sample uses each point once (column, filter field, section, header facet, form element, action with handler, `onBeforeSave` veto). Tests: sanitizer XSS, path collection, fragment rendering and SELECT, E2E handler + veto.
-- **11. Custom Pages (non-standard floorplans)**: not started; needs a design and developer documentation first.
-- **12. E2E + visual parity + README** (former Phase 7), also covering shell mode.
+- **Roadmap: Frontend extensibility**: `template.js` + sanitizer, building blocks, all §6A points, `hx-fiori` façade + ExtensionAPI, server SPI, coverage entries. Sample uses each point once (column, filter field, section, header facet, form element, action with handler, `onBeforeSave` veto). Tests: sanitizer XSS, path collection, fragment rendering and SELECT, E2E handler + veto.
+- **Roadmap: Custom Pages (non-standard floorplans)**: not started; needs a design and developer documentation first.
+- **10. Open Items** and **11. E2E + visual parity + README + documentation site** (former Phase 7), also covering shell mode: see the plan.
 
 ## 9. Config additions (`cds.htmx`)
 `apps: { sources: [{ kind: "local" }], allow: ["*"] (production: explicit list), ttl: 60000, refetchInterval: 5000, localRecheck: 1000, maxApps: 50, maxBundleBytes: 2097152, fetchTimeout: 5000 }`, `extensions: []`, `assetsVersioned: true`, `stickySessions: true`.
@@ -178,4 +178,4 @@ Behaviour worth knowing:
 Not done / open:
 - **`html5-repo` provider**: the HTML5 runtime content URL could not be verified offline. Until then use `destination`, or write a provider with `registerSourceKind('html5-repo', factory)`.
 - **SourceEvents declared only in an app's annotation layer** are not registered at startup (listeners come from the service annotations and the `app/` scan). Declare them in the service annotations, or register lazily when an app loads (later).
-- `X-Htmx-Shell: none` is accepted but there is no backend shellbar to hide yet (`#shell` is empty); it becomes relevant with the shell in Phase 9.
+- `X-Htmx-Shell: none` is accepted but there is no backend shellbar to hide yet (`#shell` is empty); it becomes relevant with the shell (Phase 9).

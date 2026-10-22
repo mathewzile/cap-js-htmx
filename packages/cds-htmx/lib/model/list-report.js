@@ -150,6 +150,8 @@ function buildListReport(store, entityType, { pageSettings } = {}) {
       sortOrder: presentationVariant?.SortOrder,
       groupBy: presentationVariant?.GroupBy
     },
+    // a manifest with routing lists the navigations of the page; rows open a page only for the entity set's own entry
+    navigable: pageSettings?.$navigation ? !!pageSettings.$navigation[entityType.split('.').pop()] : true,
     variantManagement: pageSettings?.variantManagement || feDefaults.listReport.variantManagement,
     initialLoad: pageSettings?.initialLoad ?? feDefaults.listReport.initialLoad,
     // The draft indicator ("Draft", "Locked", ...) sits under the semantic key column(s) only; without a

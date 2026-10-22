@@ -1,0 +1,9 @@
+{
+  "name": "manageauthors-htmx",
+  "version": "1.0.0",
+  "description": "Manage Authors as a cds-htmx app in a flexible column layout for SAP Build Work Zone: manifest and the generic htmx shell, packaged as an HTML5 application.",
+  "private": true,
+  "scripts": {
+    "build": "node ../../packages/cds-htmx-shell/scripts/build-app.mjs ."
+  }
+}

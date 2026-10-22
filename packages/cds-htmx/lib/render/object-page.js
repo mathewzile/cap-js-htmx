@@ -6,6 +6,7 @@ const { rowsHtml, tableHead, columnVisibilityStyle, rowHref, treeAttributes } = 
 const { criticalityClass } = require('../data/format')
 const { toast } = require('./toast')
 const { canEdit, canDelete } = require('../model/edit-capabilities')
+const fclRender = require('./fcl')
 
 /** Ancestor trail above the title (§3.4: "Title: fd-breadcrumb (sub-OP)"). Like FE, the current
  *  object is not repeated and a top-level Object Page shows no breadcrumb at all. */
@@ -101,7 +102,7 @@ function tableBlock(facet, ctx) {
   const editing = !!ctx.isDraft || direct
   // A tree table (display mode): its rows and the children of an expanded node are the hierarchy entity's own set
   const tree = !editing && child?.tree
-  const miniLayout = { table: { columns: facet.content.columns, hierarchy: tree ? facet.content.hierarchy : undefined } }
+  const miniLayout = { navigable: facet.content.navigable, table: { columns: facet.content.columns, hierarchy: tree ? facet.content.hierarchy : undefined } }
   const rowSetPath = tree ? tree.set : entitySetPath
   const keyNames = child?.keyNames || []
   const bundle = ctx.bundle
@@ -350,7 +351,7 @@ function objectPageFragment(layout, row, ctx) {
     ${ctx.successMessage ? raw(`<hx-partial hx-target="#${ids.toast()}" hx-swap="outerHTML">${toast(ctx.successMessage).value}</hx-partial>`) : html``}
     <div id="${ids.opPage()}" class="hf-page hf-page--op${editMode ? ' hf-page--edit' : ''}" data-entity-type="${layout.entityType}"${ctx.messages?.length ? html` data-hf-messages="${JSON.stringify(ctx.messages)}"` : html``}>
       <header class="hf-page__header hf-op-header" id="${ids.opHeader()}">
-        ${breadcrumbs(ctx.trail, ctx.basePath)}
+        ${ctx.fcl ? html`` : breadcrumbs(ctx.trail, ctx.basePath)}
         <div class="hf-op-title">
           ${headerAvatar(layout.header, row)}
           ${titleText(title, description)}
@@ -362,6 +363,7 @@ function objectPageFragment(layout, row, ctx) {
             draftExists: row.HasDraftEntity === true, isDraftRoot: layout.edit?.mode === 'draft',
             deleteChild: layout.edit?.mode === 'node' && editMode === 'draft' // a child row of the draft being edited
           })}
+          ${ctx.fcl ? fclRender.columnButtons(ctx.fcl.column, { t: ctx.t, bundle: ctx.bundle, closeHref: ctx.fcl.closeHref }) : html``}
         </div>
         ${headerFacets.length ? html`<div class="hf-op-header__content">${headerFacets.map(f => facetBlock(f, row, fullCtx, { asSection: false }))}</div>` : html``}
         ${anchorBar(visibleSections)}

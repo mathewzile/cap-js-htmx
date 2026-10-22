@@ -46,12 +46,12 @@ test.describe('non-draft entity (Authors) is edited directly', () => {
     await page.getByRole('button', { name: 'Save' }).click()
     await expect(title(page)).toHaveText('E2E Author Renamed')
 
-    await page.getByRole('button', { name: 'Delete' }).click()
+    await page.locator('#op-page').getByRole('button', { name: 'Delete' }).click()
     await expect(confirmDialog(page)).toBeVisible() // a UI dialog, not window.confirm
     await confirmDialog(page).locator('[data-hf-cancel]').click()
     await expect(confirmDialog(page)).toHaveCount(0)
     expect(pathOf(page)).toBe(objectUrl)
-    await page.getByRole('button', { name: 'Delete' }).click()
+    await page.locator('#op-page').getByRole('button', { name: 'Delete' }).click()
     await confirmDialog(page).locator('[data-hf-ok]').click()
     await expect(page).toHaveURL(/\/htmx\/catalog\/Authors$/)
     await expect(page.locator('body')).not.toContainText('E2E Author Renamed')

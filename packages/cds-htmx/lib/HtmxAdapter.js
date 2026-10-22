@@ -27,6 +27,8 @@ const toastRender = require('./render/toast')
 const listReportRender = require('./render/list-report')
 const { cellText } = require('./render/table')
 const objectPageRender = require('./render/object-page')
+const fclRender = require('./render/fcl')
+const ids = require('./render/ids')
 const valueHelpRender = require('./render/value-help')
 const { loadObjectPage } = require('./data/page')
 const { formValues, InputError, invalidValueListKeys, childRowValues } = require('./data/form')
@@ -60,6 +62,7 @@ class HtmxAdapter extends HttpAdapter {
     router.use(this.stickySession.bind(this))
     router.use(this.resolveApp.bind(this))
 
+    router.use(this.fclShown.bind(this))
     router.get('/', this.handle(this.home))
     router.get('/$events', this.handle(this.events))
     router.get('/$shell', this.handle(this.shellInfo))
@@ -124,6 +127,7 @@ class HtmxAdapter extends HttpAdapter {
       styles: { variables: styles.variables(config().theme), common: styles.common, fundamental: styles.fundamental, own: styles.own },
       scripts,
       texts: textsFor(cache.bundleFor(this.appOpts(req))),
+      animations: this.animationsOf(req),
       servicePath: this.basePath(req)
     })
   }
@@ -323,6 +327,8 @@ class HtmxAdapter extends HttpAdapter {
     if (overrides) Object.assign(row, overrides)
     const persisted = row.IsActiveEntity === false ? draftMessages.labelled(draftMessages.fromDraftMessages(row.DraftMessages), opLayout) : []
     const entitySetPath = segments.map(s => `${s.set}${s.raw ? `(${s.raw})` : ''}`).join('/')
+    const fcl = this.fclPage(req, segments[0].set, segments.length, segments)
+    if (fcl) ids.setColumn(fcl.column)
     if (keys) this.trackView(req, { entityType, keys, contextPath, entitySetPath })
     const title = keys
       ? evaluate(opLayout.header?.title?.Value, row) ?? opLayout.header?.typeName ?? segments[segments.length - 1].set
@@ -336,11 +342,11 @@ class HtmxAdapter extends HttpAdapter {
 
     let body = objectPageRender.objectPageFragment(opLayout, row, {
       basePath: base, entitySetPath, trail, children, bundle, t: i18n.t, valueLists, editMode,
-      successMessage: req.successMessage, messages: persisted
+      successMessage: req.successMessage, messages: persisted, fcl
     })
     if (messages?.length) body = html`${rawHtml(this.messagesPartial(messages))}${body}`
     if (status) res.status(status)
-    this.render(req, res, { title, body, keepMessages: !!messages?.length })
+    this.render(req, res, { title, body, keepMessages: !!messages?.length, fcl })
   }
 
   /** A page whose object is gone: a draft that was saved or discarded (browser back/forward onto its URL)
@@ -483,7 +489,7 @@ class HtmxAdapter extends HttpAdapter {
     // The value is valid again (clear its message) unless it is a mandatory field the user emptied
     const missing = layout ? draftMessages.missingMandatory(layout, row, [path], this.text(req, 'MissingValue')) : []
     res.set('HX-Trigger', draftMessages.triggerHeader({ clear: [path], set: draftMessages.labelled(missing, layout ?? {}), title }))
-    const status = `<hx-partial hx-target="#op-draft-status" hx-swap="innerHTML">${this.text(req, 'DraftSavedStatus')}</hx-partial>`
+    const status = `<hx-partial hx-target="#${ids.opDraftStatus()}" hx-swap="innerHTML">${this.text(req, 'DraftSavedStatus')}</hx-partial>`
     // clears a stale validation strip as well
     const markup = [this.messagesPartial([]), status, ...(parts.length ? [engine.partialsMarkup(parts)] : [])].join('\n')
     res.status(200).type('html').send(markup)
@@ -549,8 +555,11 @@ class HtmxAdapter extends HttpAdapter {
     }
     const header = req.headers['x-hf-source']
     const source = typeof header === 'string' && /^[\w-]+$/.test(header) ? header : null
-    const status = `<hx-partial hx-target="#op-draft-status" hx-swap="innerHTML">${this.text(req, 'DraftSavedStatus')}</hx-partial>`
-    if (source?.startsWith('op-field--')) {
+    const ownPage = ids.unprefixed(source ?? '').startsWith('op-field--')
+    // a field of the child's own page is in the child's column, a cell of a table section is in its parent's
+    if (this.fclOf(req, n.root.set)) ids.setColumn(ownPage ? n.segments.length : n.segments.length - 1)
+    const status = `<hx-partial hx-target="#${ids.opDraftStatus()}" hx-swap="innerHTML">${this.text(req, 'DraftSavedStatus')}</hx-partial>`
+    if (ownPage) {
       // A field of the child's own page: same as a field of the root page (other occurrences, header title, validation)
       const view = { service: this.service.name, servicePath: this.odataServicePath(), entityType: n.entityType, keys: n.keys, contextPath: n.parent.contextPath + `/${n.nav}`, basePath: this.basePath(req), entitySetPath: n.path }
       const { parts, layout: childLayout, row: childRow } = await engine.bindingParts(tx, view, { path: n.property, source, ...this.appOpts(req) })
@@ -896,6 +905,8 @@ class HtmxAdapter extends HttpAdapter {
     const servicePath = this.odataServicePath()
 
     const lrLayout = cache.listReportFor(cds.model, this.service.name, servicePath, entityType, `/${req.params.Set}`, opts)
+    const fcl = this.fclPage(req, req.params.Set, 0)
+    if (fcl) ids.setColumn(0)
     this.trackView(req, { entityType, list: true, set: req.params.Set })
     const bundle = cache.bundleFor(opts)
     const keyNames = keyElements(entityDef(cds.model, entityType)).map(k => k.name)
@@ -920,7 +931,7 @@ class HtmxAdapter extends HttpAdapter {
     const toasted = req.successMessage
       ? html`<hx-partial hx-target="#toast" hx-swap="outerHTML">${toastRender.toast(req.successMessage)}</hx-partial>${body}`
       : body
-    this.render(req, res, { title: lrLayout.header.typeNamePlural || req.params.Set, body: toasted })
+    this.render(req, res, { title: lrLayout.header.typeNamePlural || req.params.Set, body: toasted, fcl })
   }
 
   /** `GET /:Set/$export`: the List Report's rows as a CSV file, for the filters, search and sort in the query
@@ -1061,7 +1072,56 @@ class HtmxAdapter extends HttpAdapter {
     const srv = this.service
     // `req.hfFailure`: a handler that wants to answer an error itself, AFTER the transaction rolled back
     // (CAP persists draft messages from the rollback of a failed activation, so the error must propagate)
-    return (req, res, next) => srv.tx(req, tx => fn.call(this, req, res, tx)).catch(err => req.hfFailure ? req.hfFailure(err) : next(err))
+    // In a Flexible Column Layout the ids of the page depend on its column (render/ids.js): the request path says which one
+    const run = (req, res) => srv.tx(req, tx => fn.call(this, req, res, tx))
+    return (req, res, next) => {
+      const column = this.fclColumnOfPath(req)
+      return (column == null ? run(req, res) : ids.inColumn(column, () => run(req, res))).catch(err => req.hfFailure ? req.hfFailure(err) : next(err))
+    }
+  }
+
+  /** Whether pages move at all (the manifest's `sap.htmx.animations`); `false` makes the page carry `hf-no-motion`. */
+  animationsOf(req) {
+    const { appRoot: root, app } = this.appOpts(req)
+    return cache.animationsFor(this.odataServicePath(), { appRoot: root, app })
+  }
+
+  /** The Flexible Column Layout (`{ two, three }`) the entity set of a path opens in, or `undefined`. */
+  fclOf(req, set) {
+    const { appRoot: root, app } = this.appOpts(req)
+    return set ? cache.fclFor(this.odataServicePath(), set, { appRoot: root, app }) : undefined
+  }
+
+  /** The column a request path belongs to: `/Books` 0, `/Books(k)` 1, `/Books(k)/chapters(k2)` 2 (`$`-segments such as
+   *  `$field` or `$table` belong to the page before them); `null` when the set does not open in columns. */
+  fclColumnOfPath(req) {
+    const segments = req.path.split('/').filter(Boolean).filter(seg => !seg.startsWith('$'))
+    if (!segments.length) return null
+    const first = keysLib.splitSegments(segments[0])[0]
+    if (!this.fclOf(req, first?.set)) return null
+    const last = keysLib.splitSegments(segments[segments.length - 1])[0]
+    return last?.raw == null ? segments.length - 1 : segments.length
+  }
+
+  /** What a page needs to render in its column of a Flexible Column Layout, or `undefined` outside one. `segments` is the
+   *  entity path of the page (empty for a List Report): the URL of every column before it, to load them on a direct visit. */
+  fclPage(req, set, column, segments = []) {
+    const layouts = this.fclOf(req, set)
+    if (!layouts) return undefined
+    const base = this.basePath(req)
+    const pathOf = n => segments.slice(0, n).map(s => `${s.set}${s.raw ? `(${s.raw})` : ''}`).join('/')
+    const urls = Array.from({ length: Math.max(column, 0) }, (_, n) => n === 0 ? `${base}/${set}` : `${base}/${pathOf(n)}`)
+    return { layouts, column, urls, closeHref: column > 0 ? urls[column - 1] : undefined }
+  }
+
+  /** `X-Hf-Fcl: shown`: the page of this URL is already in its column (Close on a column), nothing is rendered, the
+   *  columns to the right are trimmed and the layout follows. */
+  fclShown(req, res, next) {
+    if (req.method !== 'GET' || req.headers['x-hf-fcl'] !== 'shown') return next()
+    const column = this.fclColumnOfPath(req)
+    if (column == null) return next()
+    const layouts = this.fclOf(req, keysLib.splitSegments(req.path.split('/').filter(Boolean)[0])[0].set)
+    res.set('Content-Type', 'text/html').send(fclRender.trim(column, layouts))
   }
 
   isFragmentRequest(req) {
@@ -1070,18 +1130,32 @@ class HtmxAdapter extends HttpAdapter {
 
   /** Every page replaces `#app`; the message strips live outside it, so a page without messages of its own
    *  clears the previous page's (`keepMessages`: the page brings its own). */
-  render(req, res, { title, body, keepMessages }) {
+  render(req, res, { title, body, keepMessages, fcl }) {
     // The page says whether it wants the event stream (`#hf-live`); the page script opens or closes it (§4.1)
     const view = req.hfView
     const live = !!view && engine.needsStream(cache.storeFor(cds.model, view.service, view.servicePath, this.appOpts(req)), view.entityType, { list: !!view.list })
-    body = html`${body}<span id="hf-live" hidden data-hf-live="${live ? '1' : '0'}"></span>`
+    const liveSpan = html`<span id="hf-live" hidden data-hf-live="${live ? '1' : '0'}"></span>`
+    if (fcl) {
+      // Flexible Column Layout (render/fcl.js): the page already on screen gets its column swapped, any other request the whole layout
+      const mode = String(req.headers['x-hf-fcl'] || '')
+      const { partials, body: pageBody } = fclRender.hoistPartials(body)
+      if (mode && this.isFragmentRequest(req)) {
+        const keep = mode === 'keep'
+        const clear = keepMessages || keep ? '' : this.messagesPartial([])
+        const swapLive = keep ? '' : `<hx-partial hx-target="#hf-live" hx-swap="outerHTML">${liveSpan.value}</hx-partial>`
+        const markup = `${keep ? '' : `<title>${String(html`${title}`)}</title>`}${clear}${partials}${fclRender.columnPartials(fcl.column, pageBody, { layouts: fcl.layouts, keep })}${swapLive}`
+        return res.set('Content-Type', 'text/html').send(markup)
+      }
+      body = html`${rawHtml(partials)}${fclRender.structure(fcl.column, pageBody, fcl)}`
+    }
+    body = html`${body}${liveSpan}`
     if (this.isFragmentRequest(req) || req.htmxApp) {
       const clear = keepMessages ? '' : this.messagesPartial([])
       res.set('Content-Type', 'text/html').send(String(layout.fragment({ title, body: html`${rawHtml(clear)}${body}` })))
     } else {
       const clientId = channels.newClientId()
       channels.rememberView(clientId, req.hfView)
-      res.set('Content-Type', 'text/html').send(String(layout.page({ title, clientId, basePath: this.basePath(req), assetBase: req.htmxBase || '', body, texts: textsFor(cache.bundleFor(this.appOpts(req))) })))
+      res.set('Content-Type', 'text/html').send(String(layout.page({ title, clientId, basePath: this.basePath(req), assetBase: req.htmxBase || '', body, texts: textsFor(cache.bundleFor(this.appOpts(req))), animations: this.animationsOf(req) })))
     }
   }
 

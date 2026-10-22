@@ -72,6 +72,7 @@
 
     // the container: the same elements a page rendered by the plugin has
     root.classList.add('htmx-fiori', 'hf-root', 'is-compact')
+    if (info.animations === false) root.classList.add('hf-no-motion') // sap.htmx.animations: false in the app's manifest
     root.setAttribute('hx-headers:inherited', JSON.stringify({ ...headers, 'X-Htmx-Client': id }))
     root.innerHTML = '<div id="shell"></div><div id="app"></div><div id="messages"></div><div id="toast"></div><div id="dialogs"></div>'
     const texts = document.createElement('script')

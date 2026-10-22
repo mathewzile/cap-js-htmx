@@ -46,7 +46,9 @@ class App {
       scan = {
         layers: (found?.annotationUris || []).map(uri => parseAnnotationXml(this.files.get(uri)).$Annotations),
         listReports: found?.listReports || {},
-        objectPages: found?.objectPages || {}
+        objectPages: found?.objectPages || {},
+        fcl: found?.fcl,
+        animations: found?.animations !== false
       }
       this.scans.set(servicePath, scan)
     }

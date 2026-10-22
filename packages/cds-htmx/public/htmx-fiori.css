@@ -807,3 +807,131 @@ tr[aria-busy=true] { cursor: progress; }
 .hf-table[data-hf-tree] .fd-table__cell--checkbox { width: 2.5rem; }
 .hf-table[data-hf-tree] .hf-col-nav { width: 2.75rem; }
 .hf-table[data-hf-tree] tbody td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------- no motion (manifest: sap.htmx.animations = false) ---------- */
+/* No transitions or animations anywhere (the column layout, hover fades). The busy overlay still appears after its delay, but at once
+   and without spinning: that delay is feedback, not decoration. */
+.hf-no-motion, .hf-no-motion *, .hf-no-motion *::before, .hf-no-motion *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+.hf-no-motion .hf-busy::before { animation: hf-busy-in 0s 1s forwards !important; }
+.hf-no-motion .hf-busy::after { animation: hf-busy-show 0s 1s forwards !important; }
+
+/* ---------- Flexible Column Layout (render/fcl.js): List Report | Object Page | sub-object page ---------- */
+
+/* A column is as wide as --hf-w says: the layout type sets it, a dragged separator overrides it (--hf-c<n> on #fcl). Width changes
+   are animated like sap.f.FlexibleColumnLayout does, except while a separator is being dragged. */
+.hf-fcl { display: flex; align-items: stretch; min-height: 100vh; }
+.hf-fcl__col {
+  --hf-w: 0%;
+  position: relative;
+  flex: 0 0 var(--hf-w);
+  width: var(--hf-w);
+  min-width: 0;
+  overflow: clip;
+  background: var(--sapBackgroundColor, #f5f6f7);
+  transition: flex-basis .56s cubic-bezier(.4, 0, .2, 1), width .56s cubic-bezier(.4, 0, .2, 1);
+}
+.hf-fcl__col[hidden] { display: block; visibility: hidden; }
+.hf-fcl--dragging .hf-fcl__col { transition: none; }
+.hf-fcl--dragging { cursor: col-resize; user-select: none; }
+@media (prefers-reduced-motion: reduce) { .hf-fcl__col { transition: none; } }
+
+/* column widths per layout type (percent of the layout; a column that is not on screen has none) */
+.hf-fcl[data-hf-layout="OneColumn"] > [data-hf-col="0"] { --hf-w: 100%; }
+.hf-fcl[data-hf-layout="TwoColumnsBeginExpanded"] > [data-hf-col="0"] { --hf-w: 67%; }
+.hf-fcl[data-hf-layout="TwoColumnsBeginExpanded"] > [data-hf-col="1"] { --hf-w: 33%; }
+.hf-fcl[data-hf-layout="TwoColumnsMidExpanded"] > [data-hf-col="0"] { --hf-w: 33%; }
+.hf-fcl[data-hf-layout="TwoColumnsMidExpanded"] > [data-hf-col="1"] { --hf-w: 67%; }
+.hf-fcl[data-hf-layout="ThreeColumnsMidExpanded"] > [data-hf-col="0"] { --hf-w: 25%; }
+.hf-fcl[data-hf-layout="ThreeColumnsMidExpanded"] > [data-hf-col="1"] { --hf-w: 50%; }
+.hf-fcl[data-hf-layout="ThreeColumnsMidExpanded"] > [data-hf-col="2"] { --hf-w: 25%; }
+.hf-fcl[data-hf-layout="ThreeColumnsEndExpanded"] > [data-hf-col="0"] { --hf-w: 25%; }
+.hf-fcl[data-hf-layout="ThreeColumnsEndExpanded"] > [data-hf-col="1"] { --hf-w: 25%; }
+.hf-fcl[data-hf-layout="ThreeColumnsEndExpanded"] > [data-hf-col="2"] { --hf-w: 50%; }
+.hf-fcl[data-hf-layout="ThreeColumnsMidExpandedEndHidden"] > [data-hf-col="0"] { --hf-w: 33%; }
+.hf-fcl[data-hf-layout="ThreeColumnsMidExpandedEndHidden"] > [data-hf-col="1"] { --hf-w: 67%; }
+.hf-fcl[data-hf-layout="ThreeColumnsBeginExpandedEndHidden"] > [data-hf-col="0"] { --hf-w: 67%; }
+.hf-fcl[data-hf-layout="ThreeColumnsBeginExpandedEndHidden"] > [data-hf-col="1"] { --hf-w: 33%; }
+.hf-fcl[data-hf-layout="MidColumnFullScreen"] > [data-hf-col="0"] { --hf-w: 0%; }
+.hf-fcl[data-hf-layout="MidColumnFullScreen"] > [data-hf-col="1"] { --hf-w: 100%; }
+.hf-fcl[data-hf-layout="EndColumnFullScreen"] > [data-hf-col="0"] { --hf-w: 0%; }
+.hf-fcl[data-hf-layout="EndColumnFullScreen"] > [data-hf-col="1"] { --hf-w: 0%; }
+.hf-fcl[data-hf-layout="EndColumnFullScreen"] > [data-hf-col="2"] { --hf-w: 100%; }
+.hf-fcl[data-hf-custom] > [data-hf-col="0"] { --hf-w: var(--hf-c0); }
+.hf-fcl[data-hf-custom] > [data-hf-col="1"] { --hf-w: var(--hf-c1); }
+.hf-fcl[data-hf-custom] > [data-hf-col="2"] { --hf-w: var(--hf-c2); }
+
+/* the footer is the column's, not the window's */
+.hf-fcl .hf-footer { position: sticky; left: auto; right: auto; bottom: .5rem; margin: 0 .5rem .5rem; z-index: 3; }
+.hf-fcl .hf-op-header { z-index: 4; }
+
+.hf-fcl__buttons { display: flex; gap: .25rem; margin-inline-start: .5rem; }
+.hf-fcl .fd-table__row.is-selected, .hf-fcl .fd-table__row.is-selected > td { background: var(--sapList_SelectionBackgroundColor, #ebf8ff); }
+
+/* the separator on a column's left edge: a hairline, the grip to drag it and the arrow that gives the column next to it more
+   room. It is as tall as the window and sticks to it, so the grip stays in reach however far the page is scrolled. */
+.hf-fcl__col + .hf-fcl__col { box-shadow: inset 1px 0 0 var(--sapGroup_ContentBorderColor, #d9d9d9); }
+.hf-fcl__sep {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  width: 1rem;
+  height: 100vh;
+  margin-bottom: -100vh;
+  cursor: col-resize;
+  touch-action: none;
+}
+.hf-fcl__sep::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: 2px;
+  background: transparent;
+  transition: background-color .15s;
+}
+.hf-fcl__sep:hover::before, .hf-fcl__sep:focus-visible::before, .hf-fcl--dragging .hf-fcl__sep.is-active::before { background: var(--sapContent_FocusColor, #0032a5); }
+.hf-fcl__sep:focus-visible { outline: none; }
+.hf-fcl__grip {
+  position: absolute;
+  top: 50%;
+  inset-inline-start: 0;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: .875rem;
+  height: 2.5rem;
+  border: 1px solid var(--sapButton_BorderColor, #bcc3ca);
+  border-inline-start: 0;
+  border-radius: 0 .5rem .5rem 0;
+  background: var(--sapButton_Background, #fff);
+  color: var(--sapContent_IconColor, #1d2d3e);
+  font-size: .75rem;
+  opacity: 0;
+  transition: opacity .15s;
+}
+.hf-fcl__sep:hover .hf-fcl__grip, .hf-fcl__sep:focus-visible .hf-fcl__grip, .hf-fcl--dragging .hf-fcl__sep.is-active .hf-fcl__grip { opacity: 1; }
+.hf-fcl__arrow {
+  position: absolute;
+  /* on the grip's row, beside it */
+  top: 50%;
+  transform: translateY(-50%);
+  inset-inline-start: 1.125rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: 1px solid var(--sapButton_BorderColor, #bcc3ca);
+  border-radius: 50%;
+  background: var(--sapButton_Background, #fff);
+  color: var(--sapButton_TextColor, #0064d9);
+  font-size: .75rem;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .15s, background-color .15s;
+}
+.hf-fcl__sep:hover .hf-fcl__arrow, .hf-fcl__sep:focus-within .hf-fcl__arrow, .hf-fcl--dragging .hf-fcl__sep.is-active .hf-fcl__arrow { opacity: 1; }
+.hf-fcl__arrow:hover { background: var(--sapButton_Hover_Background, #eaecee); }
+.hf-fcl__arrow[hidden] { display: none; }
