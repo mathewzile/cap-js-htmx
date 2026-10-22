@@ -85,9 +85,18 @@ function tablePartial(layout, rows, ctx) {
   return html`${raw(rowsHtml(layout, rows, { ...ctx, selectable: isSelectable(layout) }).value)}${layout.table.hierarchy ? html`` : html`<hx-partial hx-target="#${ids.lrCount()}" hx-swap="innerHTML">${formatCount(ctx.count, ctx.locale)}</hx-partial>`}<hx-partial hx-target="#${ids.lrGrowing()}" hx-swap="outerHTML">${growingButton(ctx.basePath, ctx.entitySetPath, ctx)}</hx-partial>`
 }
 
+/** The row below the children of a node that has more of them: it loads the next page and is replaced by it. */
+function moreChildrenRow(layout, { level, href, bundle, t }) {
+  const colspan = layout.table.columns.length + (isSelectable(layout) ? 1 : 0) + 1
+  return html`<tr class="fd-table__row hf-tree-more" data-hf-level="${level}" data-hf-state="leaf">
+    <td class="fd-table__cell" colspan="${colspan}">
+      <button type="button" class="hf-table__growing-button" hx-get="${href}" hx-target="closest tr" hx-swap="outerHTML"><span class="hf-table__growing-title">${t(bundle, 'More')}</span></button>
+    </td></tr>`
+}
+
 /** Just the rows (a tree node's children). */
 function rowsOnly(layout, rows, ctx) {
   return html`${raw(rowsHtml(layout, rows, { ...ctx, selectable: isSelectable(layout) }).value)}`
 }
 
-module.exports = { listReportFragment, tablePartial, toolbar, rowsOnly }
+module.exports = { listReportFragment, tablePartial, toolbar, rowsOnly, moreChildrenRow }

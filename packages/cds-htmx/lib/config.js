@@ -9,6 +9,7 @@ const DEFAULTS = {
   shell: true,
   appTitle: null,
   growingThreshold: 20,
+  treeChildrenPage: 100, // children of a tree node read per request (a `More` row asks for the next page)
   assets: 'local',
   sse: { heartbeat: 15000 },
   liveListReport: true,

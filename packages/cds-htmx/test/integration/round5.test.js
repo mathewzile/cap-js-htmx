@@ -26,7 +26,7 @@ describe('round 5: tree table, paging, date filters', () => {
     test('the manifest of browse-genres makes the Genres list a tree on the declared hierarchy', () => {
       const lr = layoutOf('Genres')
       assert.equal(lr.table.type, 'TreeTable')
-      assert.deepEqual(lr.table.hierarchy, { qualifier: 'GenresHierarchy', nodeProperty: 'ID', parentNavigation: 'parent', parentKey: 'parent_ID' })
+      assert.deepEqual(lr.table.hierarchy, { qualifier: 'GenresHierarchy', nodeProperty: 'ID', parentNavigation: 'parent', parentKey: 'parent_ID', initialExpansionLevel: 0 })
     })
 
     test('without a usable hierarchy the table stays flat', () => {

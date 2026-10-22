@@ -6,8 +6,9 @@ const pathOf = value => typeof value === 'string' ? value : value?.$PropertyPath
 /** A tree table's recursive hierarchy (`Aggregation.RecursiveHierarchy#<qualifier>` on the entity type, which CAP
  *  derives from `@hierarchy`): the node property (the key a child's parent points at) and the parent link, as the
  *  property names the queries need. `qualifier` is the one the FE manifest names (`tableSettings.hierarchyQualifier`);
- *  without it the type's only hierarchy is taken. `undefined` when the type declares no (usable) hierarchy. */
-function buildHierarchy(store, entityType, qualifier) {
+ *  without it the type's only hierarchy is taken. `initialExpansionLevel` (`tableSettings.initialExpansionLevel`, FE's default is 0:
+ *  everything collapsed) is how many levels are open when the table shows. `undefined` when the type declares no (usable) hierarchy. */
+function buildHierarchy(store, entityType, qualifier, initialExpansionLevel) {
   const bag = store.raw(entityType)
   const key = qualifier
     ? `@Aggregation.RecursiveHierarchy#${qualifier}`
@@ -21,7 +22,7 @@ function buildHierarchy(store, entityType, qualifier) {
   const referenced = parent?.keys?.length === 1 ? parent.keys[0].ref.join('_') : nodeProperty
   const parentKey = `${parentNavigation}_${referenced}`
   if (!entityDef(cds.model, entityType)?.elements?.[parentKey]) return undefined
-  return { qualifier: key.split('#')[1], nodeProperty, parentNavigation, parentKey }
+  return { qualifier: key.split('#')[1], nodeProperty, parentNavigation, parentKey, initialExpansionLevel: Math.max(0, Math.floor(Number(initialExpansionLevel)) || 0) }
 }
 
 module.exports = { buildHierarchy }

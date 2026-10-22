@@ -1063,11 +1063,15 @@ class HtmxAdapter extends HttpAdapter {
     if (!treeLib.isUsable(cds.model, entityType, hierarchy)) return res.sendStatus(404)
     const layout = { ...lrLayout, table: { ...lrLayout.table, hierarchy } }
     const level = Math.min(Math.max(Number(req.query.level) || 1, 1), 100)
-    const rows = await treeLib.childrenOf(tx, cds.model, entityType, layout, { node, level, query: req.query })
+    const skip = Math.max(Number(req.query.$skip) || 0, 0)
+    const { rows, hasMore } = await treeLib.childrenOf(tx, cds.model, entityType, layout, { node, level, query: req.query, skip, limit: config().treeChildrenPage })
     const keyNames = keyElements(entityDef(cds.model, entityType)).map(k => k.name)
-    res.set('Content-Type', 'text/html').send(String(listReportRender.rowsOnly(layout, rows, {
-      basePath: this.basePath(req), entitySetPath: req.params.Set, keyNames, bundle: cache.bundleFor(opts), t: i18n.t
-    })))
+    const bundle = cache.bundleFor(opts)
+    const ctx = { basePath: this.basePath(req), entitySetPath: req.params.Set, keyNames, bundle, t: i18n.t }
+    // a node with more children than a page: the last row loads the next page (replacing itself)
+    const next = new URLSearchParams({ ...req.query, node, level: String(level), $skip: String(skip + rows.length) })
+    const more = hasMore ? listReportRender.moreChildrenRow(layout, { level, href: `${ctx.basePath}/${req.params.Set}/$children?${next}`, ...ctx }) : html``
+    res.set('Content-Type', 'text/html').send(String(html`${listReportRender.rowsOnly(layout, rows, ctx)}${more}`))
   }
 
   /** Wraps a handler so it runs inside a service transaction and errors reach the HttpAdapter error handler. */

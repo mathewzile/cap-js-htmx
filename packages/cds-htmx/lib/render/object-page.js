@@ -363,7 +363,7 @@ function objectPageFragment(layout, row, ctx) {
             draftExists: row.HasDraftEntity === true, isDraftRoot: layout.edit?.mode === 'draft',
             deleteChild: layout.edit?.mode === 'node' && editMode === 'draft' // a child row of the draft being edited
           })}
-          ${ctx.fcl ? fclRender.columnButtons(ctx.fcl.column, { t: ctx.t, bundle: ctx.bundle, closeHref: ctx.fcl.closeHref }) : html``}
+          ${ctx.fcl ? fclRender.columnButtons(ctx.fcl.column, { t: ctx.t, bundle: ctx.bundle, closeHref: ctx.fcl.closeHref, editing: !!editMode }) : html``}
         </div>
         ${headerFacets.length ? html`<div class="hf-op-header__content">${headerFacets.map(f => facetBlock(f, row, fullCtx, { asSection: false }))}</div>` : html``}
         ${anchorBar(visibleSections)}

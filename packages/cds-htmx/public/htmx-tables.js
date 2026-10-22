@@ -648,15 +648,17 @@
   })
 
   // ---------------------------------------------------------------- sort indicator
-  // A header click sorts like the menu does: through the filter bar's state (the header link alone would drop the filters).
+  // A click on a column header opens the column menu under it, like FE's (sorting is an entry of that menu, so it goes through the
+  // filter bar's state and keeps the filters; the header link alone would drop them). A second click on the header closes it.
+  let menuClosedBy = null
   document.addEventListener('click', e => {
-    const link = e.target.closest?.('a.hf-th__sort')
-    const th = link?.closest('th[data-hf-sort]')
-    const lr = th?.closest('.hf-page--lr')
-    if (!lr) return
+    const th = e.target.closest?.('thead th.hf-th')
+    if (!th || !th.closest('[data-hf-view]')) return
     e.preventDefault()
     e.stopPropagation()
-    sortList(lr, th.dataset.hfSort + (th.getAttribute('aria-sort') === 'ascending' ? ' desc' : ''))
+    if (menuClosedBy === th) { menuClosedBy = null; return }
+    const rect = th.getBoundingClientRect()
+    openColumnMenu(th, rect.left, rect.bottom)
   }, true)
 
   // The rows were sorted on the server (`HX-Trigger: hf:sorted`): move the arrow in the header
@@ -676,6 +678,7 @@
   // column settings. The List Report sorts and groups on the server (the same `$table` request the header link uses);
   // a section table only has the rows on the page, so it sorts those.
   let columnMenu = null
+  let columnMenuOpenedAt = 0
   const closeColumnMenu = () => { columnMenu?.remove(); columnMenu = null }
   const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
 
@@ -759,7 +762,8 @@
     const box = columnMenu.getBoundingClientRect()
     columnMenu.style.left = `${Math.max(4, Math.min(x, innerWidth - box.width - 4))}px`
     columnMenu.style.top = `${Math.max(4, Math.min(y, innerHeight - box.height - 4))}px`
-    columnMenu.querySelector('button:not([disabled])')?.focus()
+    columnMenu.querySelector('button:not([disabled])')?.focus({ preventScroll: true })
+    columnMenuOpenedAt = performance.now()
   }
 
   document.addEventListener('contextmenu', e => {
@@ -771,7 +775,12 @@
     const rect = th.getBoundingClientRect()
     openColumnMenu(th, keyboard ? rect.left : e.clientX, keyboard ? rect.bottom : e.clientY)
   })
-  document.addEventListener('mousedown', e => { if (columnMenu && !columnMenu.contains(e.target)) closeColumnMenu() })
+  document.addEventListener('mousedown', e => {
+    menuClosedBy = null
+    if (!columnMenu || columnMenu.contains(e.target)) return
+    menuClosedBy = e.target.closest?.('thead th.hf-th') // pressing the header of the open menu closes it, the click that follows must not reopen it
+    closeColumnMenu()
+  })
   document.addEventListener('keydown', e => {
     if (!columnMenu) return
     if (e.key === 'Escape') { closeColumnMenu(); return }
@@ -782,7 +791,8 @@
     items[(at + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length]?.focus()
   })
   window.addEventListener('resize', closeColumnMenu)
-  window.addEventListener('scroll', closeColumnMenu, true)
+  // a scroll right after the menu opened is the browser bringing the clicked header into view, not the user moving on
+  window.addEventListener('scroll', () => { if (performance.now() - columnMenuOpenedAt > 250) closeColumnMenu() }, true)
   document.addEventListener('htmx:before:request', closeColumnMenu)
 
   // ---------------------------------------------------------------- wiring

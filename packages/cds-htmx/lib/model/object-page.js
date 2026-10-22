@@ -47,7 +47,7 @@ function buildFacet(model, store, entityType, facet, pageSettings) {
       : []
     // a section table is a tree when the manifest says so for this navigation's line item (`<nav>/@com.sap.vocabularies.UI.v1.LineItem`)
     const tableSettings = pageSettings?.controlConfiguration?.[`${nav}/@com.sap.vocabularies.UI.v1.LineItem`]?.tableSettings || {}
-    const hierarchy = targetEntityType && tableSettings.type === 'TreeTable' ? buildHierarchy(store, targetEntityType, tableSettings.hierarchyQualifier) : undefined
+    const hierarchy = targetEntityType && tableSettings.type === 'TreeTable' ? buildHierarchy(store, targetEntityType, tableSettings.hierarchyQualifier, tableSettings.initialExpansionLevel) : undefined
     // with routing in the manifest the page only opens a sub-object page for a navigation the manifest has a route for
     const navigable = pageSettings?.$navigation ? !!pageSettings.$navigation[nav] : true
     return { ...base, kind: 'ReferenceFacet', content: { kind: 'table', nav, targetEntityType, columns, composition: element?.type === 'cds.Composition', hierarchy, navigable } }

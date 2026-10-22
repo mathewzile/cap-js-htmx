@@ -71,3 +71,33 @@ test.describe('flexible column layout (admin Authors: List Report | Author | Boo
     expect(await layout(page)).toBe('TwoColumnsMidExpanded')
   })
 })
+
+test.describe('closing a column that is being edited', () => {
+  test('asks first; Cancel keeps the column and the edit, Close trims', async ({ page }) => {
+    await page.goto(AUTHOR)
+    await expect(page.locator('#op-page')).toBeVisible()
+
+    // display mode: no question
+    await column(page, 1).locator('button[aria-label="Close"]').click()
+    await expect(page).toHaveURL(/\/htmx\/admin\/Authors$/)
+    await page.goBack()
+    await expect(page.locator('#op-page')).toBeVisible()
+
+    await page.locator('#op-page').getByRole('button', { name: 'Edit' }).click()
+    await expect(page.locator('input[name=name]')).toBeVisible()
+    await page.locator('input[name=name]').fill('Charlotte Brontë (edited)')
+    const close = column(page, 1).locator('button[aria-label="Close"]')
+    await close.click()
+    const dialog = page.locator('.hf-message-box')
+    await expect(dialog).toBeVisible()
+    await dialog.locator('[data-hf-cancel]').click()
+    await expect(dialog).toHaveCount(0)
+    expect(pathOf(page)).toBe(AUTHOR)
+    await expect(page.locator('input[name=name]')).toHaveValue('Charlotte Brontë (edited)')
+
+    await close.click()
+    await dialog.locator('[data-hf-ok]').click()
+    await expect(page).toHaveURL(/\/htmx\/admin\/Authors$/)
+    await expect(page.locator('#op-page')).toHaveCount(0)
+  })
+})

@@ -17,7 +17,8 @@ test.describe('paging through 1,005 books', () => {
     await more.click()
     await expect(rows(page)).toHaveCount(60)
     // a different sort starts again at the first page and keeps the trigger in step
-    await page.locator('thead th[data-hf-sort=stock] a').click()
+    await page.locator('thead th[data-hf-sort=stock]').click()
+    await page.locator('.hf-colmenu').getByRole('menuitem', { name: 'Sort Ascending' }).click()
     await expect(rows(page)).toHaveCount(20)
     await expect(more).toContainText('[ 20 / 1,005 ]')
     await expect(page.locator('thead th[data-hf-sort=stock]')).toHaveAttribute('aria-sort', 'ascending')

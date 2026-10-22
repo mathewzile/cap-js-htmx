@@ -1,4 +1,4 @@
-const { html, raw } = require('./html')
+const { html, raw, escape } = require('./html')
 
 /** Flexible Column Layout (`sap.f.FlexibleColumnLayout`, the container FE uses when an app's manifest asks for it).
  *  Column 0 is the List Report, column 1 its Object Page, column 2 a sub-object page (deeper pages replace it).
@@ -60,7 +60,8 @@ function hoistPartials(body) {
 }
 
 /** The buttons of a column header: full screen / exit full screen and close (not for the first column). */
-function columnButtons(column, { t, bundle, closeHref }) {
+/** `editing`: the page is being edited, so Close asks first (the draft or the changes stay, they are not saved). */
+function columnButtons(column, { t, bundle, closeHref, editing }) {
   if (column < 1) return html``
   return html`
     <div class="hf-fcl__buttons">
@@ -68,7 +69,7 @@ function columnButtons(column, { t, bundle, closeHref }) {
         aria-label="${t(bundle, 'EnterFullScreen')}" title="${t(bundle, 'EnterFullScreen')}"
         data-hf-enter="${t(bundle, 'EnterFullScreen')}" data-hf-exit="${t(bundle, 'ExitFullScreen')}"><i class="sap-icon--full-screen" aria-hidden="true"></i></button>
       <button type="button" class="fd-button fd-button--transparent hf-icon-button" aria-label="${t(bundle, 'CloseColumn')}" title="${t(bundle, 'CloseColumn')}"
-        hx-get="${closeHref}" hx-target="#app" hx-push-url="true" hx-swap="innerHTML" hx-headers='{"X-Hf-Fcl":"shown"}'><i class="sap-icon--decline" aria-hidden="true"></i></button>
+        hx-get="${closeHref}" hx-target="#app" hx-push-url="true" hx-swap="innerHTML" hx-headers='{"X-Hf-Fcl":"shown"}'${editing ? raw(` hx-confirm="${escape(t(bundle, 'ConfirmCloseColumn'))}" data-hf-confirm-title="${escape(t(bundle, 'CloseColumn'))}" data-hf-confirm-ok="${escape(t(bundle, 'CloseColumn'))}" data-hf-confirm-cancel="${escape(t(bundle, 'Cancel'))}"`) : ''}><i class="sap-icon--decline" aria-hidden="true"></i></button>
     </div>`
 }
 

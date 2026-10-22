@@ -124,7 +124,7 @@ function buildListReport(store, entityType, { pageSettings } = {}) {
 
   const tableSettings = pageSettings?.controlConfiguration?.['@com.sap.vocabularies.UI.v1.LineItem']?.tableSettings || {}
   // `type: 'TreeTable'` needs the hierarchy the manifest names; without a usable one the table stays what FE would fall back to
-  const hierarchy = tableSettings.type === 'TreeTable' ? buildHierarchy(store, entityType, tableSettings.hierarchyQualifier) : undefined
+  const hierarchy = tableSettings.type === 'TreeTable' ? buildHierarchy(store, entityType, tableSettings.hierarchyQualifier, tableSettings.initialExpansionLevel) : undefined
   const filterRestrictions = bag['@Capabilities.FilterRestrictions'] ?? store.raw(containerTarget(entityType))['@Capabilities.FilterRestrictions']
 
   return {

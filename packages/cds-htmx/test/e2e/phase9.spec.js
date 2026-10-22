@@ -70,7 +70,8 @@ test.describe('the shell behind the approuter', () => {
 
   test('List Report state is kept in the hash too (sort and filter replace, they do not push)', async ({ page }) => {
     await page.goto(APP)
-    await page.locator('thead th[data-hf-sort=stock] a').click()
+    await page.locator('thead th[data-hf-sort=stock]').click()
+    await page.locator('.hf-colmenu').getByRole('menuitem', { name: 'Sort Ascending' }).click()
     await expect(page.locator('thead th[data-hf-sort=stock]')).toHaveAttribute('aria-sort', 'ascending')
     await expect(page).toHaveURL(/#\/htmx\/catalog\/Books\?(\$|%24)orderby=stock/)
     expect(await page.evaluate(() => history.length)).toBeLessThanOrEqual(3)

@@ -46,15 +46,36 @@ async function topLevel(tx, model, entityType, layout, { query, rootParent, skip
     tx.run(queryLib.listReportCountQuery(entityType, { filters: where }))
   ])
   const hasMore = found.length > limit
-  const rows = await markStates(tx, entityType, hierarchy, hasMore ? found.slice(0, limit) : found, 0)
+  const tops = await markStates(tx, entityType, hierarchy, hasMore ? found.slice(0, limit) : found, 0)
+  const rows = await expandInitially(tx, model, entityType, layout, tops, query)
   return { rows, hasMore, count: counted.count }
 }
 
-/** The children of one node (the rows to insert below it, one level deeper). */
-async function childrenOf(tx, model, entityType, layout, { node, level, query }) {
+/** `initialExpansionLevel`: the nodes above that level come open, their children read now and listed below them (the client
+ *  finds them loaded, like the result of a filter). At most LIMIT rows are read this way. */
+async function expandInitially(tx, model, entityType, layout, tops, query) {
+  const levels = layout.table.hierarchy.initialExpansionLevel
+  if (!levels) return tops
+  const rows = []
+  const walk = async row => {
+    rows.push(row)
+    if (row._level >= levels || row._state !== 'collapsed' || rows.length >= LIMIT) return
+    const { rows: children } = await childrenOf(tx, model, entityType, layout, { node: row[layout.table.hierarchy.nodeProperty], level: row._level + 1, query })
+    row._state = 'expanded'
+    row._loaded = true
+    for (const child of children) await walk(child)
+  }
+  for (const top of tops) await walk(top)
+  return rows
+}
+
+/** The children of one node (the rows to insert below it, one level deeper), one page of them: `{ rows, hasMore }`. `skip` is
+ *  how many the table already has. */
+async function childrenOf(tx, model, entityType, layout, { node, level, query, skip = 0, limit = LIMIT }) {
   const hierarchy = layout.table.hierarchy
-  const found = await tx.run(queryLib.listReportQuery(model, entityType, entityType, layout, { filters: [ref(hierarchy.parentKey), '=', val(node)], query, limit: LIMIT }))
-  return markStates(tx, entityType, hierarchy, found.slice(0, LIMIT), level)
+  const found = await tx.run(queryLib.listReportQuery(model, entityType, entityType, layout, { filters: [ref(hierarchy.parentKey), '=', val(node)], query, skip, limit }))
+  const hasMore = found.length > limit
+  return { rows: await markStates(tx, entityType, hierarchy, found.slice(0, limit), level), hasMore }
 }
 
 /** What a filter or search leaves of the tree: the matching nodes with their ancestors, expanded down to the matches.
