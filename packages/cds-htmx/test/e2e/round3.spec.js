@@ -160,7 +160,7 @@ test.describe('gaps', () => {
 test.describe('child rows', () => {
   const POE = "ID='9d703c23-7cf7-4cad-9f2b-0e1e1a8c0003'"
 
-  test('a draft Author: Awards (a composition) can be created in, deleted from and pasted into, Books (an association) only edited and deleted from', async ({ page, request }) => {
+  test('a draft Author: Awards (a composition) can be created in, deleted from and pasted into, Books (@readonly) is shown as in display mode', async ({ page, request }) => {
     await page.goto('/htmx/admin/Authors(' + POE + ',IsActiveEntity=true)')
     await expect(page.locator('#op-section--Awards tbody tr')).toHaveCount(2)
     await page.getByRole('button', { name: 'Edit', exact: true }).first().click()
@@ -170,8 +170,9 @@ test.describe('child rows', () => {
     await expect(awards.getByRole('button', { name: 'Create' })).toBeVisible()
     await expect(awards.getByRole('button', { name: 'Delete' })).toBeVisible()
     await expect(awards.locator('[data-hf-action=paste]')).toBeVisible()
-    await expect(books.locator('tbody tr').first().locator('input').first()).toBeVisible() // edited in place, like FE
-    await expect(books.getByRole('button', { name: 'Delete' })).toBeVisible()
+    await expect(books.locator('tbody tr').first().locator('input')).toHaveCount(0) // read-only: no inputs, no selection, no Delete
+    await expect(books.locator('tbody .hf-checkbox')).toHaveCount(0)
+    await expect(books.getByRole('button', { name: 'Delete' })).toHaveCount(0)
     await expect(books.getByRole('button', { name: 'Create' })).toHaveCount(0)
     await expect(books.locator('[data-hf-action=paste]')).toHaveCount(0)
     await request.delete('/admin/Authors(ID=9d703c23-7cf7-4cad-9f2b-0e1e1a8c0003,IsActiveEntity=false)').catch(() => {})

@@ -462,6 +462,13 @@ class HtmxAdapter extends HttpAdapter {
     })
   }
 
+  /** What the table section of an Object Page allows (`model/object-page.js`): the answer the page itself used to offer or hide Create,
+   *  Delete and the inputs, so that a request made by hand is refused the same way. `{}` (everything) when the section is unknown. */
+  sectionCaps(req, rootType, rootSet, nav) {
+    const layout = cache.objectPageFor(cds.model, this.service.name, this.odataServicePath(), rootType, `/${rootSet}`, this.appOpts(req))
+    return require('./data/page').collectTableFacets([...(layout.headerFacets || []), ...(layout.sections || [])]).find(f => f.content.nav === nav)?.content.capabilities || {}
+  }
+
   /** `POST /:Set(keys)/:nav`: Create in a table section of a draft. Like FE (creation mode "NewPage") it makes the
    *  child's own draft row, linked to the parent through the composition's foreign key, and opens its page. */
   async createChild(req, res, tx) {
@@ -472,6 +479,7 @@ class HtmxAdapter extends HttpAdapter {
     const nav = req.params.nav
     const element = resolveElement(cds.model, parent.name, nav)
     if (!element?.target) return res.sendStatus(404)
+    if (this.sectionCaps(req, parent.name, set, nav).insertable === false) return this.reject(req, res, 405, 'NotAllowed')
     const parentKeys = keysLib.parseKeys(parentRaw)
     const { IsActiveEntity: _active, ...plainParent } = parentKeys
     const assoc = backlinkElement(cds.model, element.target, parent.name)
@@ -622,6 +630,7 @@ class HtmxAdapter extends HttpAdapter {
     const n = this.parseNested(req)
     if (!n || n.action !== 'field' || !n.keys) return res.sendStatus(404)
     if (this.editOf(req, n.root.entityType).mode !== 'draft') return this.reject(req, res, 405, 'NotAllowed')
+    if (this.editOf(req, n.entityType).updatable === false || (n.segments.length === 2 && this.sectionCaps(req, n.root.entityType, n.root.set, n.nav).updatable === false)) return this.reject(req, res, 405, 'NotAllowed')
     const key = `${n.rowKey}.${n.property}`
     try {
       await draftLib.patch(tx, n.entityType, n.keys, { [n.property]: req.body?.[n.property] })
@@ -671,6 +680,7 @@ class HtmxAdapter extends HttpAdapter {
     if (n?.action === 'paste') return this.pasteRows(req, res, tx, n)
     if (!n || n.action !== 'delete') return res.sendStatus(404)
     if (this.editOf(req, n.root.entityType).mode !== 'draft') return this.reject(req, res, 405, 'NotAllowed')
+    if (this.editOf(req, n.entityType).deletable === false || (n.segments.length === 2 && this.sectionCaps(req, n.root.entityType, n.root.set, n.nav).deletable === false)) return this.reject(req, res, 405, 'NotAllowed')
     const draftNode = !!entityDef(cds.model, n.entityType)?.elements?.IsActiveEntity
     for (const raw of [].concat(req.body?.keys ?? []).slice(0, 200)) {
       const keys = keysLib.parseKeys(raw)
@@ -688,6 +698,8 @@ class HtmxAdapter extends HttpAdapter {
   async pasteRows(req, res, tx, n) {
     if (n.segments.length !== 2 || n.raw != null) return res.sendStatus(404)
     if (this.editOf(req, n.root.entityType).mode !== 'draft') return this.reject(req, res, 405, 'NotAllowed')
+    const caps = this.sectionCaps(req, n.root.entityType, n.root.set, n.nav)
+    if (caps.insertable === false || caps.updatable === false) return this.reject(req, res, 405, 'NotAllowed')
     let cols, rows
     try { cols = JSON.parse(req.body?.cols); rows = JSON.parse(req.body?.rows) } catch { return res.sendStatus(400) }
     if (!Array.isArray(cols) || !Array.isArray(rows) || rows.length > 200 || rows.some(r => !Array.isArray(r))) return res.sendStatus(400)

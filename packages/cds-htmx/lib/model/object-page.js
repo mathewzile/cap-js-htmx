@@ -1,4 +1,5 @@
-const { buildColumn } = require('./list-report')
+const { buildColumn, buildCapabilities } = require('./list-report')
+const { editCapabilities } = require('./edit-capabilities')
 const feDefaults = require('./fe-defaults')
 const { typeFromUrl } = require('../annotations/vocab')
 const { resolveElement } = require('../annotations/edm')
@@ -25,6 +26,21 @@ function parseNavigationLineItemTarget(target) {
 function parseNavigationLineItem(target) {
   const m = typeof target === 'string' && /^(.+)\/@(?:UI|com\.sap\.vocabularies\.UI\.v1)\.LineItem(?:#(.+))?$/.exec(target)
   return m ? { nav: m[1], qualifier: m[2] } : undefined
+}
+
+/** What a table section may do with its rows, from the annotations FE reads: the target entity's own restrictions (`@readonly`,
+ *  `Capabilities.Insert/Update/DeleteRestrictions`) and the parent's `Capabilities.NavigationRestrictions` for this navigation. A
+ *  restriction that is a per-row expression is not one that switches the table off. */
+function sectionCapabilities(store, parentType, nav, targetType) {
+  const own = targetType ? editCapabilities(store, targetType) : {}
+  const entry = (buildCapabilities(store, parentType).navigation?.RestrictedProperties || [])
+    .find(r => (r.NavigationProperty?.$NavigationPropertyPath ?? r.NavigationProperty) === nav)
+  const allowed = (value, restriction) => value !== false && restriction !== false
+  return {
+    insertable: allowed(own.insertable, entry?.InsertRestrictions?.Insertable),
+    updatable: allowed(own.updatable, entry?.UpdateRestrictions?.Updatable),
+    deletable: allowed(own.deletable, entry?.DeleteRestrictions?.Deletable)
+  }
 }
 
 /** One `Facets`/`HeaderFacets` entry -> a section/subsection content descriptor (§3.2: Facets row).
@@ -60,7 +76,7 @@ function buildFacet(model, store, entityType, facet, pageSettings) {
     const targetBag = targetEntityType ? store.raw(targetEntityType) : {}
     const presentationVariant = targetBag['@UI.PresentationVariant'] || targetBag['@UI.SelectionPresentationVariant']?.PresentationVariant
     const growingThreshold = Number(presentationVariant?.MaxItems) || tableSettings.growingThreshold || feDefaults.objectPage.table.growingThreshold
-    return { ...base, kind: 'ReferenceFacet', content: { kind: 'table', nav, targetEntityType, columns, composition: element?.type === 'cds.Composition', hierarchy, navigable, growingThreshold, sortOrder: presentationVariant?.SortOrder } }
+    return { ...base, kind: 'ReferenceFacet', content: { kind: 'table', nav, targetEntityType, columns, composition: element?.type === 'cds.Composition', hierarchy, navigable, growingThreshold, sortOrder: presentationVariant?.SortOrder, capabilities: sectionCapabilities(store, entityType, nav, targetEntityType) } }
   }
 
   const ref = parseAnnotationPathTarget(facet.Target)
@@ -118,4 +134,4 @@ function buildObjectPage(model, store, entityType, { pageSettings } = {}) {
   }
 }
 
-module.exports = { buildObjectPage, buildFacet, parseAnnotationPathTarget, parseNavigationLineItemTarget, parseNavigationLineItem }
+module.exports = { sectionCapabilities, buildObjectPage, buildFacet, parseAnnotationPathTarget, parseNavigationLineItemTarget, parseNavigationLineItem }

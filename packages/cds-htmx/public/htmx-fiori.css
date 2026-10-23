@@ -889,6 +889,10 @@ body.htmx-fiori:has(#fcl) { height: 100vh; height: 100dvh; overflow: hidden; dis
 .hf-fcl[data-hf-custom] > [data-hf-col="2"] { --hf-w: var(--hf-c2); }
 
 /* the header, the footer and the separator belong to the column: sticky inside its scroll box */
+/* a page that is shorter than its column still ends at the bottom of it, and so does its footer */
+.hf-fcl__scroll { display: flex; flex-direction: column; }
+.hf-fcl__scroll > .hf-page { flex: 1 0 auto; display: flex; flex-direction: column; }
+.hf-fcl__scroll > .hf-page > .hf-page__content { flex: 1 0 auto; }
 .hf-fcl .hf-footer { position: sticky; left: auto; right: auto; bottom: .5rem; margin: 0 .5rem .5rem; z-index: 3; }
 .hf-fcl .hf-op-header { z-index: 4; }
 

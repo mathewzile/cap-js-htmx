@@ -40,7 +40,13 @@ test.describe('Author draft with Awards in the column layout', () => {
     await expect(col(page, 2).locator('#c2-op-section--General input[name=year]')).toBeVisible()
     await expect(col(page, 2).getByRole('button', { name: 'Apply' })).toBeVisible()
     for (const name of ['Edit', 'Delete', 'Save']) await expect(col(page, 2).getByRole('button', { name, exact: true })).toHaveCount(0)
+    await expect(col(page, 2).locator('.hf-op-title__actions').getByRole('button')).toHaveCount(0) // no Delete in the header of a page reached through a navigation
     expect(decodeURIComponent(new URL(page.url()).hash)).toMatch(/Authors\(ID='[^']+',IsActiveEntity=false\)\/awards\(ID='[^']+',IsActiveEntity=false\)$/)
+
+    // the footer of a page that is shorter than its column is at the bottom of the column, not at the end of the page
+    const [box, footer] = [await col(page, 2).boundingBox(), await col(page, 2).locator('.hf-footer').boundingBox()]
+    expect(box.y + box.height - (footer.y + footer.height)).toBeLessThan(24)
+    expect(footer.y).toBeGreaterThan(box.y + box.height / 2)
 
     // an edit in the third column goes into the one draft; Apply closes the column, the first page is still being edited
     await col(page, 2).locator('input[name=year]').fill('1950')

@@ -1,7 +1,7 @@
 // Drafts of admin Authors (a draft root with a composition, Awards, and an association to a non-draft entity, Books), compared with
 // the manage-authors FE app: Edit makes the whole page editable, the Awards table (a draft node) can be created in, deleted from and
-// pasted into, the Books table (not draft) can be edited and deleted from but not created in; an Award opens as a page with
-// editable General fields, Apply and neither Edit nor Delete.
+// pasted into, the Books table (a @readonly association to a non-draft entity) is shown as it is (see section-capabilities.test.js);
+// an Award opens as a page with editable General fields, Apply and neither Edit nor Delete.
 const cds = require('@sap/cds')
 const path = require('node:path')
 const assert = require('node:assert/strict')
@@ -41,19 +41,14 @@ describe('drafts of Authors (draft root with a composition and a non-draft assoc
     assert.match(edited, />Discard Draft</)
   })
 
-  test('the Awards table (a composition) has Create, Delete and paste; the Books table (an association) only Delete', () => {
+  test('the Awards table (a composition) has inline inputs, Create, Delete and paste', () => {
     const awards = section(edited, 'Awards')
     assert.match(awards, /hx-post="[^"]*\/awards"[\s\S]*?>Create</)
     assert.match(awards, /\/awards\/\$delete/)
     assert.match(awards, /data-hf-action="paste"/)
     assert.match(awards, /<input/, 'the cells are inputs')
 
-    const books = section(edited, 'Books')
-    assert.match(books, /<input/, 'the cells are inputs')
-    assert.match(books, /\/books\/\$delete/, 'Delete')
-    assert.doesNotMatch(books, /hx-post="[^"]*\/books"/, 'no Create')
-    assert.doesNotMatch(books, />Create</)
-    assert.doesNotMatch(books, /data-hf-action="paste"/, 'no paste')
+    assert.doesNotMatch(section(edited, 'Books'), /\/books\/\$delete|data-hf-action="paste"/, 'the read-only Books table has neither (see section-capabilities.test.js)')
   })
 
   test('an Award opens as a page: editable General fields, Apply, neither Edit nor Delete', async () => {
@@ -71,18 +66,6 @@ describe('drafts of Authors (draft root with a composition and a non-draft assoc
     assert.equal(draftAward.name, 'Edgar Award (draft)')
     const activeAward = (await api.axios.get(`/admin/Authors(ID=${ID},IsActiveEntity=true)/awards(ID=${AWARD},IsActiveEntity=true)`)).data
     assert.equal(activeAward.name, 'Edgar Award', 'the saved version is untouched until Save')
-  })
-
-  test('a cell of the Books table is saved at once (the book is not part of the draft); Delete removes the book', async () => {
-    const created = (await api.POST('/admin/Books', { title: 'Draft Test Book', author_ID: ID, stock: 1 })).data
-    const keyRaw = `ID='${created.ID}'`
-    const patched = await api.axios.patch(`${DRAFT}/books(${keyRaw})/$field/title`, new URLSearchParams({ title: 'Draft Test Book (renamed)' }).toString(), FORM)
-    assert.equal(patched.status, 200)
-    assert.equal((await api.axios.get(`/admin/Books(${created.ID})`)).data.title, 'Draft Test Book (renamed)')
-
-    const res = await api.axios.post(`${DRAFT}/books/$delete`, new URLSearchParams([['keys', keyRaw]]).toString(), FORM)
-    assert.equal(res.status, 200)
-    assert.equal((await api.axios.get(`/admin/Books(${created.ID})`, { validateStatus: () => true })).status, 404)
   })
 
   test('the Books table pages and searches although the Author is a draft (the child has no draft state)', async () => {

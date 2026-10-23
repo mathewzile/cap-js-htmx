@@ -93,15 +93,30 @@ function formLayout(blocks, groupId) {
 
 /** A table-section's child rows (§3.4: "Table subsections reuse `table.js`"). In display mode it has
  *  no selection column (as in FE); in draft mode it adds selection and a "Create" button. */
+/** What a table section of a page being edited offers: inputs in its cells (the target is updatable), a selection column and Delete
+ *  (deletable), Create and paste (a composition, which is where rows are made, and insertable). A read-only target (`@readonly`) or a
+ *  restricted navigation is shown as it is in display mode, its rows still open their page. */
+function sectionMode(facet, ctx) {
+  const caps = facet.content.capabilities || {}
+  const draft = !!ctx.isDraft
+  return {
+    draft,
+    editing: draft && caps.updatable !== false,
+    selectable: draft && caps.deletable !== false,
+    creatable: draft && !!facet.content.composition && caps.insertable !== false
+  }
+}
+
 function tableBlock(facet, ctx) {
   const child = ctx.children?.[facet.id]
   const rows = child?.rows || []
   const nav = facet.content.nav
   const entitySetPath = `${ctx.entitySetPath}/${nav}`
   const sectionId = ids.opSection(facet.id)
-  const editing = !!ctx.isDraft
+  const mode = sectionMode(facet, ctx)
+  const { editing, selectable } = mode
   // A tree table (display mode): its rows and the children of an expanded node are the hierarchy entity's own set
-  const tree = !editing && child?.tree
+  const tree = !mode.draft && child?.tree
   const miniLayout = { navigable: facet.content.navigable, table: { columns: facet.content.columns, hierarchy: tree ? facet.content.hierarchy : undefined } }
   const rowSetPath = tree ? tree.set : entitySetPath
   const keyNames = child?.keyNames || []
@@ -121,22 +136,22 @@ function tableBlock(facet, ctx) {
         <input type="search" class="fd-input" data-hf-table-search placeholder="${t('Search')}" aria-label="${t('Search')}">
         <span class="hf-input-group__addon"><span class="hf-input-icon"><i class="sap-icon--search" aria-hidden="true"></i></span></span>
       </div>
-      ${editing ? html`
-        ${facet.content.composition ? html`<button class="fd-button fd-button--transparent" hx-post="${ctx.basePath}/${ctx.entitySetPath}/${nav}"
+      ${mode.draft ? html`
+        ${mode.creatable ? html`<button class="fd-button fd-button--transparent" hx-post="${ctx.basePath}/${ctx.entitySetPath}/${nav}"
           hx-target="#app" hx-push-url="false" hx-swap="innerHTML show:window:top">${t('Create')}</button>` : html``}
-        <button class="fd-button fd-button--transparent" disabled data-hf-needs-selection="#${sectionId}" aria-label="${t('Delete')}"
+        ${selectable ? html`<button class="fd-button fd-button--transparent" disabled data-hf-needs-selection="#${sectionId}" aria-label="${t('Delete')}"
           hx-post="${ctx.basePath}/${entitySetPath}/$delete" hx-include="#${sectionId}" hx-target="#app" hx-push-url="false" hx-swap="innerHTML show:window:top"
           hx-confirm="${t('ConfirmDeleteSelected')}" data-hf-confirm-count="#${sectionId} tbody .hf-checkbox:checked"
-          data-hf-confirm-title="${t('Delete')}" data-hf-confirm-ok="${t('Delete')}" data-hf-confirm-cancel="${t('Cancel')}" data-hf-confirm-critical>${t('Delete')}</button>` : html``}
+          data-hf-confirm-title="${t('Delete')}" data-hf-confirm-ok="${t('Delete')}" data-hf-confirm-cancel="${t('Cancel')}" data-hf-confirm-critical>${t('Delete')}</button>` : html``}` : html``}
       <span class="hf-toolbar-separator"></span>
-      ${editing && facet.content.composition ? html`<button type="button" class="fd-button fd-button--transparent hf-icon-button" data-hf-action="paste" data-hf-paste-url="${ctx.basePath}/${entitySetPath}/$paste" aria-label="${t('Paste')}" title="${t('Paste')}"><i class="sap-icon--paste" aria-hidden="true"></i></button>` : html``}
+      ${editing && mode.creatable ? html`<button type="button" class="fd-button fd-button--transparent hf-icon-button" data-hf-action="paste" data-hf-paste-url="${ctx.basePath}/${entitySetPath}/$paste" aria-label="${t('Paste')}" title="${t('Paste')}"><i class="sap-icon--paste" aria-hidden="true"></i></button>` : html``}
       <button type="button" class="fd-button fd-button--transparent hf-icon-button" data-hf-action="${paged ? 'export-section' : 'export-dom'}" data-hf-export="${tableUrl.replace(/\$table$/, '$export')}" data-hf-filename="${facet.label}" aria-label="${t('ExportCsv')}" title="${t('ExportCsv')}"><i class="sap-icon--excel-attachment" aria-hidden="true"></i></button>
       <button type="button" class="fd-button fd-button--transparent hf-icon-button" data-hf-action="settings" aria-label="${t('ViewSettings')}" title="${t('ViewSettings')}"><i class="sap-icon--action-settings" aria-hidden="true"></i></button>
     </div>
-    ${columnVisibilityStyle(`#${sectionId}`, facet.content.columns, rows, { selectable: editing })}
+    ${columnVisibilityStyle(`#${sectionId}`, facet.content.columns, rows, { selectable })}
     <table class="fd-table hf-table" role="${tree ? 'treegrid' : 'table'}"${treeAttributes(miniLayout, ctx.basePath, rowSetPath)}${paged ? html` data-hf-table-url="${tableUrl}"` : html``}>
-      ${tableHead(facet.content.columns, rows, { selectable: editing, sortable: false, editing, sortKeys: paged })}
-      <tbody id="${sectionId}-body">${rowsHtml(miniLayout, rows, { basePath: ctx.basePath, entitySetPath: rowSetPath, keyNames, bundle, t: ctx.t, selectable: editing, edit })}</tbody>
+      ${tableHead(facet.content.columns, rows, { selectable, sortable: false, editing, sortKeys: paged })}
+      <tbody id="${sectionId}-body">${rowsHtml(miniLayout, rows, { basePath: ctx.basePath, entitySetPath: rowSetPath, keyNames, bundle, t: ctx.t, selectable, edit })}</tbody>
     </table>
     ${paged ? sectionGrowing(sectionId, tableUrl, { skip: rows.length, hasMore: child.hasMore, count: child.count, bundle, t: ctx.t, locale: ctx.locale }) : html``}`
 }
@@ -332,6 +347,9 @@ function titleText(title, description) {
  *  === false`) decides Edit/Delete vs. the floating Save/Discard footer and (via `ctx.isDraft`,
  *  threaded through to `field.js`) whether form fields render as inputs or display text. */
 function objectPageFragment(layout, row, ctx) {
+  // A page reached through a navigation of another object page (an Award, a Book of an Author) has no Delete of its own, as in FE:
+  // rows are deleted from the table of the page before it
+  const subPage = ctx.trail?.length > 2
   const editMode = editModeOf(ctx, row)
   const isDraft = editMode === 'draft'
   const fullCtx = { ...ctx, isDraft, editMode }
@@ -353,7 +371,7 @@ function objectPageFragment(layout, row, ctx) {
           <div class="hf-spacer"></div>
           ${headerActions(layout.headerActions || [], ctx.bundle, ctx.t, {
             basePath: ctx.basePath, entitySetPath: ctx.entitySetPath, editMode,
-            canEdit: !layout.edit || canEdit(layout.edit, row), canDelete: !layout.edit || canDelete(layout.edit, row),
+            canEdit: !layout.edit || canEdit(layout.edit, row), canDelete: (!layout.edit || canDelete(layout.edit, row)) && !subPage,
             draftExists: row.HasDraftEntity === true, isDraftRoot: layout.edit?.mode === 'draft'
           })}
           ${ctx.fcl ? fclRender.columnButtons(ctx.fcl.column, { t: ctx.t, bundle: ctx.bundle, closeHref: ctx.fcl.closeHref, editing: !!editMode }) : html``}
@@ -474,10 +492,10 @@ function titleIfChanged(layout, row, ctx, properties) {
 function sectionRowsHtml(facet, rows, keyNames, ctx) {
   const nav = facet.content.nav
   const entitySetPath = `${ctx.entitySetPath}/${nav}`
-  const editing = !!ctx.isDraft
+  const { editing, selectable } = sectionMode(facet, ctx)
   const miniLayout = { navigable: facet.content.navigable, table: { columns: facet.content.columns } }
   const edit = editing ? { nav, rowPath: row => rowHref(ctx.basePath, entitySetPath, keyNames, row) } : undefined
-  return rowsHtml(miniLayout, rows, { basePath: ctx.basePath, entitySetPath, keyNames, bundle: ctx.bundle, t: ctx.t, selectable: editing, edit })
+  return rowsHtml(miniLayout, rows, { basePath: ctx.basePath, entitySetPath, keyNames, bundle: ctx.bundle, t: ctx.t, selectable, edit })
 }
 
 module.exports = { sectionRowsHtml, sectionGrowing, objectPageFragment, breadcrumbs, facetBlock, facetContent, footerBar, sideEffectParts, visibilityParts, titleIfChanged }
