@@ -50,6 +50,9 @@
           "kind": "xsuaa"
         }
       }
+    },
+    "htmx": {
+      "theme": "auto"
     }
   }
 }

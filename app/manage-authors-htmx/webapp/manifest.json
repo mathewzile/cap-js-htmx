@@ -88,7 +88,8 @@
   },
   "sap.htmx": {
     "service": "/htmx/admin",
-    "entry": "/htmx/admin/Authors"
+    "entry": "/htmx/admin/Authors",
+    "animations": "fast"
   },
   "sap.cloud": { "public": true, "service": "cap.htmx" }
 }
