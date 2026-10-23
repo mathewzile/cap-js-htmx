@@ -19,7 +19,12 @@ module.exports = defineConfig({
     command: 'npx cds serve',
     cwd: path.join(__dirname, '..', '..', '..', '..'),
     url: 'http://localhost:4004/',
-    env: { ...process.env, CDS_HTMX_THEME: 'auto' }, // light or dark as the browser prefers; the specs pick with colorScheme
+    env: {
+      ...process.env,
+      CDS_HTMX_THEME: 'auto', // light or dark as the browser prefers; the specs pick with colorScheme
+      // the test apps of test/fixtures/apps (a Books app in columns, which needs a draft root) next to the project's own
+      CDS_HTMX_APPS_SOURCES: JSON.stringify([{ kind: 'local' }, { kind: 'local', root: path.join(__dirname, '..', 'fixtures', 'apps') }])
+    },
     reuseExistingServer: true, // a running dev server is used as it is (the dark specs skip themselves unless it has theme auto)
     timeout: 120000
   }

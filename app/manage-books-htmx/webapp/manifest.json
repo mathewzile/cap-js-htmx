@@ -4,19 +4,28 @@
     "id": "managebooks.htmx",
     "type": "application",
     "i18n": "i18n/i18n.properties",
-    "applicationVersion": { "version": "1.0.0" },
+    "applicationVersion": {
+      "version": "1.0.0"
+    },
     "title": "{{appTitle}}",
     "description": "{{appDescription}}",
     "dataSources": {
       "mainService": {
         "uri": "/odata/v4/catalog/",
         "type": "OData",
-        "settings": { "annotations": ["annotation"], "odataVersion": "4.0" }
+        "settings": {
+          "annotations": [
+            "annotation"
+          ],
+          "odataVersion": "4.0"
+        }
       },
       "annotation": {
         "type": "ODataAnnotation",
         "uri": "annotations/annotation.xml",
-        "settings": { "localUri": "annotations/annotation.xml" }
+        "settings": {
+          "localUri": "annotations/annotation.xml"
+        }
       }
     },
     "crossNavigation": {
@@ -25,64 +34,61 @@
           "semanticObject": "Books",
           "action": "manageHtmx",
           "title": "{{tileTitle}}",
-          "signature": { "parameters": {}, "additionalParameters": "allowed" }
+          "signature": {
+            "parameters": {},
+            "additionalParameters": "allowed"
+          }
         }
       }
     }
   },
   "sap.ui": {
     "technology": "UI5",
-    "deviceTypes": { "desktop": true, "tablet": true, "phone": true }
+    "deviceTypes": {
+      "desktop": true,
+      "tablet": true,
+      "phone": true
+    }
   },
   "sap.ui5": {
-    "dependencies": { "minUI5Version": "1.120.0", "libs": { "sap.ui.core": {} } },
-    "contentDensities": { "compact": true, "cozy": true },
-    "resourceRoots": { "cds.htmx.shell": "./shell" },
-    "services": { "ShellUIService": { "factoryName": "sap.ushell.ui5service.ShellUIService", "lazy": false } },
-    "models": { "i18n": { "type": "sap.ui.model.resource.ResourceModel", "settings": { "bundleName": "managebooks.htmx.i18n.i18n" } } },
-    "rootView": { "viewName": "sap.fe.templates.RootContainer.view.Fcl", "type": "XML", "async": true, "id": "appRootView" },
-    "routing": {
-      "config": {
-        "routerClass": "sap.f.routing.Router",
-        "flexibleColumnLayout": { "defaultTwoColumnLayoutType": "TwoColumnsMidExpanded", "defaultThreeColumnLayoutType": "ThreeColumnsEndExpanded" }
-      },
-      "routes": [
-        { "pattern": ":?query:", "name": "BooksList", "target": ["BooksList"] },
-        { "pattern": "Books({key}):?query:", "name": "BooksObjectPage", "target": ["BooksList", "BooksObjectPage"] },
-        { "pattern": "Books({key})/chapters({key2}):?query:", "name": "ChaptersObjectPage", "target": ["BooksList", "BooksObjectPage", "ChaptersObjectPage"] }
-      ],
-      "targets": {
-        "BooksList": {
-          "name": "sap.fe.templates.ListReport",
-          "options": {
-            "settings": {
-              "contextPath": "/Books",
-              "variantManagement": "Page",
-              "navigation": { "Books": { "detail": { "route": "BooksObjectPage" } } },
-              "controlConfiguration": { "@com.sap.vocabularies.UI.v1.LineItem": { "tableSettings": { "type": "ResponsiveTable" } } }
-            }
-          },
-          "controlAggregation": "beginColumnPages",
-          "contextPattern": ""
-        },
-        "BooksObjectPage": {
-          "name": "sap.fe.templates.ObjectPage",
-          "options": { "settings": { "editableHeaderContent": false, "contextPath": "/Books", "navigation": { "chapters": { "detail": { "route": "ChaptersObjectPage" } } } } },
-          "controlAggregation": "midColumnPages",
-          "contextPattern": "/Books({key})"
-        },
-        "ChaptersObjectPage": {
-          "name": "sap.fe.templates.ObjectPage",
-          "options": { "settings": { "editableHeaderContent": false, "contextPath": "/Books/chapters" } },
-          "controlAggregation": "endColumnPages",
-          "contextPattern": "/Books({key})/chapters({key2})"
+    "dependencies": {
+      "minUI5Version": "1.120.0",
+      "libs": {
+        "sap.ui.core": {}
+      }
+    },
+    "contentDensities": {
+      "compact": true,
+      "cozy": true
+    },
+    "resourceRoots": {
+      "cds.htmx.shell": "./shell"
+    },
+    "services": {
+      "ShellUIService": {
+        "factoryName": "sap.ushell.ui5service.ShellUIService",
+        "lazy": false
+      }
+    },
+    "models": {
+      "i18n": {
+        "type": "sap.ui.model.resource.ResourceModel",
+        "settings": {
+          "bundleName": "managebooks.htmx.i18n.i18n"
         }
       }
+    },
+    "routing": {
+      "targets": {},
+      "routes": []
     }
   },
   "sap.htmx": {
     "service": "/htmx/catalog",
     "entry": "/htmx/catalog/Books"
   },
-  "sap.cloud": { "public": true, "service": "cap.htmx" }
+  "sap.cloud": {
+    "public": true,
+    "service": "cap.htmx"
+  }
 }

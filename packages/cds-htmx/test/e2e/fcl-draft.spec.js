@@ -1,12 +1,20 @@
 const { test, expect } = require('@playwright/test')
 
-// manage-books-htmx runs Books | Book | Chapter in columns; Books is a draft root with chapters as a draft composition.
+// The test app fixture.fclbooks (test/fixtures/apps/fcl-books) runs Books | Book | Chapter in columns; Books is a draft root with
+// chapters as a draft composition. The shell page of manage-books-htmx is started with that app's manifest instead of its own.
+const fs = require('node:fs')
+const path = require('node:path')
+const MANIFEST = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'fixtures', 'apps', 'fcl-books', 'webapp', 'manifest.json'), 'utf8'))
 const SHELL = '/manage-books-htmx/webapp/index.html'
 const BOOK = '3d2d2d2d-1c1c-4b4b-8a8a-000000000002' // Jane Eyre, three chapters
 
 const col = (page, n) => page.locator(`#fcl-col-${n}`)
 const editButton = (page, n) => col(page, n).getByRole('button', { name: 'Edit', exact: true })
 const hash = page => decodeURIComponent(new URL(page.url()).hash)
+
+test.beforeEach(async ({ page }) => {
+  await page.route('**/manage-books-htmx/webapp/manifest.json', route => route.fulfill({ json: MANIFEST }))
+})
 
 test.afterEach(async ({ request }) => {
   await request.delete(`/odata/v4/catalog/Books(ID=${BOOK},IsActiveEntity=false)`).catch(() => {})

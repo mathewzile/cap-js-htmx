@@ -141,8 +141,18 @@ describe('the Work Zone app', () => {
   test('the layout of an htmx app applies to the pages requested for it, and to nothing else', async () => {
     const authors = await get('/htmx/admin/Authors(ID=\'9d703c23-7cf7-4cad-9f2b-0e1e1a8c0001\')/books(ID=\'3d2d2d2d-1c1c-4b4b-8a8a-000000000001\')', { ...HX, 'X-Htmx-App': 'manageauthors.htmx@1.0.0' })
     assert.match(authors, /data-hf-layout="ThreeColumnsEndExpanded"/, 'the app says End, the FE manifest says Mid')
-    const books = await get('/htmx/catalog/Books', { ...HX, 'X-Htmx-App': 'managebooks.htmx@1.0.0' })
-    assert.match(books, /<div id="fcl" class="hf-fcl" data-hf-layout="OneColumn"/, 'manage-books-htmx runs Books in columns')
+    // manage-books-htmx has no columns; the fixture app fixture.fclbooks (a draft root in columns) does, for its own pages only
+    assert.doesNotMatch(await get('/htmx/catalog/Books', { ...HX, 'X-Htmx-App': 'managebooks.htmx@1.0.0' }), /id="fcl"/)
+    const fixtures = path.join(__dirname, '..', 'fixtures', 'apps')
+    const before = cds.env.htmx
+    cds.env.htmx = { ...before, apps: { ...before.apps, sources: [{ kind: 'local', root: fixtures }, { kind: 'local' }] } }
+    require('../../lib/apps').reset()
+    try {
+      assert.match(await get('/htmx/catalog/Books', { ...HX, 'X-Htmx-App': 'fixture.fclbooks@1.0.0' }), /<div id="fcl" class="hf-fcl" data-hf-layout="OneColumn"/)
+    } finally {
+      cds.env.htmx = before
+      require('../../lib/apps').reset()
+    }
     assert.doesNotMatch(await get('/htmx/catalog/Books'), /id="fcl"/, 'the standalone Books page (manage-books, no columns) does not')
   })
 })
