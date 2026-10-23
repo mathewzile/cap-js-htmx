@@ -11,6 +11,13 @@ Tree tables work for reading (`Aggregation.RecursiveHierarchy`, expand/collapse,
 - **Create child / move node**: FE's tree table toolbar creates a node below the selected one and moves nodes (cut / paste, `Aggregation.RecursiveHierarchyActions`). Today a tree table is display-only.
 - **Draft roots**: a tree whose entity is a draft root (nodes are edited as drafts) is not supported; the tree is read from the active data and only in display mode.
 
+### Out of scope
+
+Fiori elements features that are not planned. They are listed as known deviations in the README.
+
+- **Share / header action menu**: the share menu of the page header (send e-mail, save as tile, Microsoft Teams, ...).
+- **Related apps**: the "Related Apps" action of the header.
+
 ## Roadmap (future work, not scheduled)
 
 Each item needs the preceding phases done; Custom Pages also needs a design first.
