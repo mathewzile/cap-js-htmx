@@ -161,7 +161,6 @@
     document.addEventListener('htmx:after:swap', e => {
       if (!root.contains(e.target)) return
       adapter.setTitle(document.title)
-      adapter.setDirty(!!root.querySelector('.hf-page--edit'))
     })
 
     // a first visit without a route gets the entry page's route, so a reload or a copied link opens the same page

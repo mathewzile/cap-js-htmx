@@ -1,6 +1,6 @@
 /* Launchpad adapter (SAP Build Work Zone / Fiori launchpad): the route is the inner-app hash (`#Books-manageHtmx&/htmx/catalog/Books(..)`)
- * kept by UI5's HashChanger, the theme follows the launchpad's, the page title goes to the shell bar through ShellUIService and
- * the launchpad is told while a draft is being edited (its "unsaved changes" prompt).
+ * kept by UI5's HashChanger, the theme follows the launchpad's and the page title goes to the shell bar through ShellUIService. The launchpad is
+ * never told about unsaved changes: a draft is saved on the server as it is edited, so leaving it loses nothing (and would only prompt).
  *
  * `ui5` carries the UI5 modules the component loaded: { HashChanger, Theming, ControlBehavior, ShellUIService }. */
 ;(function (global) {
@@ -22,8 +22,7 @@
       // UI5's animation mode (`full`, `basic`, `minimal`, `none`): the launchpad's setting for how much the page moves
       animationMode() { return ui5.ControlBehavior?.getAnimationMode?.() ?? null },
       onAnimationMode(callback) { ui5.ControlBehavior?.attachChange?.(() => callback(ui5.ControlBehavior.getAnimationMode())) },
-      setTitle(title) { ui5.ShellUIService?.setTitle?.(title) },
-      setDirty(dirty) { global.sap?.ushell?.Container?.setDirtyFlag?.(!!dirty) }
+      setTitle(title) { ui5.ShellUIService?.setTitle?.(title) }
     }
   }
 })(window)

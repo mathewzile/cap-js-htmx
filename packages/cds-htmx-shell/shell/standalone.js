@@ -15,8 +15,7 @@
       replace(route) { global.history.replaceState(history.state, '', '#' + route) },
       theme() { return null },
       onTheme() {},
-      setTitle() {},
-      setDirty() {}
+      setTitle() {}
     }
   }
 })(window)

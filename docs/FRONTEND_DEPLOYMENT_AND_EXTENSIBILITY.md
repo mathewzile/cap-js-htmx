@@ -88,7 +88,7 @@ New package `packages/cds-htmx-shell`:
 - `adapters/flp.js`:
   - inner-app hash `#Books-manageHtmx&/Books(ID=…)` via `HashChanger`
   - `Navigation` service: intent-based navigation; `DataFieldWithIntentBasedNavigation`, `DataFieldForIntentBasedNavigation` and `SemanticObject` links become live (currently rendered disabled), unsupported intents hidden via `isNavigationSupported`
-  - `ShellUIService` for title and back; `Container.setDirtyFlag` while a draft is unsaved
+  - `ShellUIService` for title and back; no dirty flag: a draft is saved on the server as it is edited, so the launchpad never asks about leaving it
   - startup parameters → initial route; related apps via `getLinks`
 - **Theme/language sync**: in FLP mode skip `css_variables.css` (UI5 defines the same `--sap*` variables); swap only the fundamental-styles theme CSS on `Theming.attachApplied` (horizon, horizon_dark, hcb, hcw). UI5 language → `Accept-Language`.
 - Shell mode: backend skips its shellbar (`X-Htmx-Shell: none` → existing `cds.htmx.shell`).
