@@ -22,7 +22,7 @@ const normalize = uri => uri.replace(/\/+$/, '')
  *   - `fcl`: `{ roots, layouts }` when the app runs in a Flexible Column Layout (FE: router class
  *     `sap.f.routing.Router`, the FCL root view or a `flexibleColumnLayout` config): `roots` are the context paths of its
  *     List Reports (the entity sets whose pages open in columns), `layouts` the default two / three column layout types
- *   - `animations`: the motion of the app, `full` (default), `fast` (durations half as long) or `none` (no transitions or
+ *   - `animations`: the motion of the app, `full` (default), `fast` (durations a quarter as long) or `none` (no transitions or
  *     animations), from `sap.htmx.animations` (`true` / `false` are `full` / `none`)
  *   - routing: with `routing.routes` the manifest decides where a page can navigate to. Each List Report / Object Page
  *     target then carries `$navigation`, `{ <entity set or navigation property>: true }` for every `navigation` entry

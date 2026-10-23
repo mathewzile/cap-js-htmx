@@ -810,8 +810,8 @@ tr[aria-busy=true] { cursor: progress; }
 .hf-table[data-hf-tree] tbody td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---------- motion (manifest: sap.htmx.animations = full | fast | none) ---------- */
-/* fast: every duration is half as long (50% faster), through --hf-motion-scale */
-.hf-motion-fast { --hf-motion-scale: .5; }
+/* fast: every duration is a quarter as long (75% faster), through --hf-motion-scale */
+.hf-motion-fast { --hf-motion-scale: .25; }
 
 /* none: */
 /* No transitions or animations anywhere (the column layout, hover fades). The busy overlay still appears after its delay, but at once

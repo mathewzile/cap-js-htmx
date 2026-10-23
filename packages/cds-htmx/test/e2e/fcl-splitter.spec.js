@@ -130,7 +130,7 @@ test.describe('sap.htmx.animations: false (hf-no-motion on the page)', () => {
 })
 
 test.describe('sap.htmx.animations: fast', () => {
-  test('hf-motion-fast makes every duration half as long', async ({ page }) => {
+  test('hf-motion-fast makes every duration a quarter as long', async ({ page }) => {
     await page.goto(AUTHOR)
     await expect(page.locator('#op-page')).toBeVisible()
     await fullMotion(page)
@@ -140,8 +140,8 @@ test.describe('sap.htmx.animations: fast', () => {
     await page.evaluate(() => document.body.classList.add('hf-motion-fast'))
     const fast = await seconds()
     expect(fast.length).toBe(full.length)
-    fast.forEach((d, i) => expect(d).toBeCloseTo(full[i] * 0.5, 3))
-    expect(Math.max(...fast)).toBeCloseTo(0.28, 3)
+    fast.forEach((d, i) => expect(d).toBeCloseTo(full[i] * 0.25, 3))
+    expect(Math.max(...fast)).toBeCloseTo(0.14, 3)
 
     // and the layout change is over in about that time
     await page.waitForTimeout(100)

@@ -1,4 +1,4 @@
-// sap.htmx.animations: `full` (default), `fast` (durations half as long) or `none`; true / false are the old form of full / none.
+// sap.htmx.animations: `full` (default), `fast` (durations a quarter as long) or `none`; true / false are the old form of full / none.
 const cds = require('@sap/cds')
 const path = require('node:path')
 const assert = require('node:assert/strict')
