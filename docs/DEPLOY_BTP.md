@@ -58,7 +58,7 @@ The app's inbound is `Books-manageHtmx`. Its first page and service come from `s
 
 The theme follows the Work Zone user's setting (Settings > Appearance): the shell asks the launchpad's UI5 for the theme and updates when it changes. Standalone, `cds.htmx.theme` (`sap_horizon`, `sap_horizon_dark`, `sap_horizon_hcb`, `sap_horizon_hcw`, or `auto` for the browser's preference) decides.
 
-To turn every transition and animation off (for example for users or landscapes that dislike motion), set `"animations": false` in the `sap.htmx` block of the app's manifest; the default is on.
+How much the page moves is `"animations"` in the `sap.htmx` block of the app's manifest: `"full"` (default), `"fast"` (every transition 75% shorter) or `"none"` (no transitions or animations; `true` / `false` also work). In the launchpad the user's animation mode (UI5's `animationMode`) applies as well, and the calmer of the two wins.
 
 ## 4. After the first deployment: check these
 

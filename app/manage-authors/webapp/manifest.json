@@ -104,6 +104,15 @@
             "AuthorsList",
             "AuthorsObjectPage"
           ]
+        },
+        {
+          "name": "Authors_booksObjectPage",
+          "pattern": "Authors({key})/books({booksKey}):?query:",
+          "target": [
+            "AuthorsList",
+            "AuthorsObjectPage",
+            "Authors_booksObjectPage"
+          ]
         }
       ],
       "targets": {
@@ -141,11 +150,38 @@
           "options": {
             "settings": {
               "editableHeaderContent": false,
-              "contextPath": "/Authors"
+              "contextPath": "/Authors",
+              "controlConfiguration": {
+                "books/@com.sap.vocabularies.UI.v1.LineItem#Books": {
+                  "tableSettings": {
+                    "type": "ResponsiveTable"
+                  }
+                }
+              },
+              "navigation": {
+                "books": {
+                  "detail": {
+                    "route": "Authors_booksObjectPage"
+                  }
+                }
+              }
             }
           },
           "controlAggregation": "midColumnPages",
           "contextPattern": "/Authors({key})"
+        },
+        "Authors_booksObjectPage": {
+          "type": "Component",
+          "id": "Authors_booksObjectPage",
+          "name": "sap.fe.templates.ObjectPage",
+          "controlAggregation": "endColumnPages",
+          "options": {
+            "settings": {
+              "navigation": {},
+              "contextPath": "/Authors/books"
+            }
+          },
+          "contextPattern": "/Authors({key})/books({booksKey})"
         }
       }
     },

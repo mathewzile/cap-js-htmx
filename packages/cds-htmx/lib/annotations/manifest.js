@@ -22,7 +22,8 @@ const normalize = uri => uri.replace(/\/+$/, '')
  *   - `fcl`: `{ roots, layouts }` when the app runs in a Flexible Column Layout (FE: router class
  *     `sap.f.routing.Router`, the FCL root view or a `flexibleColumnLayout` config): `roots` are the context paths of its
  *     List Reports (the entity sets whose pages open in columns), `layouts` the default two / three column layout types
- *   - `animations`: `false` when the manifest says `sap.htmx.animations: false` (no transitions or animations, e.g. in the column layout)
+ *   - `animations`: the motion of the app, `full` (default), `fast` (durations a quarter as long) or `none` (no transitions or
+ *     animations), from `sap.htmx.animations` (`true` / `false` are `full` / `none`)
  *   - routing: with `routing.routes` the manifest decides where a page can navigate to. Each List Report / Object Page
  *     target then carries `$navigation`, `{ <entity set or navigation property>: true }` for every `navigation` entry
  *     whose `detail.route` is a route of the manifest; anything else is not navigable (as in FE)
@@ -33,7 +34,7 @@ function scanManifest(manifest, servicePath) {
     .find(([, ds]) => ds.type === 'OData' && normalize(ds.uri) === normalize(servicePath))
   if (!mainEntry) return null
 
-  const result = { annotationUris: [], listReports: {}, objectPages: {}, animations: manifest['sap.htmx']?.animations !== false }
+  const result = { annotationUris: [], listReports: {}, objectPages: {}, animations: motionOf(manifest['sap.htmx']?.animations) }
   for (const key of mainEntry[1].settings?.annotations || []) {
     const annDs = dataSources[key]
     if (annDs?.type === 'ODataAnnotation' && annDs.settings?.localUri) result.annotationUris.push(annDs.settings.localUri)
@@ -59,6 +60,14 @@ function scanManifest(manifest, servicePath) {
   return result
 }
 
+const MOTION_RANK = { full: 0, fast: 1, none: 2 }
+
+/** `sap.htmx.animations` as a motion mode: `true` / `full` / unset -> `full`, `false` / `none` -> `none`, `fast` -> `fast`. */
+function motionOf(value) {
+  if (value === false || value === 'none') return 'none'
+  return value === 'fast' ? 'fast' : 'full'
+}
+
 /** The `navigation` entries of a target whose route exists: `{ Books: { detail: { route: 'BooksObjectPage' } } }` -> `{ Books: true }`. */
 function navigableOf(navigation, routeNames) {
   const out = {}
@@ -82,7 +91,7 @@ function isFlexibleColumnLayout(manifest) {
  *  at `servicePath`; `annotationFiles` are absolute paths. Used so the layout builders can honor
  *  manifest page settings (§3.2b) when an FE app exists, falling back to `fe-defaults.js` otherwise. */
 function scanService(appRoot, servicePath) {
-  const result = { annotationFiles: [], listReports: {}, objectPages: {}, fcl: undefined, animations: true }
+  const result = { annotationFiles: [], listReports: {}, objectPages: {}, fcl: undefined, animations: 'full' }
   for (const manifestPath of findManifests(appRoot)) {
     let manifest
     try { manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) } catch { continue }
@@ -92,10 +101,10 @@ function scanService(appRoot, servicePath) {
     for (const uri of scan.annotationUris) result.annotationFiles.push(path.join(webappDir, uri))
     Object.assign(result.listReports, scan.listReports)
     Object.assign(result.objectPages, scan.objectPages)
-    if (!scan.animations) result.animations = false
+    if (MOTION_RANK[scan.animations] > MOTION_RANK[result.animations]) result.animations = scan.animations // several apps: the calmest wins
     if (scan.fcl) result.fcl = { roots: [...(result.fcl?.roots || []), ...scan.fcl.roots], layouts: scan.fcl.layouts }
   }
   return result
 }
 
-module.exports = { findManifests, scanManifest, scanService }
+module.exports = { findManifests, scanManifest, scanService, motionOf }

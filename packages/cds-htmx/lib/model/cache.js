@@ -26,7 +26,7 @@ function cachesFor(model, app) {
  *  when one is given, otherwise from every FE manifest in the `app/` folder. */
 function manifestScanFor(appRoot, servicePath, app) {
   if (app) return app.scanFor(servicePath)
-  if (!appRoot) return { annotationFiles: [], listReports: {}, objectPages: {}, fcl: undefined, animations: true }
+  if (!appRoot) return { annotationFiles: [], listReports: {}, objectPages: {}, fcl: undefined, animations: 'full' }
   const key = `${appRoot}:${servicePath}`
   let scan = manifestCache.get(key)
   if (!scan) manifestCache.set(key, scan = scanService(appRoot, servicePath))
@@ -40,9 +40,9 @@ function fclFor(servicePath, set, { appRoot, app } = {}) {
   return fcl?.roots.includes(`/${set}`) ? fcl.layouts : undefined
 }
 
-/** Whether pages move (column layout, hover fades): `false` when an app of the service says `sap.htmx.animations: false`. */
+/** How pages move (column layout, fades): `full`, `fast` or `none`, from `sap.htmx.animations` of the apps of the service. */
 function animationsFor(servicePath, { appRoot, app } = {}) {
-  return manifestScanFor(appRoot, servicePath, app).animations !== false
+  return manifestScanFor(appRoot, servicePath, app).animations ?? 'full'
 }
 
 function storeFor(model, service, servicePath, { appRoot, locale, app } = {}) {

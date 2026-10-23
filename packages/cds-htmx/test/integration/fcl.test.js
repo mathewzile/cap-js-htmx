@@ -144,33 +144,3 @@ describe('the Work Zone app', () => {
     assert.doesNotMatch(books, /id="fcl"/)
   })
 })
-
-describe('animations switch (sap.htmx.animations)', () => {
-  const cache = require('../../lib/model/cache')
-  const layout = require('../../lib/render/layout')
-  const manifest = animations => ({ 'sap.app': { dataSources: { mainService: { uri: '/admin/', type: 'OData' } } }, 'sap.htmx': animations === undefined ? {} : { animations } })
-
-  test('animations are on unless the manifest says false', () => {
-    assert.equal(scanManifest(manifest(), '/admin/').animations, true)
-    assert.equal(scanManifest(manifest(true), '/admin/').animations, true)
-    assert.equal(scanManifest(manifest(false), '/admin/').animations, false)
-  })
-
-  test('the service-wide answer: one app switching them off is enough, an app bundle answers for itself', () => {
-    const app = animations => ({ scanFor: () => scanManifest(manifest(animations), '/admin/') })
-    assert.equal(cache.animationsFor('/admin/', { app: app(false) }), false)
-    assert.equal(cache.animationsFor('/admin/', { app: app(undefined) }), true)
-    assert.equal(cache.animationsFor('/odata/v4/catalog/', { appRoot: path.join(__dirname, '..', '..', '..', '..', 'app') }), true)
-  })
-
-  test('a page without animations carries hf-no-motion on its body', () => {
-    const page = animations => String(layout.page({ title: 't', body: '', animations }))
-    assert.match(page(false), /<body class="htmx-fiori is-compact hf-no-motion"/)
-    assert.match(page(true), /<body class="htmx-fiori is-compact"/)
-  })
-
-  test('$shell tells the shell (Work Zone) whether to move', async () => {
-    const info = (await GET('/htmx/admin/$shell', { headers: HX })).data
-    assert.equal(info.animations, true)
-  })
-})

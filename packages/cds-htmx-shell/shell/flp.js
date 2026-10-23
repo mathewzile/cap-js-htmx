@@ -2,7 +2,7 @@
  * kept by UI5's HashChanger, the theme follows the launchpad's, the page title goes to the shell bar through ShellUIService and
  * the launchpad is told while a draft is being edited (its "unsaved changes" prompt).
  *
- * `ui5` carries the UI5 modules the component loaded: { HashChanger, Theming, ShellUIService }. */
+ * `ui5` carries the UI5 modules the component loaded: { HashChanger, Theming, ControlBehavior, ShellUIService }. */
 ;(function (global) {
   'use strict'
 
@@ -19,6 +19,9 @@
       replace(route) { hashChanger.replaceHash(strip(route)) },
       theme() { return ui5.Theming.getTheme() },
       onTheme(callback) { ui5.Theming.attachApplied(() => callback(ui5.Theming.getTheme())) },
+      // UI5's animation mode (`full`, `basic`, `minimal`, `none`): the launchpad's setting for how much the page moves
+      animationMode() { return ui5.ControlBehavior?.getAnimationMode?.() ?? null },
+      onAnimationMode(callback) { ui5.ControlBehavior?.attachChange?.(() => callback(ui5.ControlBehavior.getAnimationMode())) },
       setTitle(title) { ui5.ShellUIService?.setTitle?.(title) },
       setDirty(dirty) { global.sap?.ushell?.Container?.setDirtyFlag?.(!!dirty) }
     }

@@ -808,7 +808,11 @@ tr[aria-busy=true] { cursor: progress; }
 .hf-table[data-hf-tree] .hf-col-nav { width: 2.75rem; }
 .hf-table[data-hf-tree] tbody td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* ---------- no motion (manifest: sap.htmx.animations = false) ---------- */
+/* ---------- motion (manifest: sap.htmx.animations = full | fast | none) ---------- */
+/* fast: every duration is a quarter as long (75% faster), through --hf-motion-scale */
+.hf-motion-fast { --hf-motion-scale: .25; }
+
+/* none: */
 /* No transitions or animations anywhere (the column layout, hover fades). The busy overlay still appears after its delay, but at once
    and without spinning: that delay is feedback, not decoration. */
 .hf-no-motion, .hf-no-motion *, .hf-no-motion *::before, .hf-no-motion *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
@@ -828,7 +832,7 @@ tr[aria-busy=true] { cursor: progress; }
   min-width: 0;
   overflow: clip;
   background: var(--sapBackgroundColor, #f5f6f7);
-  transition: flex-basis .56s cubic-bezier(.4, 0, .2, 1), width .56s cubic-bezier(.4, 0, .2, 1);
+  transition: flex-basis calc(.56s * var(--hf-motion-scale, 1)) cubic-bezier(.4, 0, .2, 1), width calc(.56s * var(--hf-motion-scale, 1)) cubic-bezier(.4, 0, .2, 1);
 }
 .hf-fcl__col[hidden] { display: block; visibility: hidden; }
 .hf-fcl--dragging .hf-fcl__col { transition: none; }
@@ -887,7 +891,7 @@ tr[aria-busy=true] { cursor: progress; }
   inset-inline-start: 0;
   width: 2px;
   background: transparent;
-  transition: background-color .15s;
+  transition: background-color calc(.15s * var(--hf-motion-scale, 1));
 }
 .hf-fcl__sep:hover::before, .hf-fcl__sep:focus-visible::before, .hf-fcl--dragging .hf-fcl__sep.is-active::before { background: var(--sapContent_FocusColor, #0032a5); }
 .hf-fcl__sep:focus-visible { outline: none; }
@@ -908,7 +912,7 @@ tr[aria-busy=true] { cursor: progress; }
   color: var(--sapContent_IconColor, #1d2d3e);
   font-size: .75rem;
   opacity: 0;
-  transition: opacity .15s;
+  transition: opacity calc(.15s * var(--hf-motion-scale, 1));
 }
 .hf-fcl__sep:hover .hf-fcl__grip, .hf-fcl__sep:focus-visible .hf-fcl__grip, .hf-fcl--dragging .hf-fcl__sep.is-active .hf-fcl__grip { opacity: 1; }
 .hf-fcl__arrow {
@@ -930,7 +934,7 @@ tr[aria-busy=true] { cursor: progress; }
   font-size: .75rem;
   cursor: pointer;
   opacity: 0;
-  transition: opacity .15s, background-color .15s;
+  transition: opacity calc(.15s * var(--hf-motion-scale, 1)), background-color calc(.15s * var(--hf-motion-scale, 1));
 }
 .hf-fcl__sep:hover .hf-fcl__arrow, .hf-fcl__sep:focus-within .hf-fcl__arrow, .hf-fcl--dragging .hf-fcl__sep.is-active .hf-fcl__arrow { opacity: 1; }
 .hf-fcl__arrow:hover { background: var(--sapButton_Hover_Background, #eaecee); }

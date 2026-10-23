@@ -11,8 +11,9 @@ sap.ui.define([
   'sap/ui/dom/includeScript',
   'sap/ui/core/routing/HashChanger',
   'sap/ui/core/Theming',
+  'sap/ui/core/ControlBehavior',
   'sap/base/i18n/Localization'
-], function (UIComponent, HTML, includeScript, HashChanger, Theming, Localization) {
+], function (UIComponent, HTML, includeScript, HashChanger, Theming, ControlBehavior, Localization) {
   'use strict'
 
   return UIComponent.extend('cds.htmx.shell.Component', {
@@ -34,7 +35,7 @@ sap.ui.define([
       for (const file of ['hx-csrf.js', 'standalone.js', 'flp.js', 'shell.js']) {
         await includeScript({ url: sap.ui.require.toUrl('cds/htmx/shell/' + file) })
       }
-      const ui5 = { HashChanger, Theming }
+      const ui5 = { HashChanger, Theming, ControlBehavior }
       try { ui5.ShellUIService = await this.getService('ShellUIService') } catch (err) { /* not in a launchpad */ }
       const startup = this.getComponentData()?.startupParameters || {}
       this._shell = await window.HtmxShell.start({

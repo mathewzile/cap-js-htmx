@@ -32,6 +32,12 @@ annotate service.Authors with @(
             Label : 'General Information',
             Target : '@UI.FieldGroup#GeneratedGroup',
         },
+        {
+            $Type : 'UI.ReferenceFacet',
+            Label : 'Books',
+            ID : 'Books',
+            Target : 'books/@UI.LineItem#Books',
+        },
     ],
     UI.LineItem : [
         {
@@ -72,4 +78,24 @@ annotate service.Authors with @(
 annotate service.Authors with {
     dateOfBirth @Common.Label : 'dateOfBirth'
 };
+
+annotate service.Books with @(
+    UI.LineItem #Books : [
+        {
+            $Type : 'UI.DataField',
+            Value : title,
+            Label : 'title',
+        },
+        {
+            $Type : 'UI.DataField',
+            Value : stock,
+            Label : 'stock',
+        },
+        {
+            $Type : 'UI.DataField',
+            Value : price,
+            Label : 'price',
+        },
+    ]
+);
 

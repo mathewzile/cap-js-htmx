@@ -29,7 +29,7 @@ function headAssets(theme, base = '') {
 }
 
 /** Renders the full HTML document shell around a page fragment. */
-function page({ title, clientId, basePath, assetBase = '', body, texts = {}, animations = true }) {
+function page({ title, clientId, basePath, assetBase = '', body, texts = {}, animations = 'full' }) {
   const { theme } = config()
   return html`<!doctype html>
 <html lang="en">
@@ -40,7 +40,7 @@ function page({ title, clientId, basePath, assetBase = '', body, texts = {}, ani
   <meta name="htmx-config" content='{"extensions":"sse"}'>
   ${headAssets(theme, assetBase)}
 </head>
-<body class="htmx-fiori is-compact${animations ? '' : ' hf-no-motion'}"${clientId ? raw(` hx-headers:inherited='{"X-Htmx-Client":"${clientId}"}'`) : ''}>
+<body class="htmx-fiori is-compact${animations === 'none' ? ' hf-no-motion' : animations === 'fast' ? ' hf-motion-fast' : ''}"${clientId ? raw(` hx-headers:inherited='{"X-Htmx-Client":"${clientId}"}'`) : ''}>
   <div id="shell"></div>
   <div id="app">${raw(body)}</div>
   <div id="messages"></div>

@@ -124,3 +124,62 @@ test.describe('sap.htmx.animations: false (hf-no-motion on the page)', () => {
     expect(end).toBeGreaterThan(start + 200)
   })
 })
+
+test.describe('sap.htmx.animations: fast', () => {
+  test('hf-motion-fast makes every duration a quarter as long', async ({ page }) => {
+    await page.goto(AUTHOR)
+    await expect(page.locator('#op-page')).toBeVisible()
+    const seconds = async () => page.evaluate(() => [...document.querySelectorAll('.hf-fcl__col, .hf-fcl__grip, .hf-fcl__arrow')]
+      .map(el => getComputedStyle(el).transitionDuration.split(',').map(d => parseFloat(d))).flat())
+    const full = await seconds()
+    await page.evaluate(() => document.body.classList.add('hf-motion-fast'))
+    const fast = await seconds()
+    expect(fast.length).toBe(full.length)
+    fast.forEach((d, i) => expect(d).toBeCloseTo(full[i] * 0.25, 3))
+    expect(Math.max(...fast)).toBeCloseTo(0.14, 3)
+
+    // and the layout change is over in about that time
+    await page.waitForTimeout(100)
+    const start = await width(page, 0)
+    await separator(page, 1).hover()
+    await separator(page, 1).locator('[data-hf-fcl-arrow]').click()
+    await page.waitForTimeout(350)
+    const end = await width(page, 0)
+    await page.waitForTimeout(500)
+    expect(Math.abs(end - (await width(page, 0)))).toBeLessThan(1)
+    expect(end).toBeGreaterThan(start + 200)
+  })
+})
+
+test.describe('the shell and the launchpad animation mode', () => {
+  test('the calmer of the app\'s motion and UI5\'s animation mode applies', async ({ page }) => {
+    await page.goto('/manage-books-htmx/webapp/index.html')
+    await expect(page.locator('#lr-table-body tr').first()).toBeVisible()
+    const table = await page.evaluate(() => [
+      ['full', undefined], ['full', 'full'], ['full', 'basic'], ['full', 'minimal'], ['full', 'none'],
+      ['fast', 'full'], ['fast', 'basic'], ['fast', 'none'], ['none', 'full'], [false, 'full'], [true, 'full'], [undefined, 'minimal']
+    ].map(([app, ui5]) => window.HtmxShell.motionFor(app, ui5)))
+    expect(table).toEqual(['full', 'full', 'fast', 'fast', 'none', 'fast', 'fast', 'none', 'none', 'none', 'full', 'fast'])
+  })
+
+  test('the launchpad adapter reads UI5\'s animation mode and hears about changes', async ({ page }) => {
+    await page.goto('/manage-books-htmx/webapp/index.html')
+    await page.addScriptTag({ url: '/manage-books-htmx/webapp/shell/flp.js' }) // the launchpad adapter, which only the UI5 component loads
+    const result = await page.evaluate(() => {
+      let mode = 'basic'
+      let listener
+      const ui5 = {
+        HashChanger: { getInstance: () => ({ attachEvent() {}, getHash: () => '' }) },
+        Theming: { getTheme: () => 'sap_horizon', attachApplied() {} },
+        ControlBehavior: { getAnimationMode: () => mode, attachChange: fn => { listener = fn } }
+      }
+      const adapter = window.HtmxShellAdapters.flp(ui5)
+      const seen = [adapter.animationMode()]
+      adapter.onAnimationMode(value => seen.push(value))
+      mode = 'none'
+      listener()
+      return seen
+    })
+    expect(result).toEqual(['basic', 'none'])
+  })
+})

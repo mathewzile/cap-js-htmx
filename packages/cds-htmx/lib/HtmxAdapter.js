@@ -1087,7 +1087,7 @@ class HtmxAdapter extends HttpAdapter {
     }
   }
 
-  /** Whether pages move at all (the manifest's `sap.htmx.animations`); `false` makes the page carry `hf-no-motion`. */
+  /** How pages move (the manifest's `sap.htmx.animations`: `full`, `fast`, `none`); the page carries `hf-motion-fast` / `hf-no-motion`. */
   animationsOf(req) {
     const { appRoot: root, app } = this.appOpts(req)
     return cache.animationsFor(this.odataServicePath(), { appRoot: root, app })

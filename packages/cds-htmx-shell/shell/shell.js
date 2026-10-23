@@ -53,6 +53,17 @@
     root.append(strip)
   }
 
+  const MOTION_RANK = { full: 0, fast: 1, none: 2 }
+
+  /** The motion of the page from the app's setting (`full` | `fast` | `none`; booleans are the old form) and UI5's animation mode
+   *  (`full`, `basic`, `minimal`, `none`; the launchpad's, when there is one): the calmer of the two. `basic` and `minimal` keep
+   *  motion but shorter, so they are `fast`. */
+  function motionFor(app, ui5Mode) {
+    const fromApp = app === false || app === 'none' ? 'none' : app === 'fast' ? 'fast' : 'full'
+    const fromUi5 = ui5Mode === 'none' ? 'none' : ui5Mode === 'basic' || ui5Mode === 'minimal' ? 'fast' : 'full'
+    return MOTION_RANK[fromApp] >= MOTION_RANK[fromUi5] ? fromApp : fromUi5
+  }
+
   async function start(options) {
     const { root, base = '', app, service, entry, adapter, csrf = true } = options
     const language = options.language || navigator.language || 'en'
@@ -72,7 +83,14 @@
 
     // the container: the same elements a page rendered by the plugin has
     root.classList.add('htmx-fiori', 'hf-root', 'is-compact')
-    if (info.animations === false) root.classList.add('hf-no-motion') // sap.htmx.animations: false in the app's manifest
+    // motion: the app's (sap.htmx.animations, from $shell) and, in the launchpad, UI5's animation mode; the calmer of the two applies
+    const applyMotion = () => {
+      const mode = motionFor(info.animations, adapter.animationMode?.())
+      root.classList.toggle('hf-no-motion', mode === 'none')
+      root.classList.toggle('hf-motion-fast', mode === 'fast')
+    }
+    applyMotion()
+    adapter.onAnimationMode?.(applyMotion)
     root.setAttribute('hx-headers:inherited', JSON.stringify({ ...headers, 'X-Htmx-Client': id }))
     root.innerHTML = '<div id="shell"></div><div id="app"></div><div id="messages"></div><div id="toast"></div><div id="dialogs"></div>'
     const texts = document.createElement('script')
@@ -151,5 +169,5 @@
     return { info, clientId: id, show, destroy() { document.getElementById('sse')?.remove(); root.replaceChildren() } }
   }
 
-  global.HtmxShell = { start }
+  global.HtmxShell = { start, motionFor }
 })(window)

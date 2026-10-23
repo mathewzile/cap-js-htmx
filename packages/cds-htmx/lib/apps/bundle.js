@@ -48,7 +48,7 @@ class App {
         listReports: found?.listReports || {},
         objectPages: found?.objectPages || {},
         fcl: found?.fcl,
-        animations: found?.animations !== false
+        animations: found?.animations ?? 'full'
       }
       this.scans.set(servicePath, scan)
     }
