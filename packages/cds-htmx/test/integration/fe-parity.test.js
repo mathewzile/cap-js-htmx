@@ -154,10 +154,10 @@ describe('FE parity: capabilities, direct editing, history, confirmations (round
       const edited = await POST(`/htmx/catalog/Books(${BOOK})/$edit`, {}, { headers: HX })
       draftRaw = edited.headers['hx-replace-url'].match(/Books\((.*)\)/)[1]
       expect(edited.data).to.include('data-hf-popover-toggle')
-      expect(edited.data).to.match(/hx-get="\/htmx\/catalog\/Books\(ID='[^']*',IsActiveEntity=true\)"/) // Saved Version
+      expect(edited.data).to.match(/hx-get="\/htmx\/catalog\/Books\(ID=(?:'|&#39;).*?(?:'|&#39;),IsActiveEntity=true\)"/) // Saved Version (the quotes of a key are escaped in the attribute)
       const savedVersion = await GET(`/htmx/catalog/Books(${BOOK})`, { headers: HX })
       expect(savedVersion.data).to.include('Saved Version')
-      expect(savedVersion.data).to.match(/hx-get="\/htmx\/catalog\/Books\(ID='[^']*',IsActiveEntity=false\)"/) // switch to Draft
+      expect(savedVersion.data).to.match(/hx-get="\/htmx\/catalog\/Books\(ID=(?:'|&#39;).*?(?:'|&#39;),IsActiveEntity=false\)"/) // switch to Draft
       expect(savedVersion.data).not.to.match(/aria-label="Edit"/) // a draft exists
     })
 

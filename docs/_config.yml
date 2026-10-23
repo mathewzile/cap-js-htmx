@@ -1,0 +1,5 @@
+title: cds-htmx
+description: SAP Fiori elements style List Report and Object Page over htmx 4, as a CAP plugin
+theme: minima
+exclude:
+  - images/*.psd

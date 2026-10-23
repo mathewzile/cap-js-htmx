@@ -14,12 +14,16 @@ const prefix = () => scope.getStore()?.prefix ?? ''
 const prefixOf = column => column >= 2 ? `c${column}-` : ''
 
 /** Runs `fn` with the ids of FCL column `column` (0 List Report, 1 Object Page, 2 sub-object page, ...). */
-const inColumn = (column, fn) => scope.run({ prefix: prefixOf(column) }, fn)
+const inColumn = (column, fn) => scope.run({ prefix: prefixOf(column), column }, fn)
+
+/** The column of the page being rendered (`undefined` outside a Flexible Column Layout). A tracked view remembers it,
+ *  so a push to that page later is rendered with the ids of its own column, not those of the request that pushes. */
+const column = () => scope.getStore()?.column
 
 /** Switches the current scope to the column of the page about to be rendered (no scope = no FCL = nothing to do). */
 function setColumn(column) {
   const store = scope.getStore()
-  if (store) store.prefix = prefixOf(column)
+  if (store) Object.assign(store, { prefix: prefixOf(column), column })
 }
 
 /** An id as the client sent it back (`X-Hf-Source`), without the column prefix. */
@@ -51,4 +55,4 @@ const opFooter = () => `${prefix()}op-footer`
 const messages = () => 'messages'
 const toast = () => 'toast'
 
-module.exports = { inColumn, setColumn, unprefixed, sanitize, lrTable, lrTableBody, lrFilterBar, lrToolbar, lrCount, lrGrowing, lrRow, lrColumnSort, opSection, opField, opHeaderFacet, opAnchor, opHeader, opPage, opTitle, opMessages, opDraftStatus, opFooter, messages, toast }
+module.exports = { inColumn, column, setColumn, unprefixed, sanitize, lrTable, lrTableBody, lrFilterBar, lrToolbar, lrCount, lrGrowing, lrRow, lrColumnSort, opSection, opField, opHeaderFacet, opAnchor, opHeader, opPage, opTitle, opMessages, opDraftStatus, opFooter, messages, toast }

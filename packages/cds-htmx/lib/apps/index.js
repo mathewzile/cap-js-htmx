@@ -1,3 +1,4 @@
+const cds = require('@sap/cds')
 const { config } = require('../config')
 const { sourcesFor, registerSourceKind } = require('./sources')
 const { loadBundle } = require('./bundle')
@@ -95,7 +96,7 @@ async function resolve(ref) {
         failures.set(id, { until: Date.now() + FAILURE_TTL, error })
         throw error
       }
-      console.error(`[htmx] refreshing app ${id} failed, serving the cached version:`, error.message)
+      cds.log('htmx').error(`refreshing app ${id} failed, serving the cached version:`, error.message)
       entry.fetchedAt = entry.checkedAt = Date.now()
     }
   }

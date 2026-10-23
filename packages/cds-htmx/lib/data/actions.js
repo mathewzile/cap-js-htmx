@@ -1,5 +1,4 @@
 const cds = require('@sap/cds')
-const { SELECT } = cds.ql
 
 /** Invoke a bound or unbound action via the service. Returns result and collects req.messages from handlers.
  *  `actionFqn` is the fully qualified action name (e.g., "CatalogService.Books.addStock").

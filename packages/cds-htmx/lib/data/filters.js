@@ -16,11 +16,16 @@ function instant(raw) {
 const OPS = { eq: '=', ge: '>=', le: '<=', gt: '>', lt: '<', ne: '!=' }
 const KEY = /^f\.([^.]+)(?:\.(ge|le|gt|lt|ne|eq))?$/
 
-function coerce(raw) {
-  if (raw === 'true') return true
-  if (raw === 'false') return false
-  if (/^-?\d+(\.\d+)?$/.test(raw)) return Number(raw)
-  return raw
+const NUMERIC_TYPES = /^Edm\.(Int\d+|Byte|SByte|Decimal|Double|Single)$/
+
+/** A filter value as the column holds it. The field's Edm type decides: a String such as an ISBN (`0123`) stays text,
+ *  only numeric types become numbers and only Boolean becomes true/false. A field without a type keeps the guess by shape. */
+function coerce(raw, field) {
+  const type = field?.edmType
+  const asNumber = /^-?\d+(\.\d+)?$/.test(raw) ? Number(raw) : raw
+  if (!type) return raw === 'true' ? true : raw === 'false' ? false : asNumber
+  if (type === 'Edm.Boolean') return raw === 'true' ? true : raw === 'false' ? false : raw
+  return NUMERIC_TYPES.test(type) ? asNumber : raw
 }
 
 /** EditingStatus values -> draft-state predicate. Kept flat (no `xpr` grouping, only `and`) so lean
@@ -64,7 +69,7 @@ function parseFilters(query, layout) {
       if (where.length) { if (clauses.length) clauses.push('and'); clauses.push(...where) }
       continue
     }
-    const values = rawValues.map(v => field.edmType === 'Edm.DateTimeOffset' ? instant(v) : coerce(v))
+    const values = rawValues.map(v => field.edmType === 'Edm.DateTimeOffset' ? instant(v) : coerce(v, field))
     if (clauses.length) clauses.push('and')
     if (op === 'eq' && values.length > 1) clauses.push(ref(field.cqlPath), 'in', { list: values.map(val) })
     else clauses.push(ref(field.cqlPath), OPS[op], val(values[0]))
@@ -90,22 +95,22 @@ function conditionsToWhere(field, tokens) {
     const days = isDate(field) ? dateRange(token) : undefined
     if (days) { included.push([{ xpr: [column, '>=', val(days[0]), 'and', column, '<=', val(days[1])] }]); continue }
     const compare = COMPARE.exec(token)
-    if (compare) { included.push([column, COMPARE_OP[compare[1]], val(coerce(compare[2]))]); continue }
+    if (compare) { included.push([column, COMPARE_OP[compare[1]], val(coerce(compare[2], field))]); continue }
     const between = /^(.+)\.\.\.(.+)$/.exec(token) // `a...b`
-    if (between) { included.push([{ xpr: [column, '>=', val(coerce(between[1])), 'and', column, '<=', val(coerce(between[2]))] }]); continue }
+    if (between) { included.push([{ xpr: [column, '>=', val(coerce(between[1], field)), 'and', column, '<=', val(coerce(between[2], field))] }]); continue }
     const starts = token.startsWith('*')
     const ends = token.endsWith('*') && token.length > 1
     const text = token.replace(/^\*/, '').replace(/\*$/, '')
     if (starts && ends) included.push([{ func: 'contains', args: [column, val(text)] }])
     else if (ends) included.push([{ func: 'startswith', args: [column, val(text)] }])
     else if (starts) included.push([{ func: 'endswith', args: [column, val(text)] }])
-    else included.push([column, '=', val(coerce(text))])
+    else included.push([column, '=', val(coerce(text, field))])
   }
   const where = []
   const add = part => { if (where.length) where.push('and'); where.push(...part) }
   if (included.length === 1) add(included[0])
   else if (included.length) add([{ xpr: included.flatMap((part, i) => i ? ['or', ...part] : part) }])
-  for (const text of excluded) add([column, '!=', val(coerce(text))])
+  for (const text of excluded) add([column, '!=', val(coerce(text, field))])
   return where
 }
 

@@ -66,6 +66,8 @@
 
   async function start(options) {
     const { root, base = '', app, service, entry, adapter, csrf = true } = options
+    const abort = new AbortController() // every document listener of this start; destroy() removes them, so a second start does not stack them
+    const { signal } = abort
     const language = options.language || navigator.language || 'en'
     const id = clientId()
     const headers = { 'X-Htmx-Base': base, 'X-Htmx-App': app, 'Accept-Language': language }
@@ -123,7 +125,7 @@
       if (variables && info.variables?.[horizon]) variables.href = info.variables[horizon]
     }
     adapter.onTheme(applyTheme)
-    if (adapter.name !== 'flp' && info.auto) dark?.addEventListener?.('change', () => applyTheme(preferred()))
+    if (adapter.name !== 'flp' && info.auto) dark?.addEventListener?.('change', () => applyTheme(preferred()), { signal })
 
     if (!global.htmx) {
       const meta = document.createElement('meta')
@@ -139,7 +141,7 @@
 
     // routes: the URL/hash holds the path below `base`. htmx still decides what is a push and what a replace (hx-push-url, HX-Push-Url,
     // HX-Replace-Url) but its history entries are cancelled and handed to the adapter; restoring a page is the adapter's hash event.
-    document.addEventListener('htmx:before:history:restore', e => e.preventDefault())
+    document.addEventListener('htmx:before:history:restore', e => e.preventDefault(), { signal })
     const appElement = document.getElementById('app')
     let current = null
     const toRoute = path => (path.startsWith(base) ? path.slice(base.length) : path)
@@ -153,7 +155,7 @@
       const route = toRoute(path)
       current = route
       if (type === 'push') adapter.push(route); else adapter.replace(route)
-    })
+    }, { signal })
     // The launchpad hands the route back through its hash, which may encode it (`(`, `=`, `,` in a key): the hash event of our own push
     // is the same route, not a navigation, and a real one (back, forward) is fetched in the form the server knows.
     const decoded = route => { try { return decodeURIComponent(route) } catch { return route } }
@@ -161,14 +163,14 @@
     document.addEventListener('htmx:after:swap', e => {
       if (!root.contains(e.target)) return
       adapter.setTitle(document.title)
-    })
+    }, { signal })
 
     // a first visit without a route gets the entry page's route, so a reload or a copied link opens the same page
     const first = adapter.current()
     await show(first || entry)
     if (!first) adapter.replace(entry)
     document.dispatchEvent(new CustomEvent('hf:ready'))
-    return { info, clientId: id, show, destroy() { document.getElementById('sse')?.remove(); root.replaceChildren() } }
+    return { info, clientId: id, show, destroy() { abort.abort(); adapter.detach?.(); document.getElementById('sse')?.remove(); root.replaceChildren() } }
   }
 
   global.HtmxShell = { start, motionFor }

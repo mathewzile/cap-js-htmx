@@ -75,7 +75,7 @@ Everything below was tested locally against a real `@sap/approuter`, but not on 
 
 ## 5. What is not verified, and what is not there
 
-- **Not run on BTP.** Verified locally: the HTML5 app behind a real `@sap/approuter` 23.3.0 (prefix, hash routing, deep links, SSE, versioned assets), the CSRF client against a stand-in for the approuter's token handling, and the `srv` module unpacked and started from the MTAR. Not verified: the FLP adapter in a real launchpad (hash/URL prefix, theme sync, `ShellUIService` title), XSUAA token validation in CAP, and SAP HANA (the service ran on SQLite here).
+- **Not run on BTP.** Verified locally: the HTML5 app behind a real `@sap/approuter` 23.3.0 (prefix, hash routing, deep links, SSE, versioned assets), the CSRF client against a stand-in for the approuter's token handling, and the `srv` module unpacked and started from the MTAR. The FLP adapter (hash/URL prefix, theme sync, `ShellUIService` title, animation mode) is verified in a real launchpad. Not verified: XSUAA token validation in CAP, and SAP HANA (the service ran on SQLite here).
 - **`html5-repo` app source.** The backend reads the app's manifest and annotations from its own copy in `gen/srv/app` (the `local` source). That copy and the HTML5 zip come from the same build. Pulling them from the HTML5 repository at run time (`destination`/`html5-repo` sources) is available but not used here.
 - **No scopes yet.** `xs-security.json` defines none; any authenticated user may use the app. Add scopes and role templates when services get `@requires`.
 - **Intent-based navigation links** (`DataFieldWithIntentBasedNavigation`) are still rendered disabled.

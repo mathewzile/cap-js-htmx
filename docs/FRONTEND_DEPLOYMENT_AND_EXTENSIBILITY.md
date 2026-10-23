@@ -19,7 +19,7 @@ Browser / Work Zone (FLP)
      ├─ manifest.json (FE V4 manifest + "sap.htmx")  annotations/*.xml  i18n/  ext/fragment/*.html  ext/controller/*.js
      └─ requests  /htmx/** ──xs-app route──► destination "cap-htmx-srv" ──► CAP + cds-htmx (renders fragments)
                                                                               │
-                         AppSource "pull" (destination / html5-repo / local) ◄┘ fetches manifest + declarative files, cached by version
+                         AppSource "pull" (destination / local) ◄┘ fetches manifest + declarative files, cached by version
 ```
 
 - **Backend** stays the rendering engine. In *shell mode* it renders fragments only. Requests without app headers behave exactly as today.
@@ -60,7 +60,7 @@ New `packages/cds-htmx/lib/apps/`:
 - Providers:
   - `local`: `manifest.js findManifests` over `app/`; dev default; mtime check invalidates.
   - `destination`: SAP Cloud SDK `executeHttpRequest`, destination e.g. `htmx-apps`, path template `/{appId}/`; optional dependency, lazy-required.
-  - `html5-repo`: bound `html5-apps-repo` app-runtime instance, client credentials. **Spike in Phase 7: confirm the runtime content URL format.** Until then `destination` is the documented production default.
+  - `html5-repo`: **not implemented** (the HTML5 runtime content URL could not be verified); `destination` is the production default, and `registerSourceKind` adds another kind.
 - Backend-team code (CAP handlers, the plugin SPI in §6C) is co-deployed with srv, never pulled.
 
 ## 4. Deployment on BTP (Cloud Foundry, MTA)
@@ -92,7 +92,7 @@ New package `packages/cds-htmx-shell`:
   - startup parameters → initial route; related apps via `getLinks`
 - **Theme/language sync**: in FLP mode skip `css_variables.css` (UI5 defines the same `--sap*` variables); swap only the fundamental-styles theme CSS on `Theming.attachApplied` (horizon, horizon_dark, hcb, hcw). UI5 language → `Accept-Language`.
 - Shell mode: backend skips its shellbar (`X-Htmx-Shell: none` → existing `cds.htmx.shell`).
-- **CSS/DOM isolation**: plugin CSS in `@layer htmx-fiori`, body-level rules scoped to `.hf-root` (today `body.htmx-fiori` in `public/htmx-fiori.css` and `layout.js`); dialogs/popovers mount inside `.hf-root` above the shell bar.
+- **CSS/DOM isolation**: plugin CSS is not yet in a CSS `@layer` (planned), body-level rules scoped to `.hf-root` (today `body.htmx-fiori` in `public/htmx-fiori.css` and `layout.js`); dialogs/popovers mount inside `.hf-root` above the shell bar.
 - App manifest: `sap.cloud: { public: true, service: "cap-htmx" }`, `crossNavigation.inbounds` (e.g. `Books-manageHtmx`), `sap.ui5.dependencies` limited to `sap.ui.core`.
 - Fallback: the zip's `index.html` registered as a Work Zone **URL app**.
 
@@ -149,7 +149,7 @@ app/manage-books-htmx/                    # new npm workspace (root workspaces a
   webapp/ manifest.json  Component.js (extends cds-htmx-shell)  index.html
           annotations/annotation.xml  i18n/  ext/fragment/*.fragment.html  ext/controller/*.js
 packages/cds-htmx-shell/                  # ui5/Component.js, shell.js, adapters/, ext/hx-fiori.js, ext/hx-csrf.js
-packages/cds-htmx/lib/apps/               # sources.js, bundle.js, providers/{local,destination,html5-repo}.js, template.js
+packages/cds-htmx/lib/apps/               # sources.js, bundle.js, providers/{local,destination}.js
 mta.yaml                                  # srv + html5 deployer + destination content + xsuaa
 ```
 `app/manage-books` (FE reference app) is unchanged. The new app owns its `annotation.xml`.

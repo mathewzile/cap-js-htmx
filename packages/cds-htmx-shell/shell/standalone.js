@@ -9,7 +9,8 @@
   global.HtmxShellAdapters.standalone = function standalone() {
     return {
       name: 'standalone',
-      attach({ onRoute }) { global.addEventListener('hashchange', () => onRoute(this.current())) },
+      attach({ onRoute }) { this.listener = () => onRoute(this.current()); global.addEventListener('hashchange', this.listener) },
+      detach() { global.removeEventListener('hashchange', this.listener) },
       current() { return decode(global.location.hash.replace(/^#/, '')) || null },
       push(route) { global.location.hash = '#' + route },
       replace(route) { global.history.replaceState(history.state, '', '#' + route) },

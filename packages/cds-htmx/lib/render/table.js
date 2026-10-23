@@ -86,7 +86,7 @@ function objectStatus(cls, text) {
 }
 
 function checkbox(label, { name, value } = {}) {
-  return html`<input type="checkbox" class="hf-checkbox" aria-label="${label}"${name ? raw(` name="${name}"`) : html``}${value != null ? html` value="${value}"` : html``}>`
+  return html`<input type="checkbox" class="hf-checkbox" aria-label="${label}"${name ? html` name="${name}"` : html``}${value != null ? html` value="${value}"` : html``}>`
 }
 
 /** Row selection exists to act on rows (Delete); an entity that can't be deleted gets no checkbox column (FE). */

@@ -89,3 +89,17 @@ test('parseSearch() trims and ignores a blank $search', () => {
   assert.equal(parseSearch({ $search: '   ' }), undefined)
   assert.equal(parseSearch({}), undefined)
 })
+
+test('parseFilters() converts a value by the Edm type of the field: a String of digits stays text', () => {
+  const typed = { filterBar: { fields: [
+    { path: 'isbn', cqlPath: 'isbn', edmType: 'Edm.String' },
+    { path: 'stock', cqlPath: 'stock', edmType: 'Edm.Int32' },
+    { path: 'flag', cqlPath: 'flag', edmType: 'Edm.Boolean' }
+  ] } }
+  assert.deepEqual(parseFilters({ 'f.isbn': '0123' }, typed), [R('isbn'), '=', V('0123')])
+  assert.deepEqual(parseFilters({ 'f.isbn': ['1', '2'] }, typed), [R('isbn'), 'in', { list: [V('1'), V('2')] }])
+  assert.deepEqual(parseFilters({ 'f.isbn': '*12*' }, typed), [{ func: 'contains', args: [R('isbn'), V('12')] }])
+  assert.deepEqual(parseFilters({ 'f.stock': '10' }, typed), [R('stock'), '=', V(10)])
+  assert.deepEqual(parseFilters({ 'f.flag': 'true' }, typed), [R('flag'), '=', V(true)])
+  assert.deepEqual(parseFilters({ 'f.isbn': 'true' }, typed), [R('isbn'), '=', V('true')])
+})

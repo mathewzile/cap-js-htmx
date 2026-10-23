@@ -108,7 +108,7 @@ class HtmxAdapter extends HttpAdapter {
     const { stickySessions } = config()
     const name = stickySessions === true ? 'JSESSIONID' : stickySessions
     const wanted = name && req.method === 'GET' && (req.path === '/$events' || req.path === '/$shell' || !this.isFragmentRequest(req))
-    if (wanted && !(req.headers.cookie || '').split(/;s*/).some(c => c.startsWith(`${name}=`))) {
+    if (wanted && !(req.headers.cookie || '').split(/;\s*/).some(c => c.startsWith(`${name}=`))) {
       const secure = req.secure || req.headers['x-forwarded-proto'] === 'https'
       res.append('Set-Cookie', `${name}=${crypto.randomUUID()}; Path=/; HttpOnly; SameSite=Lax${secure ? '; Secure' : ''}`)
     }
@@ -135,39 +135,11 @@ class HtmxAdapter extends HttpAdapter {
     })
   }
 
-  /** Logs incoming htmx and SSE requests (§logging: match OData's `[odata] -` format). */
+  /** Logs incoming htmx and SSE requests the way CAP logs OData ones (`[htmx] - GET /Books`). */
   logRequest(req, res, next) {
-    const method = req.method
-    const path = req.path
-    const isSSE = path === '/$events'
-    const prefix = isSSE ? '[sse]' : '[htmx]'
-    const hasQuery = Object.keys(req.query).length > 0
-
-    const log = () => {
-      if (isSSE) {
-        console.error(`${prefix} - ${method} ${path} { client: '${req.query.client}' }`)
-      } else if (hasQuery) {
-        console.error(`${prefix} - ${method} ${path} ${JSON.stringify(req.query)}`)
-      } else {
-        console.error(`${prefix} - ${method} ${path}`)
-      }
-    }
-
-    const originalJson = res.json
-    const originalSend = res.send
-    res.json = function(data) {
-      log()
-      return originalJson.apply(this, arguments)
-    }
-    res.send = function(data) {
-      log()
-      return originalSend.apply(this, arguments)
-    }
-    res.sendStatus = function(status) {
-      log()
-      return res.status(status).end()
-    }
-
+    const sse = req.path === '/$events'
+    const detail = sse ? ` { client: '${req.query.client}' }` : Object.keys(req.query).length ? ` ${JSON.stringify(req.query)}` : ''
+    cds.log(sse ? 'sse' : 'htmx').info(`${req.method} ${req.path}${detail}`)
     next()
   }
 
@@ -223,12 +195,14 @@ class HtmxAdapter extends HttpAdapter {
 
   trackView(req, view) {
     // A full page load has no client id yet (it is created for the response): remember the view for it
-    req.hfView = this.viewOf(req, view)
+    // (it also remembers the Flexible Column Layout column the page is in: a push to it later renders with that column's ids)
+    const tracked = this.viewOf(req, { ...view, column: ids.column() })
+    req.hfView = tracked
     const clientId = req.headers['x-htmx-client']
     if (!clientId) return
     // The stream may not be open yet (pages that want one open it after the swap): it picks the view up then
-    if (channels.get(clientId)) channels.setView(clientId, this.viewOf(req, view))
-    else channels.rememberView(clientId, this.viewOf(req, view))
+    if (channels.forUser(clientId)) channels.setView(clientId, tracked)
+    else channels.rememberView(clientId, tracked)
   }
 
   entitySet(name) {
@@ -550,7 +524,7 @@ class HtmxAdapter extends HttpAdapter {
     const header = req.headers['x-hf-source']
     const source = typeof header === 'string' && /^[\w-]+$/.test(header) ? header : null
     const { parts, layout, row, title } = await engine.bindingParts(tx, view, { path, source, ...this.appOpts(req) })
-      .catch(err => { console.error('[htmx] binding refresh for', path, 'failed:', err.message); return { parts: [], layout: null, row: null, title: null } })
+      .catch(err => { cds.log('htmx').error('binding refresh for', path, 'failed:', err.message); return { parts: [], layout: null, row: null, title: null } })
     // The value is valid again (clear its message) unless it is a mandatory field the user emptied
     const missing = layout ? draftMessages.missingMandatory(layout, row, [path], this.text(req, 'MissingValue')) : []
     res.set('HX-Trigger', draftMessages.triggerHeader({ clear: [path], set: draftMessages.labelled(missing, layout ?? {}), title }))
@@ -564,7 +538,7 @@ class HtmxAdapter extends HttpAdapter {
     // the page asks for the effects to wait until the focus leaves the field group (`POST $effects` then runs them)
     if (req.headers['x-hf-defer'] === '1') return engine.defer(clientId, view.entitySetPath, path)
     await engine.onChange(tx, view, { clientId, properties: [path] })
-      .catch(err => console.error('[sse] side effects for', path, 'failed:', err.message))
+      .catch(err => cds.log('sse').error('side effects for', path, 'failed:', err.message))
   }
 
   /** Parses a path below a draft root: `Books(k)/chapters(k2)` followed by `/$field/title` (a change) or
@@ -619,7 +593,7 @@ class HtmxAdapter extends HttpAdapter {
     if (properties.length) {
       const view = { service: this.service.name, servicePath: this.odataServicePath(), entityType: entity.name, keys: keysLib.parseKeys(raw), contextPath: `/${set}`, basePath: this.basePath(req), entitySetPath }
       await engine.onChange(tx, view, { clientId, properties })
-        .catch(err => console.error('[sse] side effects for', properties.join(','), 'failed:', err.message))
+        .catch(err => cds.log('sse').error('side effects for', properties.join(','), 'failed:', err.message))
     }
     res.sendStatus(204)
   }
@@ -648,7 +622,7 @@ class HtmxAdapter extends HttpAdapter {
       // A field of the child's own page: same as a field of the root page (other occurrences, header title, validation)
       const view = { service: this.service.name, servicePath: this.odataServicePath(), entityType: n.entityType, keys: n.keys, contextPath: n.parent.contextPath + `/${n.nav}`, basePath: this.basePath(req), entitySetPath: n.path }
       const { parts, layout: childLayout, row: childRow } = await engine.bindingParts(tx, view, { path: n.property, source, ...this.appOpts(req) })
-        .catch(err => { console.error('[htmx] binding refresh for', n.property, 'failed:', err.message); return { parts: [], layout: null, row: null } })
+        .catch(err => { cds.log('htmx').error('binding refresh for', n.property, 'failed:', err.message); return { parts: [], layout: null, row: null } })
       const missingField = childLayout ? draftMessages.missingMandatory(childLayout, childRow, [n.property], this.text(req, 'MissingValue')) : []
       res.set('HX-Trigger', draftMessages.triggerHeader({ clear: [n.property], set: draftMessages.labelled(missingField, childLayout ?? {}) }))
       res.status(200).type('html').send([this.messagesPartial([]), status, ...(parts.length ? [engine.partialsMarkup(parts)] : [])].join('\n'))
@@ -669,7 +643,7 @@ class HtmxAdapter extends HttpAdapter {
     if (!clientId) return
     const view = { service: this.service.name, servicePath: this.odataServicePath(), entityType: n.root.entityType, keys: n.root.keys, contextPath: `/${n.root.set}`, basePath: this.basePath(req), entitySetPath: `${n.root.set}(${n.root.raw})` }
     await engine.onChange(tx, view, { clientId, navigations: [n.segments[1].set] })
-      .catch(err => console.error('[sse] side effects for', n.nav, 'failed:', err.message))
+      .catch(err => cds.log('sse').error('side effects for', n.nav, 'failed:', err.message))
   }
 
   /** `POST …/chapters/$delete`: deletes the ticked rows of a table section of the draft: the draft rows of a composition (CANCEL of
@@ -803,7 +777,7 @@ class HtmxAdapter extends HttpAdapter {
         entityType: entity.name, keys, segments: [{ set, raw }], contextPath: `/${set}`
       })
     } catch (err) {
-      res.status(400).send(`Action failed: ${err.message}`)
+      this.reject(req, res, 400, 'ActionFailed', err.message)
     }
   }
 
@@ -958,8 +932,6 @@ class HtmxAdapter extends HttpAdapter {
     const lrLayout = cache.listReportFor(cds.model, this.service.name, this.odataServicePath(), entity.name, `/${req.params.Set}`, opts)
     const parsedFilters = filtersLib.parseFilters(req.query, lrLayout)
     const search = filtersLib.parseSearch(req.query)
-    const columnsSelected = queryLib.selectColumns(cds.model, entity.name, lrLayout)
-    const orderByTerms = queryLib.parseOrderBy(req.query, columnsSelected)
     // A query returns at most `cds.query.limit.max` rows (1000 by default), so a long list is read page by page; each page
     // asks for one row more than it keeps (the has-more probe), which must still fit under that maximum
     const pageSize = Math.max((cds.env.query?.limit?.max ?? 1000) - 1, 1)
@@ -990,7 +962,6 @@ class HtmxAdapter extends HttpAdapter {
       'Content-Type': 'text/csv; charset=utf-8',
       'Content-Disposition': `attachment; filename="${req.params.Set}.csv"; filename*=UTF-8''${encodeURIComponent(name)}.csv`
     })
-    void orderByTerms // sort comes from the query itself (listReportQuery reads `$orderby`)
     res.send('﻿' + lines.join('\r\n') + '\r\n')
   }
 
@@ -1220,7 +1191,7 @@ class HtmxAdapter extends HttpAdapter {
   async playgroundWatch(req, res) {
     if (!this.playgroundEnabled()) return res.sendStatus(404)
     const entity = this.entitySet(String(req.body?.set))
-    if (!entity || !channels.get(req.body?.client)) return res.sendStatus(404)
+    if (!entity || !channels.forUser(req.body?.client)) return res.sendStatus(404)
     channels.setView(req.body.client, this.viewOf(req, { entityType: entity.name, list: true, set: req.body.set }))
     res.sendStatus(204)
   }
@@ -1278,7 +1249,7 @@ class HtmxAdapter extends HttpAdapter {
     openSse(res)
     channels.add(clientId, { res, user: cds.context.user, locale: cds.context.locale, app: req.htmxApp?.ref ?? null, view: channels.takePending(clientId) })
     writeSse(res, { event: 'connected', data: clientId })
-    req.on('close', () => channels.remove(clientId))
+    req.on('close', () => channels.remove(clientId, res))
   }
 }
 

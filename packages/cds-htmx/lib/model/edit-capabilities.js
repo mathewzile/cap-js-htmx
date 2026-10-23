@@ -1,4 +1,4 @@
-const { buildCapabilities, containerTarget } = require('./list-report')
+const { buildCapabilities, containerTarget } = require('./capabilities')
 const { evaluate } = require('../annotations/expressions')
 
 /** How an entity set can be changed, from the annotations the OData service exposes (the same ones

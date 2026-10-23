@@ -13,7 +13,8 @@
     const hashChanger = ui5.HashChanger.getInstance()
     return {
       name: 'flp',
-      attach({ onRoute }) { hashChanger.attachEvent('hashChanged', e => onRoute(e.getParameter('newHash') ? '/' + strip(e.getParameter('newHash')) : null)) },
+      attach({ onRoute }) { this.listener = e => onRoute(e.getParameter('newHash') ? '/' + strip(e.getParameter('newHash')) : null); hashChanger.attachEvent('hashChanged', this.listener) },
+      detach() { hashChanger.detachEvent('hashChanged', this.listener) },
       current() { return hashChanger.getHash() ? '/' + strip(hashChanger.getHash()) : null },
       push(route) { hashChanger.setHash(strip(route)) },
       replace(route) { hashChanger.replaceHash(strip(route)) },

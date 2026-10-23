@@ -12,13 +12,16 @@
 
   const SAFE = /^(GET|HEAD|OPTIONS)$/i
 
+  let listener // the one request hook: installing again (an app opened a second time in a launchpad) replaces it
+
   function install({ url, headers = {} }) {
     let token
+    let fetched = false // the server was asked: without an approuter it sends no token, and asking again before every write would be a wasted request
     let pending
 
     function fetchToken() {
       pending ||= fetch(url, { method: 'GET', credentials: 'same-origin', headers: { ...headers, 'X-CSRF-Token': 'Fetch', 'HX-Request': 'true' } })
-        .then(res => { const value = res.headers.get('x-csrf-token'); token = value && value.toLowerCase() !== 'required' ? value : undefined })
+        .then(res => { const value = res.headers.get('x-csrf-token'); token = value && value.toLowerCase() !== 'required' ? value : undefined; fetched = true })
         .catch(() => { token = undefined })
         .finally(() => { pending = undefined })
       return pending
@@ -32,22 +35,25 @@
       return next
     }
 
-    document.addEventListener('htmx:config:request', e => {
+    if (listener) document.removeEventListener('htmx:config:request', listener)
+    listener = e => {
       const ctx = e.detail?.ctx
       const request = ctx?.request
       if (!request || SAFE.test(request.method || 'GET')) return
       const send = ctx.fetch ?? global.fetch.bind(global)
       ctx.fetch = async (target, init) => {
-        if (!token) await (pending || fetchToken())
+        if (!token && !fetched) await (pending || fetchToken())
         let res = await send(target, withToken(init))
         if (res.status === 403 && res.headers.get('x-csrf-token')?.toLowerCase() === 'required') {
           token = undefined
+          fetched = false
           await fetchToken()
           if (token) res = await send(target, withToken(init)) // the write never reached the backend: safe to repeat once
         }
         return res
       }
-    })
+    }
+    document.addEventListener('htmx:config:request', listener)
 
     return { refresh: fetchToken, get token() { return token } }
   }

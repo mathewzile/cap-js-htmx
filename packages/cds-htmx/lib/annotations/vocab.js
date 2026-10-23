@@ -5,39 +5,9 @@
  * (e.g. `@Common.SideEffects#Stock`), so no normalization is needed for that source.
  * Hand-authored `annotation.xml` files reference vocabularies via `edmx:Reference` /
  * `edmx:Include Alias="...">` though, and may spell a term's `@type` as a full URL
- * fragment (`...#UI.ReferenceFacet`). This module is the single place that turns any
- * of those spellings into the same `Alias.Term` form used throughout the plugin.
+ * fragment (`...#UI.ReferenceFacet`). This module turns those spellings into the same
+ * `Alias.Term` form used throughout the plugin (the `Include` aliases themselves are resolved in `xml.js`).
  */
-
-/** Namespace → default alias, used when an annotation.xml Include omits Alias (rare) or as a fallback. */
-const DEFAULT_ALIASES = {
-  'com.sap.vocabularies.UI.v1': 'UI',
-  'com.sap.vocabularies.Common.v1': 'Common',
-  'com.sap.vocabularies.Communication.v1': 'Communication',
-  'com.sap.vocabularies.Capabilities.v1': 'Capabilities',
-  'com.sap.vocabularies.Analytics.v1': 'Analytics',
-  'com.sap.vocabularies.PersonalData.v1': 'PersonalData',
-  'com.sap.vocabularies.Session.v1': 'Session',
-  'com.sap.vocabularies.HTML5.v1': 'HTML5',
-  'Org.OData.Core.V1': 'Core',
-  'Org.OData.Measures.V1': 'Measures',
-  'Org.OData.Validation.V1': 'Validation',
-  'Org.OData.Capabilities.V1': 'Capabilities',
-  'Org.OData.Aggregation.V1': 'Aggregation',
-  'com.sap.vocabularies.Hierarchy.v1': 'Hierarchy'
-}
-
-/** The default record $Type for members of well-known annotation collections, used when a
- *  Record omits an explicit Type (as CAP's own compiler output does for the common case). */
-const DEFAULT_RECORD_TYPES = {
-  'UI.LineItem': 'UI.DataField',
-  'UI.Facets': 'UI.ReferenceFacet',
-  'UI.HeaderFacets': 'UI.ReferenceFacet',
-  'UI.Identification': 'UI.DataField',
-  'UI.FieldGroup.Data': 'UI.DataField',
-  'UI.SelectionFields': 'UI.DataField',
-  'Common.ValueList.Parameters': 'Common.ValueListParameterInOut'
-}
 
 /** Extracts the trailing `Alias.Term` from a vocabulary URL fragment, e.g.
  *  `https://sap.github.io/odata-vocabularies/vocabularies/UI.xml#UI.ReferenceFacet` -> `UI.ReferenceFacet`. */
@@ -71,13 +41,4 @@ function parseAnnotationKey(key) {
   }
 }
 
-/** Alias.Term key, with optional qualifier, e.g. `common('SideEffects','Stock')` -> `Common.SideEffects#Stock`. */
-function qualifiedTerm(alias, term, qualifier) {
-  return qualifier ? `${alias}.${term}#${qualifier}` : `${alias}.${term}`
-}
-
-function defaultRecordType(contextTerm) {
-  return DEFAULT_RECORD_TYPES[contextTerm]
-}
-
-module.exports = { DEFAULT_ALIASES, DEFAULT_RECORD_TYPES, typeFromUrl, parseAnnotationKey, qualifiedTerm, defaultRecordType }
+module.exports = { typeFromUrl, parseAnnotationKey }

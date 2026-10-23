@@ -87,3 +87,36 @@ test('qualifiers produce distinct #Qualifier keys on the same target', () => {
   assert.ok(books['@UI.FieldGroup#A'])
   assert.ok(books['@UI.FieldGroup#B'])
 })
+
+function expr(inner) {
+  const xml = `<?xml version="1.0"?>
+<edmx:Edmx xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx" Version="4.0">
+  <edmx:Reference Uri="x"><edmx:Include Namespace="com.sap.vocabularies.UI.v1" Alias="UI"/></edmx:Reference>
+  <edmx:DataServices><Schema xmlns="http://docs.oasis-open.org/odata/ns/edm" Namespace="local">
+    <Annotations Target="S.Books/stock"><Annotation Term="UI.Hidden">${inner}</Annotation></Annotations>
+  </Schema></edmx:DataServices>
+</edmx:Edmx>`
+  return parseAnnotationXml(xml).$Annotations['S.Books/stock']['@UI.Hidden']
+}
+
+test('expression operands keep their document order: If is condition, then, else', () => {
+  assert.deepEqual(
+    expr('<If><Eq><Path>stock</Path><Int>0</Int></Eq><String>yes</String><String>no</String></If>'),
+    { $If: [{ $Eq: [{ $Path: 'stock' }, 0] }, 'yes', 'no'] }
+  )
+})
+
+test('literal operands: Int, Bool, Decimal, EnumMember survive next to a Path', () => {
+  assert.deepEqual(expr('<Gt><Path>stock</Path><Int>5</Int></Gt>'), { $Gt: [{ $Path: 'stock' }, 5] })
+  assert.deepEqual(expr('<Eq><Bool>true</Bool><Path>flag</Path></Eq>'), { $Eq: [true, { $Path: 'flag' }] })
+  assert.deepEqual(expr('<Lt><Decimal>2.5</Decimal><Path>price</Path></Lt>'), { $Lt: [2.5, { $Path: 'price' }] })
+  assert.deepEqual(expr('<Eq><Path>s</Path><EnumMember>Ns.T/Mandatory</EnumMember></Eq>'), { $Eq: [{ $Path: 's' }, 'Mandatory'] })
+})
+
+test('nested And / Or / Not and string values stay strings', () => {
+  assert.deepEqual(
+    expr('<And><Not><Path>a</Path></Not><Or><Path>b</Path><Path>c</Path></Or></And>'),
+    { $And: [{ $Not: { $Path: 'a' } }, { $Or: [{ $Path: 'b' }, { $Path: 'c' }] }] }
+  )
+  assert.equal(expr('<String>0123</String>'), '0123')
+})

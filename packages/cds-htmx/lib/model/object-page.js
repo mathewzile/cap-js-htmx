@@ -1,4 +1,5 @@
-const { buildColumn, buildCapabilities } = require('./list-report')
+const { buildColumn } = require('./list-report')
+const { buildCapabilities } = require('./capabilities')
 const { editCapabilities } = require('./edit-capabilities')
 const feDefaults = require('./fe-defaults')
 const { typeFromUrl } = require('../annotations/vocab')
@@ -130,7 +131,7 @@ function buildObjectPage(model, store, entityType, { pageSettings } = {}) {
     sections: facets.map(f => buildFacet(model, store, entityType, f, pageSettings)),
     editableHeaderContent: pageSettings?.editableHeaderContent ?? feDefaults.objectPage.editableHeaderContent,
     sectionLayout: pageSettings?.sectionLayout || feDefaults.objectPage.sectionLayout,
-    edit: require('./edit-capabilities').editCapabilities(store, entityType)
+    edit: editCapabilities(store, entityType)
   }
 }
 

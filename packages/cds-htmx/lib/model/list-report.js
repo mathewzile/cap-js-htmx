@@ -1,14 +1,9 @@
 const { buildField } = require('./fields')
 const feDefaults = require('./fe-defaults')
 const { typeFromUrl } = require('../annotations/vocab')
+const { containerTarget, buildCapabilities } = require('./capabilities')
+const { editCapabilities } = require('./edit-capabilities')
 const { buildHierarchy } = require('./hierarchy')
-
-/** `CatalogService.Books` -> `CatalogService.EntityContainer/Books`, the container-member
- *  target `Capabilities.*Restrictions` annotations live under (§3.2: Capabilities row). */
-function containerTarget(entityType) {
-  const dot = entityType.lastIndexOf('.')
-  return `${entityType.slice(0, dot)}.EntityContainer/${entityType.slice(dot + 1)}`
-}
 
 /** One `UI.LineItem` record -> a table column descriptor. Record shapes verified against a live
  *  compile (§3.2): every kind keeps its own fields rather than being flattened into one generic
@@ -97,22 +92,6 @@ function buildAvailableFilters(store, entityType, selected, restrictions) {
     .map(el => filterTraits(store, entityType, buildField(store, entityType, el.name), restrictions))
 }
 
-/** Restriction terms live on the container-member target (`Capabilities.*Restrictions`, §3.2).
- *  Absent in the sample today; still read generically so a future model gains support for free. */
-function buildCapabilities(store, entityType) {
-  const bag = store.raw(containerTarget(entityType))
-  return {
-    insert: bag['@Capabilities.InsertRestrictions'],
-    update: bag['@Capabilities.UpdateRestrictions'],
-    delete: bag['@Capabilities.DeleteRestrictions'],
-    search: bag['@Capabilities.SearchRestrictions'],
-    filter: bag['@Capabilities.FilterRestrictions'],
-    sort: bag['@Capabilities.SortRestrictions'],
-    count: bag['@Capabilities.CountRestrictions'],
-    navigation: bag['@Capabilities.NavigationRestrictions']
-  }
-}
-
 /** Builds the `LRLayout` for one entity type (§3.2), from the `AnnotationStore` plus an optional
  *  FE manifest `ListReport` routing-target's `options.settings` (`pageSettings`, §3.2b) -- never
  *  from raw CSN. Falls back to `fe-defaults.js` wherever the manifest is silent or absent. */
@@ -159,8 +138,8 @@ function buildListReport(store, entityType, { pageSettings } = {}) {
     // `Common.SemanticKey` FE shows none
     semanticKey: (bag['@Common.SemanticKey'] || []).map(k => typeof k === 'string' ? k : k.$PropertyPath ?? k.$Path).filter(Boolean),
     capabilities: buildCapabilities(store, entityType),
-    edit: require('./edit-capabilities').editCapabilities(store, entityType)
+    edit: editCapabilities(store, entityType)
   }
 }
 
-module.exports = { buildListReport, buildColumn, buildFilterBar, buildCapabilities, containerTarget }
+module.exports = { buildListReport, buildColumn, buildFilterBar }

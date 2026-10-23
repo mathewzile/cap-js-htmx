@@ -7,6 +7,7 @@ const { loadObjectPage } = require('../data/page')
 const { invokeAction } = require('../data/actions')
 const { selectColumns, markDraftOwners } = require('../data/query')
 const objectPageRender = require('../render/object-page')
+const ids = require('../render/ids')
 const { rowMarkup, rowId, isNumericColumn } = require('../render/table')
 const i18n = require('../i18n')
 const { config, appRoot } = require('../config')
@@ -85,7 +86,12 @@ function publish(client, parts) {
 /** Re-reads one object and publishes the parts `targets` asks for to one client. `tx` decides
  *  the data visibility: the request's own transaction (field change) or one opened for the
  *  client's user (server-triggered events). */
-async function pushObjectPage(tx, client, view, targets) {
+/** Rendered with the ids of the page's own Flexible Column Layout column (`view.column`), not those of the request that happens to push. */
+function pushObjectPage(tx, client, view, targets) {
+  return ids.inColumn(view.column, () => pushObjectPageIn(tx, client, view, targets))
+}
+
+async function pushObjectPageIn(tx, client, view, targets) {
   const { service, servicePath, entityType, keys, contextPath, basePath, entitySetPath } = view
   const locale = client.locale
   const page = await loadObjectPage(tx, { service, servicePath, entityType, keys, contextPath, appRoot: appRoot(), locale, app: view.app })
@@ -144,7 +150,7 @@ function takeDeferred(clientId, objectPath) {
 }
 
 async function onChange(tx, view, { clientId, properties = [], navigations = [] }) {
-  const client = channels.get(clientId)
+  const client = channels.forUser(clientId)
   if (!client || view.keys.IsActiveEntity !== false) return
   const store = cache.storeFor(cds.model, view.service, view.servicePath, { appRoot: appRoot(), locale: client.locale, app: view.app })
   const index = sideEffectsOf(store, view.entityType)
@@ -190,7 +196,7 @@ async function onSourceEvent(srv, { entityType, eventName, data }) {
         }
       })
     } catch (err) {
-      console.error('[sse] side effect for event', eventName, 'failed:', err.message)
+      cds.log('sse').error('side effect for event', eventName, 'failed:', err.message)
     }
   }
 }
@@ -227,7 +233,7 @@ function registerSourceEvents(srv) {
     srv.on(eventName, async (msg, next) => {
       // Defer until the emitting transaction finished, so the re-read sees its committed changes
       const run = () => Promise.all(entityTypes.map(entityType => onSourceEvent(srv, { entityType, eventName, data: msg.data })))
-        .catch(err => console.error('[sse] SourceEvents', eventName, 'failed:', err.message))
+        .catch(err => cds.log('sse').error('SourceEvents', eventName, 'failed:', err.message))
       const ctx = cds.context
       if (typeof ctx?.on === 'function') ctx.on('succeeded', run)
       else setImmediate(run)

@@ -50,13 +50,13 @@ function fieldEditControl(field, row, { basePath, entitySetPath, valueListOption
   // that show the same value). Direct/create: plain inputs, the footer's Save sends them all.
   // Never push a URL for a field change: this is not navigation.
   const common = editMode === 'draft' || editMode == null
-    ? `id="${id}" name="${field.path}" hx-patch="${basePath}/${entitySetPath}/$field/${field.path}" hx-trigger="change" hx-include="this" hx-push-url="false" hx-swap="none" hx-headers:inherited:append='{"X-Hf-Source":"${id.replace(/--input$/, '')}"}'`
-    : `id="${id}" name="${field.path}"`
+    ? html`id="${id}" name="${field.path}" hx-patch="${basePath}/${entitySetPath}/$field/${field.path}" hx-trigger="change" hx-include="this" hx-push-url="false" hx-swap="none" hx-headers:inherited:append='{"X-Hf-Source":"${id.replace(/--input$/, '')}"}'`
+    : html`id="${id}" name="${field.path}"`
 
   if (field.valueList && !field.fixedValues) {
     return html`
       <div class="hf-input-group hf-vh-field">
-        <input type="text" class="fd-input" ${raw(common)} value="${value ?? ''}" autocomplete="off" role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="false" data-hf-vh-input>
+        <input type="text" class="fd-input" ${common} value="${value ?? ''}" autocomplete="off" role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="false" data-hf-vh-input>
         <span class="hf-input-group__addon">
           ${raw(valueHelpButton(field, { basePath, entitySetPath }).value)}
         </span>
@@ -66,19 +66,19 @@ function fieldEditControl(field, row, { basePath, entitySetPath, valueListOption
   if (field.fixedValues && valueListOptions) {
     return html`
       <span class="hf-select">
-        <select class="fd-select" ${raw(common)}>
+        <select class="fd-select" ${common}>
           ${valueListOptions.map(opt => html`<option value="${opt.value}" ${String(opt.value) === String(value) ? raw('selected') : html``}>${opt.text}</option>`)}
         </select>
         <i class="sap-icon--slim-arrow-down" aria-hidden="true"></i>
       </span>`
   }
   if (typeof value === 'boolean') {
-    return html`<input type="checkbox" class="hf-checkbox" ${raw(common)} ${value ? raw('checked') : html``}>`
+    return html`<input type="checkbox" class="hf-checkbox" ${common} ${value ? raw('checked') : html``}>`
   }
   if (field.multiline) {
-    return html`<textarea class="fd-textarea" ${raw(common)}>${value ?? ''}</textarea>`
+    return html`<textarea class="fd-textarea" ${common}>${value ?? ''}</textarea>`
   }
-  return html`<input type="text" class="fd-input" ${raw(common)} value="${value ?? ''}">`
+  return html`<input type="text" class="fd-input" ${common} value="${value ?? ''}">`
 }
 
 /** One label/value pair in an Object Page form section (§3.4: "label above value (Horizon),

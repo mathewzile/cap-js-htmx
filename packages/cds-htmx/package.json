@@ -8,8 +8,7 @@
     "lib",
     "public",
     "_i18n",
-    "cds-plugin.js",
-    "index.cds"
+    "cds-plugin.js"
   ],
   "dependencies": {
     "htmx.org": "4.0.0",
@@ -27,18 +26,6 @@
         "path": "/htmx",
         "impl": "cds-htmx/lib/HtmxAdapter.js"
       }
-    },
-    "htmx": {
-      "theme": "sap_horizon",
-      "shell": true,
-      "appTitle": null,
-      "growingThreshold": 20,
-      "assets": "local",
-      "sse": {
-        "heartbeat": 15000
-      },
-      "liveListReport": true,
-      "requireHxRequestForMutations": true
     }
   }
 }

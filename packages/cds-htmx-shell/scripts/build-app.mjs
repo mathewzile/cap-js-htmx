@@ -24,7 +24,7 @@ const out = path.join(appDir, 'dist')
 const staging = path.join(out, 'app')
 fs.rmSync(out, { recursive: true, force: true })
 fs.mkdirSync(staging, { recursive: true })
-fs.cpSync(webapp, staging, { recursive: true, filter: file => !/[\/]test([\/]|$)/.test(file) })
+fs.cpSync(webapp, staging, { recursive: true, filter: file => !/[\\/]test([\\/]|$)/.test(file) })
 fs.cpSync(shellDir, path.join(staging, 'shell'), { recursive: true })
 fs.copyFileSync(path.join(appDir, 'xs-app.json'), path.join(staging, 'xs-app.json'))
 

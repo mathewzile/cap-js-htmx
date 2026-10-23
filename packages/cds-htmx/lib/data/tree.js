@@ -119,13 +119,10 @@ async function matching(tx, model, entityType, layout, { filters, search, query,
   return { rows, hasMore: skip + limit < tops.length, count: tops.length }
 }
 
-/** The id of a row's tree node, the way the client sends it back as `node`. */
-const nodeId = (hierarchy, row) => row[hierarchy.nodeProperty]
-
 /** The key columns of the hierarchy entity must exist in the row; used as a guard before a tree is rendered. */
 function isUsable(model, entityType, hierarchy) {
   const entity = entityDef(model, entityType)
   return !!hierarchy && !!entity?.elements?.[hierarchy.nodeProperty] && keyElements(entity).length > 0
 }
 
-module.exports = { topLevel, childrenOf, matching, markStates, nodeId, isUsable, LIMIT }
+module.exports = { topLevel, childrenOf, matching, markStates, isUsable, LIMIT }
