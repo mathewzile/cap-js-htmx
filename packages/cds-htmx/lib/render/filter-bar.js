@@ -6,9 +6,12 @@ const ids = require('./ids')
  *  other types stay plain text inputs. */
 /** A date filter restricted to one value or one range (`Capabilities.FilterRestrictions/FilterExpressionRestrictions`
  *  `SingleValue`/`SingleRange`) is a date picker, as in FE: the browser's own calendar popup in an input of the
- *  Fiori look. A range is one control holding "from – to"; it sends `f.<path>.ge` and `f.<path>.le`. (A
- *  `DateTimeOffset` property with these restrictions stays a text field for now.) */
+ *  Fiori look. A range is one control holding "from – to"; it sends `f.<path>.ge` and `f.<path>.le`. A `DateTimeOffset`
+ *  property gets the same with date and time (`datetime-local`): the browser shows its own time zone, and the page script sends
+ *  the instant as UTC (`2026-10-23T08:30:00.000Z`), so a reloaded URL means the same in any time zone; the server renders the
+ *  value into `data-hf-utc` and the script turns it back into the local time. */
 function datePicker(field, query, id, name) {
+  if (field.edmType === 'Edm.DateTimeOffset') return dateTimePicker(field, query, id, name)
   if (field.filterExpression === 'SingleValue') {
     return html`<input id="${id}" name="${name}" type="date" class="fd-input hf-date-input" value="${query?.[name] ?? ''}" data-hf-picker="value">`
   }
@@ -20,7 +23,20 @@ function datePicker(field, query, id, name) {
     </div>`
 }
 
-const isDatePicker = field => field.edmType === 'Edm.Date' && (field.filterExpression === 'SingleValue' || field.filterExpression === 'SingleRange')
+function dateTimePicker(field, query, id, name) {
+  const utc = key => query?.[key] ?? ''
+  if (field.filterExpression === 'SingleValue') {
+    return html`<input id="${id}" name="${name}" type="datetime-local" class="fd-input hf-date-input" data-hf-utc="${utc(name)}" data-hf-picker="value">`
+  }
+  return html`
+    <div class="fd-input hf-date-range hf-date-range--time" role="group" aria-labelledby="${id}--label" data-hf-picker="range">
+      <input id="${id}" name="${name}.ge" type="datetime-local" class="hf-date-range__input" data-hf-utc="${utc(`${name}.ge`)}" aria-label="${field.label} (from)">
+      <span class="hf-date-range__dash" aria-hidden="true">–</span>
+      <input name="${name}.le" type="datetime-local" class="hf-date-range__input" data-hf-utc="${utc(`${name}.le`)}" aria-label="${field.label} (to)">
+    </div>`
+}
+
+const isDatePicker = field => (field.edmType === 'Edm.Date' || field.edmType === 'Edm.DateTimeOffset') && (field.filterExpression === 'SingleValue' || field.filterExpression === 'SingleRange')
 
 function filterField(field, query, options, ctx) {
   const name = `f.${field.path}`

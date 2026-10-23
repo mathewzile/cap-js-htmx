@@ -79,6 +79,7 @@ class HtmxAdapter extends HttpAdapter {
     router.post('/:Set/$edit', this.handle(this.editDraft))
     router.post('/:Set/$save', this.handle(this.saveDraft))
     router.post('/:Set/$discard', this.handle(this.discardDraft))
+    router.post('/:Set/$effects', this.handle(this.flushEffects))
     router.patch('/:Set/$field/:path', this.handle(this.patchField))
     router.get('/:Set/$vh/:path', this.handle(this.valueHelp))
     router.post('/:Set/$action/:name', this.handle(this.callAction))
@@ -569,6 +570,8 @@ class HtmxAdapter extends HttpAdapter {
     // The response is out; annotated side effects are pushed over SSE inside this same transaction, so they see the patch
     const clientId = req.headers['x-htmx-client']
     if (!clientId) return
+    // the page asks for the effects to wait until the focus leaves the field group (`POST $effects` then runs them)
+    if (req.headers['x-hf-defer'] === '1') return engine.defer(clientId, view.entitySetPath, path)
     await engine.onChange(tx, view, { clientId, properties: [path] })
       .catch(err => console.error('[sse] side effects for', path, 'failed:', err.message))
   }
@@ -611,6 +614,23 @@ class HtmxAdapter extends HttpAdapter {
   parentPage(req, res, tx, n, { push }) {
     if (push) res.set('HX-Replace-Url', `${this.basePath(req)}/${n.parent.path}`)
     return this.objectPage(req, res, tx, { entityType: n.parent.entityType, keys: n.parent.keys, segments: n.parent.segments, contextPath: n.parent.contextPath })
+  }
+
+  /** `POST /:Set(keys)/$effects`: the focus left a field group, so the side effects of the changes made in it run now (what the
+   *  PATCHes with `X-Hf-Defer` left waiting for this page and object). Answers 204 whether or not something was waiting. */
+  async flushEffects(req, res, tx) {
+    const { set, raw } = keysLib.splitSegments(req.params.Set)[0] || {}
+    const entity = this.entitySet(set)
+    const clientId = req.headers['x-htmx-client']
+    if (!entity || raw == null || typeof clientId !== 'string') return res.sendStatus(404)
+    const entitySetPath = `${set}(${raw})`
+    const properties = engine.takeDeferred(clientId, entitySetPath)
+    if (properties.length) {
+      const view = { service: this.service.name, servicePath: this.odataServicePath(), entityType: entity.name, keys: keysLib.parseKeys(raw), contextPath: `/${set}`, basePath: this.basePath(req), entitySetPath }
+      await engine.onChange(tx, view, { clientId, properties })
+        .catch(err => console.error('[sse] side effects for', properties.join(','), 'failed:', err.message))
+    }
+    res.sendStatus(204)
   }
 
   /** `PATCH …/chapters(k)/$field/:path`: a cell of a child row, or a field of a child page, in a draft. The

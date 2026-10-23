@@ -123,8 +123,9 @@ test.describe('CSRF token of the approuter', () => {
     state.token = 'token-2' // the session changed: the next write is refused once
     await page.locator('input[name=stock]').fill('42')
     await page.locator('input[name=stock]').blur()
-    await expect.poll(() => state.writes.length).toBe(3)
-    expect(state.writes.slice(1)).toEqual(['token-1', 'token-2'])
+    // the PATCH (refused once, repeated) and then the flush of its side effects, which the page sends when the field group is left
+    await expect.poll(() => state.writes.length).toBe(4)
+    expect(state.writes.slice(1)).toEqual(['token-1', 'token-2', 'token-2'])
     expect(state.fetches).toBe(2)
 
     // clean up: discard the draft

@@ -5,6 +5,14 @@
  *  matching how FE's own filter bar only ever sends values for fields it rendered.
  *  Special case: `f.EditingStatus` maps to draft-state WHERE logic (not a model element). */
 
+/** A date-time filter value as the UTC instant the column holds (`2026-10-23T08:30:00.000Z`): the page sends exactly that, any other
+ *  ISO form (an offset, no zone = UTC) is converted; anything that is no date-time is left alone (it just matches nothing). */
+function instant(raw) {
+  if (!/^\d{4}-\d\d-\d\dT\d\d:\d\d/.test(raw)) return raw
+  const date = new Date(/(?:Z|[+-]\d\d:?\d\d)$/i.test(raw) ? raw : `${raw}Z`)
+  return Number.isNaN(date.getTime()) ? raw : date.toISOString()
+}
+
 const OPS = { eq: '=', ge: '>=', le: '<=', gt: '>', lt: '<', ne: '!=' }
 const KEY = /^f\.([^.]+)(?:\.(ge|le|gt|lt|ne|eq))?$/
 
@@ -56,7 +64,7 @@ function parseFilters(query, layout) {
       if (where.length) { if (clauses.length) clauses.push('and'); clauses.push(...where) }
       continue
     }
-    const values = rawValues.map(coerce)
+    const values = rawValues.map(v => field.edmType === 'Edm.DateTimeOffset' ? instant(v) : coerce(v))
     if (clauses.length) clauses.push('and')
     if (op === 'eq' && values.length > 1) clauses.push(ref(field.cqlPath), 'in', { list: values.map(val) })
     else clauses.push(ref(field.cqlPath), OPS[op], val(values[0]))

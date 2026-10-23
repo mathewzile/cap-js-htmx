@@ -21,7 +21,9 @@ const separator = column => column < 1 ? html`` : html`<div class="hf-fcl__sep" 
   <button type="button" class="hf-fcl__arrow" data-hf-fcl-arrow tabindex="-1" hidden><i class="sap-icon--slim-arrow-right" aria-hidden="true"></i></button>
   <span class="hf-fcl__grip" aria-hidden="true"><i class="sap-icon--vertical-grip"></i></span></div>`
 
-const columnElement = (column, inner) => html`<section id="${colId(column)}" class="hf-fcl__col" data-hf-col="${column}">${separator(column)}${inner}</section>`
+/** A column is a box of the layout's height; the page scrolls in its `hf-fcl__scroll` inside it (like FE: every column has its own
+ *  vertical scrollbar), while the separator stays on the box. */
+const columnElement = (column, inner) => html`<section id="${colId(column)}" class="hf-fcl__col" data-hf-col="${column}">${separator(column)}<div class="hf-fcl__scroll">${inner}</div></section>`
 
 const emptyColumn = column => html`<section id="${colId(column)}" class="hf-fcl__col" data-hf-col="${column}" hidden></section>`
 

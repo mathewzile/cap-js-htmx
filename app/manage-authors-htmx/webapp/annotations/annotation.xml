@@ -3,6 +3,9 @@
     <edmx:Reference Uri="https://sap.github.io/odata-vocabularies/vocabularies/UI.xml">
         <edmx:Include Namespace="com.sap.vocabularies.UI.v1" Alias="UI"/>
     </edmx:Reference>
+    <edmx:Reference Uri="https://sap.github.io/odata-vocabularies/vocabularies/Common.xml">
+        <edmx:Include Namespace="com.sap.vocabularies.Common.v1" Alias="Common"/>
+    </edmx:Reference>
     <edmx:Reference Uri="/admin/$metadata">
         <edmx:Include Namespace="AdminService"/>
     </edmx:Reference>
@@ -36,7 +39,17 @@
                     </Collection>
                 </Annotation>
             </Annotations>
+            <!-- a date-time filter (createdAt) as a range picker -->
+            <Annotations Target="AdminService.Books/createdAt">
+                <Annotation Term="UI.HiddenFilter" Bool="false"/> <!-- managed.createdAt is hidden from filters by default -->
+                <Annotation Term="Common.FilterExpressionType" EnumMember="Common.FilterExpressionType/SingleRange"/>
+            </Annotations>
             <Annotations Target="AdminService.Books">
+                <Annotation Term="UI.SelectionFields">
+                    <Collection>
+                        <PropertyPath>createdAt</PropertyPath>
+                    </Collection>
+                </Annotation>
                 <Annotation Term="UI.HeaderInfo">
                     <Record Type="UI.HeaderInfoType">
                         <PropertyValue Property="TypeName" String="Book"/>

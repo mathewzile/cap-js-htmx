@@ -27,7 +27,7 @@ describe('flexible column layout', () => {
   test('a List Report opens the layout with one column', async () => {
     const page = await get('/htmx/admin/Authors')
     assert.match(page, /<div id="fcl" class="hf-fcl" data-hf-layout="OneColumn" data-hf-deepest="0">/)
-    assert.match(page, /<section id="fcl-col-0"[^>]*data-hf-col="0">\s*<div[^>]*hf-page--lr/s)
+    assert.match(page, /<section id="fcl-col-0"[^>]*data-hf-col="0">\s*<div class="hf-fcl__scroll">\s*<div[^>]*hf-page--lr/s)
     assert.match(page, /<section id="fcl-col-1"[^>]* hidden>/)
     assert.match(page, /<section id="fcl-col-2"[^>]* hidden>/)
   })

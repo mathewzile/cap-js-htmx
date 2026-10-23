@@ -119,6 +119,30 @@ async function bindingParts(tx, view, { path, source, appRoot: root, locale, app
  *  `navigations` (table sections) whose rows changed. Resolves the matching side effects, runs any
  *  `TriggerAction` on the draft first, then pushes the re-rendered targets to the editing client.
  *  FE only fires side effects for drafts, so active-entity changes are ignored (§4.2.4). */
+/** Side effects wait for the field group to be left (Fiori elements fires them then, not on every change): a PATCH that says so
+ *  (`X-Hf-Defer`) records its property here, the page flushes them (`POST <object>/$effects`) when the focus leaves the group.
+ *  Entries are per browser page and object; an abandoned one is dropped after ten minutes. */
+const deferred = new Map() // `${clientId}|${object path}` -> { properties: Set, at }
+const DEFER_TTL = 10 * 60 * 1000
+
+function defer(clientId, objectPath, property) {
+  const now = Date.now()
+  for (const [key, entry] of deferred) if (now - entry.at > DEFER_TTL) deferred.delete(key)
+  const key = `${clientId}|${objectPath}`
+  const entry = deferred.get(key) ?? { properties: new Set(), at: now }
+  entry.properties.add(property)
+  entry.at = now
+  deferred.set(key, entry)
+}
+
+/** The properties waiting for `objectPath` of this page, and forgets them. */
+function takeDeferred(clientId, objectPath) {
+  const key = `${clientId}|${objectPath}`
+  const properties = [...(deferred.get(key)?.properties ?? [])]
+  deferred.delete(key)
+  return properties
+}
+
 async function onChange(tx, view, { clientId, properties = [], navigations = [] }) {
   const client = channels.get(clientId)
   if (!client || view.keys.IsActiveEntity !== false) return
@@ -212,4 +236,4 @@ function registerSourceEvents(srv) {
   }
 }
 
-module.exports = { needsStream, registerSourceEvents, onChange, onSourceEvent, bindingParts, partialsMarkup, collectTargets, servicePaths, publish }
+module.exports = { defer, takeDeferred, needsStream, registerSourceEvents, onChange, onSourceEvent, bindingParts, partialsMarkup, collectTargets, servicePaths, publish }

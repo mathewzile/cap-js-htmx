@@ -223,9 +223,16 @@
     htmx.ajax('GET', `${base}?${params}`, { target: '#lr-table-body', swap: 'innerHTML' })
   }
 
+  /** A date-time picker shows the browser's local time; the filter is sent as the instant in UTC. */
+  const utcOf = (form, name, value) => {
+    const input = form.elements[name]
+    const date = input?.type === 'datetime-local' ? new Date(value) : null
+    return date && !Number.isNaN(date.getTime()) ? date.toISOString() : value
+  }
+
   const filterParams = form => {
     const params = new URLSearchParams()
-    for (const [k, v] of new FormData(form)) if (v !== '' && !(k === 'f.EditingStatus' && v === 'ALL')) params.append(k, v)
+    for (const [k, v] of new FormData(form)) if (v !== '' && !(k === 'f.EditingStatus' && v === 'ALL')) params.append(k, utcOf(form, k, v))
     return params
   }
 

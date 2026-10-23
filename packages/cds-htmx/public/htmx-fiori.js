@@ -550,6 +550,56 @@ document.addEventListener('htmx:config:request', e => {
   }
 })
 
+// ---------- date-time filters ----------
+// A `datetime-local` input shows (and takes) the browser's local time; the server only knows instants. The server renders the value
+// of a reloaded URL into `data-hf-utc` (UTC) and the filter request carries the UTC instant of what the user picked.
+const hfLocalTime = iso => {
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return ''
+  const two = n => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${two(date.getMonth() + 1)}-${two(date.getDate())}T${two(date.getHours())}:${two(date.getMinutes())}`
+}
+function hfInitDateTimes() {
+  for (const input of document.querySelectorAll('input[type=datetime-local][data-hf-utc]')) {
+    if (input.dataset.hfUtc && !input.value) input.value = hfLocalTime(input.dataset.hfUtc)
+  }
+}
+document.addEventListener('DOMContentLoaded', hfInitDateTimes)
+document.addEventListener('hf:ready', hfInitDateTimes)
+document.addEventListener('htmx:after:swap', hfInitDateTimes)
+document.addEventListener('htmx:config:request', e => {
+  const body = e.detail?.ctx?.request?.body
+  if (!body?.has) return
+  for (const input of document.querySelectorAll('form.hf-filter-bar input[type=datetime-local]')) {
+    if (!body.has(input.name)) continue
+    const date = new Date(input.value)
+    body.set(input.name, input.value && !Number.isNaN(date.getTime()) ? date.toISOString() : '')
+  }
+})
+
+// ---------- side effects wait for the field group to be left ----------
+// Like Fiori elements, a change only has its side effects (Common.SideEffects, pushed over the event stream) when the focus leaves
+// the field group (the form section) the field is in, not on every change: the PATCH says so (`X-Hf-Defer`) and this page flushes
+// (`POST <object>/$effects`) once the group is left and the PATCH is done. The flush is queued behind the PATCHes (above).
+let hfEffects = null // { group, url }
+document.addEventListener('htmx:config:request', e => {
+  const ctx = e.detail?.ctx
+  if (String(ctx?.request?.method).toUpperCase() !== 'PATCH') return
+  const group = ctx.sourceElement?.closest?.('[data-hf-fieldgroup]')
+  const action = ctx.request.action
+  if (!group || !/\/\$field\/[^/]+$/.test(action)) return
+  ctx.request.headers['X-Hf-Defer'] = '1'
+  hfEffects = { group, url: action.replace(/\/\$field\/[^/]+$/, '/$effects') }
+})
+function hfFlushEffects() {
+  const pending = hfEffects
+  if (!pending || pending.group.contains(document.activeElement)) return
+  hfEffects = null
+  htmx.ajax('POST', pending.url, { source: pending.group, target: pending.group, swap: 'none' })
+}
+document.addEventListener('focusout', () => setTimeout(hfFlushEffects, 0))
+document.addEventListener('htmx:after:request', e => { if (String(e.detail?.ctx?.request?.method).toUpperCase() === 'PATCH') setTimeout(hfFlushEffects, 0) })
+
 // ---------- busy state and failed requests ----------
 // Like Fiori elements: a request that takes longer than a second (UI5's busy indicator delay) puts a busy overlay on what is
 // being replaced -- the List Report's table card, or the whole page for a navigation. The delay is a CSS animation, so a quick

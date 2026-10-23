@@ -86,8 +86,9 @@ function formColumns(items, max = 3) {
   return cols
 }
 
-function formLayout(blocks) {
-  return html`<div class="hf-form">${formColumns(blocks).map(col => html`<div class="hf-form__column">${col}</div>`)}</div>`
+/** `groupId`: the facet (UI.FieldGroup) the fields belong to; side effects of a change in it wait until the group is left. */
+function formLayout(blocks, groupId) {
+  return html`<div class="hf-form"${groupId ? html` data-hf-fieldgroup="${groupId}"` : html``}>${formColumns(blocks).map(col => html`<div class="hf-form__column">${col}</div>`)}</div>`
 }
 
 /** A table-section's child rows (§3.4: "Table subsections reuse `table.js`"). In display mode it has
@@ -169,7 +170,7 @@ function facetContent(facet, row, ctx) {
     case 'form':
       return formLayout(content.fields.map(col => formField(col, row, {
         facetId: facet.id, isDraft: ctx.isDraft, editMode: ctx.editMode, basePath: ctx.basePath, entitySetPath: ctx.entitySetPath, valueLists: ctx.valueLists
-      })).filter(f => f.value.trim()))
+      })).filter(f => f.value.trim()), facet.id)
     case 'dataPoint':
     case 'contact':
     case 'address':
