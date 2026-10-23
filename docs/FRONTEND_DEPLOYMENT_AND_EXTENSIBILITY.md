@@ -1,6 +1,6 @@
 # Frontend deployment, Work Zone integration and extensibility for `cds-htmx`
 
-Companion to `IMPLEMENTATION_PLAN.md`. It adds Phases 7 and 9 and the extensibility work. Phase 8 is FE feature parity (see `IMPLEMENTATION_PLAN.md` §8): the shell/Work Zone work comes after the htmx app behaves like standard Fiori elements. Frontend extensibility (§6) and Custom Pages (non-standard floorplans, which need their own design first) are items of the Roadmap section of the plan, not numbered phases. Phases 7 and 9 are implemented.
+Companion to `IMPLEMENTATION_PLAN.md`. It adds Phases 7 and 9 and the extensibility work. Phase 8 is FE feature parity (see `IMPLEMENTATION_PLAN.md` §8): the shell/Work Zone work comes after the htmx app behaves like standard Fiori elements. Frontend extensibility (§6) and Custom Pages (non-standard floorplans, which need their own design first) are items of `OPEN_ITEMS_AND_ROADMAP.md`, not numbered phases. Phases 7 and 9 are implemented.
 
 ## 0. Decisions
 
