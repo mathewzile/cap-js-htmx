@@ -27,7 +27,7 @@ describe('flexible column layout', () => {
   test('a List Report opens the layout with one column', async () => {
     const page = await get('/htmx/admin/Authors')
     assert.match(page, /<div id="fcl" class="hf-fcl" data-hf-layout="OneColumn" data-hf-deepest="0">/)
-    assert.match(page, /<section id="fcl-col-0"[^>]*data-hf-col="0">\s*<div class="hf-fcl__scroll">\s*<div[^>]*hf-page--lr/s)
+    assert.match(page, /<section id="fcl-col-0"[^>]*data-hf-col="0"[^>]*>\s*<div class="hf-fcl__scroll">\s*<div[^>]*hf-page--lr/s)
     assert.match(page, /<section id="fcl-col-1"[^>]* hidden>/)
     assert.match(page, /<section id="fcl-col-2"[^>]* hidden>/)
   })
@@ -71,7 +71,8 @@ describe('flexible column layout', () => {
   test('a sub-object page is the third column; its ids carry the column so they do not clash with the Object Page', async () => {
     assert.ok(bookUrl, 'the author page links to a book')
     const page = await get(bookUrl)
-    assert.match(page, /data-hf-layout="ThreeColumnsEndExpanded" data-hf-deepest="2"/)
+    // standalone pages follow the FE manifest (manage-authors: ThreeColumnsMidExpanded), the app's own layout is for its pages
+    assert.match(page, /data-hf-layout="ThreeColumnsMidExpanded" data-hf-deepest="2"/)
     assert.match(page, /<section id="fcl-col-0"[^>]*hx-get="\/htmx\/admin\/Authors"/)
     assert.match(page, /<section id="fcl-col-1"[^>]*hx-get="\/htmx\/admin\/Authors\(/)
     assert.match(page, /<div id="c2-op-page"/)
@@ -137,10 +138,11 @@ describe('manifest routing', () => {
 })
 
 describe('the Work Zone app', () => {
-  test('a page requested for manage-authors-htmx (X-Htmx-App) is laid out in columns, one for manage-books-htmx is not', async () => {
-    const authors = await get('/htmx/admin/Authors', { ...HX, 'X-Htmx-App': 'manageauthors.htmx@1.0.0' })
-    assert.match(authors, /<div id="fcl" class="hf-fcl" data-hf-layout="OneColumn"/)
+  test('the layout of an htmx app applies to the pages requested for it, and to nothing else', async () => {
+    const authors = await get('/htmx/admin/Authors(ID=\'9d703c23-7cf7-4cad-9f2b-0e1e1a8c0001\')/books(ID=\'3d2d2d2d-1c1c-4b4b-8a8a-000000000001\')', { ...HX, 'X-Htmx-App': 'manageauthors.htmx@1.0.0' })
+    assert.match(authors, /data-hf-layout="ThreeColumnsEndExpanded"/, 'the app says End, the FE manifest says Mid')
     const books = await get('/htmx/catalog/Books', { ...HX, 'X-Htmx-App': 'managebooks.htmx@1.0.0' })
-    assert.doesNotMatch(books, /id="fcl"/)
+    assert.match(books, /<div id="fcl" class="hf-fcl" data-hf-layout="OneColumn"/, 'manage-books-htmx runs Books in columns')
+    assert.doesNotMatch(await get('/htmx/catalog/Books'), /id="fcl"/, 'the standalone Books page (manage-books, no columns) does not')
   })
 })

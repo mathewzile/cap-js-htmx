@@ -23,7 +23,7 @@ const separator = column => column < 1 ? html`` : html`<div class="hf-fcl__sep" 
 
 /** A column is a box of the layout's height; the page scrolls in its `hf-fcl__scroll` inside it (like FE: every column has its own
  *  vertical scrollbar), while the separator stays on the box. */
-const columnElement = (column, inner) => html`<section id="${colId(column)}" class="hf-fcl__col" data-hf-col="${column}">${separator(column)}<div class="hf-fcl__scroll">${inner}</div></section>`
+const columnElement = (column, inner, url) => html`<section id="${colId(column)}" class="hf-fcl__col" data-hf-col="${column}"${url ? html` data-hf-url="${url}"` : html``}>${separator(column)}<div class="hf-fcl__scroll">${inner}</div></section>`
 
 const emptyColumn = column => html`<section id="${colId(column)}" class="hf-fcl__col" data-hf-col="${column}" hidden></section>`
 
@@ -34,8 +34,8 @@ const lazyColumn = (column, url) => html`<section id="${colId(column)}" class="h
 const markerElement = (column, layouts) => html`<span id="fcl-marker" hidden data-hf-col="${column}" data-hf-layout="${layoutFor(column, layouts)}"></span>`
 
 /** The whole layout, with `inner` in `column` and placeholders (`urls[n]`) in the columns before it. */
-function structure(column, inner, { layouts, urls }) {
-  const columns = Array.from({ length: COLUMNS }, (_, n) => n < column ? lazyColumn(n, urls[n]) : n === column ? columnElement(n, inner) : emptyColumn(n))
+function structure(column, inner, { layouts, urls, url }) {
+  const columns = Array.from({ length: COLUMNS }, (_, n) => n < column ? lazyColumn(n, urls[n]) : n === column ? columnElement(n, inner, url) : emptyColumn(n))
   return html`<div id="fcl" class="hf-fcl" data-hf-layout="${layoutFor(column, layouts)}" data-hf-deepest="${column}">${columns}${markerElement(column, layouts)}</div>`
 }
 
@@ -47,10 +47,12 @@ function trim(column, layouts) {
   return [...empty, partial('#fcl-marker', 'outerHTML', markerElement(column, layouts).value)].join('\n')
 }
 
-/** Swaps `column` in place. `keep`: a column that is only being filled in (placeholder), nothing else changes. */
-function columnPartials(column, inner, { layouts, keep }) {
-  const own = partial(`#${colId(column)}`, 'outerHTML', columnElement(column, inner).value)
-  return keep ? own : `${own}\n${trim(column, layouts)}`
+/** Swaps `column` in place. `keep`: a column that is only being filled in (placeholder), nothing else changes. `keepDeeper`: the
+ *  columns to its right stay (Edit, Save and Discard of the first page: the page of the third column follows to its draft or active
+ *  version, see `htmx-fiori.js`). `url` is the page's own URL, which that follow-up needs. */
+function columnPartials(column, inner, { layouts, keep, keepDeeper, url }) {
+  const own = partial(`#${colId(column)}`, 'outerHTML', columnElement(column, inner, url).value)
+  return keep || keepDeeper ? own : `${own}\n${trim(column, layouts)}`
 }
 
 /** Splits the `<hx-partial>`s (toast, messages) off a page body: they have to sit beside the column partial, a partial

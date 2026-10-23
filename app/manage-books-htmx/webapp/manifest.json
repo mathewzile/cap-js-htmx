@@ -40,7 +40,17 @@
     "resourceRoots": { "cds.htmx.shell": "./shell" },
     "services": { "ShellUIService": { "factoryName": "sap.ushell.ui5service.ShellUIService", "lazy": false } },
     "models": { "i18n": { "type": "sap.ui.model.resource.ResourceModel", "settings": { "bundleName": "managebooks.htmx.i18n.i18n" } } },
+    "rootView": { "viewName": "sap.fe.templates.RootContainer.view.Fcl", "type": "XML", "async": true, "id": "appRootView" },
     "routing": {
+      "config": {
+        "routerClass": "sap.f.routing.Router",
+        "flexibleColumnLayout": { "defaultTwoColumnLayoutType": "TwoColumnsMidExpanded", "defaultThreeColumnLayoutType": "ThreeColumnsEndExpanded" }
+      },
+      "routes": [
+        { "pattern": ":?query:", "name": "BooksList", "target": ["BooksList"] },
+        { "pattern": "Books({key}):?query:", "name": "BooksObjectPage", "target": ["BooksList", "BooksObjectPage"] },
+        { "pattern": "Books({key})/chapters({key2}):?query:", "name": "ChaptersObjectPage", "target": ["BooksList", "BooksObjectPage", "ChaptersObjectPage"] }
+      ],
       "targets": {
         "BooksList": {
           "name": "sap.fe.templates.ListReport",
@@ -48,17 +58,24 @@
             "settings": {
               "contextPath": "/Books",
               "variantManagement": "Page",
+              "navigation": { "Books": { "detail": { "route": "BooksObjectPage" } } },
               "controlConfiguration": { "@com.sap.vocabularies.UI.v1.LineItem": { "tableSettings": { "type": "ResponsiveTable" } } }
             }
-          }
+          },
+          "controlAggregation": "beginColumnPages",
+          "contextPattern": ""
         },
         "BooksObjectPage": {
           "name": "sap.fe.templates.ObjectPage",
-          "options": { "settings": { "editableHeaderContent": false, "contextPath": "/Books" } }
+          "options": { "settings": { "editableHeaderContent": false, "contextPath": "/Books", "navigation": { "chapters": { "detail": { "route": "ChaptersObjectPage" } } } } },
+          "controlAggregation": "midColumnPages",
+          "contextPattern": "/Books({key})"
         },
         "ChaptersObjectPage": {
           "name": "sap.fe.templates.ObjectPage",
-          "options": { "settings": { "editableHeaderContent": false, "contextPath": "/Books/chapters" } }
+          "options": { "settings": { "editableHeaderContent": false, "contextPath": "/Books/chapters" } },
+          "controlAggregation": "endColumnPages",
+          "contextPattern": "/Books({key})/chapters({key2})"
         }
       }
     }

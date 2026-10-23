@@ -3,12 +3,20 @@ const { test, expect } = require('@playwright/test')
 const AUTHOR = "/htmx/admin/Authors(ID='9d703c23-7cf7-4cad-9f2b-0e1e1a8c0002')"
 const column = (page, n) => page.locator(`#fcl-col-${n}`)
 const scroller = (page, n) => column(page, n).locator('.hf-fcl__scroll')
+// the author page with its first ten books fits a tall window: show more, so that there is something to scroll
+const showMoreBooks = async page => {
+  for (const loaded of [20, 30]) {
+    await page.locator('#op-section--AuthorBooks-growing .hf-table__growing-button').click()
+    await expect(page.locator('#op-section--AuthorBooks tbody tr[hx-get]')).toHaveCount(loaded)
+  }
+}
 const metrics = (page, n) => scroller(page, n).evaluate(el => ({ top: el.scrollTop, height: el.scrollHeight, client: el.clientHeight, overflowY: getComputedStyle(el).overflowY }))
 
 test.describe('every column of the layout scrolls on its own', () => {
   test('the window does not scroll, the column does', async ({ page }) => {
     await page.goto(AUTHOR)
     await expect(page.locator('#op-page')).toBeVisible()
+    await showMoreBooks(page)
     await page.waitForTimeout(700)
     const doc = await page.evaluate(() => ({ scroll: document.documentElement.scrollHeight, inner: innerHeight }))
     expect(doc.scroll).toBeLessThanOrEqual(doc.inner + 1) // the page itself has no scrollbar
@@ -22,6 +30,7 @@ test.describe('every column of the layout scrolls on its own', () => {
     await page.goto("/htmx/admin/Authors(ID='9d703c23-7cf7-4cad-9f2b-0e1e1a8c0002')")
     await expect(page.locator('#op-page')).toBeVisible()
     await expect(column(page, 0).locator('#lr-table-body tr').first()).toBeVisible()
+    await showMoreBooks(page)
     await page.waitForTimeout(700)
     await scroller(page, 1).evaluate(el => { el.scrollTop = 150 })
     expect((await metrics(page, 1)).top).toBe(150)
@@ -52,6 +61,7 @@ test.describe('every column of the layout scrolls on its own', () => {
     await page.goto(AUTHOR)
     await page.locator('#op-section--AuthorBooks tbody tr[hx-get]').first().click()
     await expect(page.locator('#c2-op-page')).toBeVisible()
+    await showMoreBooks(page)
     await page.waitForTimeout(700)
     expect((await metrics(page, 2)).overflowY).toBe('auto')
     await scroller(page, 1).evaluate(el => { el.scrollTop = 120 })

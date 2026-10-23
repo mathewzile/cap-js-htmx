@@ -338,9 +338,33 @@ document.addEventListener('hf:ready', hfFclSync)
 
 // a request made while the layout is on screen is answered with the column to swap, not the whole layout
 document.addEventListener('htmx:config:request', e => {
-  const headers = e.detail.ctx.request.headers
-  if (document.getElementById('fcl') && !headers['X-Hf-Fcl']) headers['X-Hf-Fcl'] = '1'
+  const { request } = e.detail.ctx
+  if (document.getElementById('fcl') && !request.headers['X-Hf-Fcl']) request.headers['X-Hf-Fcl'] = '1'
+  // Edit, Save and Discard of the first page leave the page in the third column open (it follows, see hfFclFollowRoot)
+  if (String(request.method).toUpperCase() === 'POST' && /\/\$(edit|save|discard)$/.test(request.action) && hfFclColumn(2)) request.headers['X-Hf-Fcl-Keep'] = '1'
 })
+
+const hfFclColumn = n => {
+  const col = document.getElementById(`fcl-col-${n}`)
+  return col && !col.hidden && col.hasChildNodes() ? col : null
+}
+
+// Drafts: one root (the first page, like in Fiori elements / CAP): Edit makes the whole object editable, the pages of the columns
+// to its right (the sub-object page has no Edit of its own) show its draft; Save and Discard bring them back to the saved version.
+// The third column asks for the version that matches the first page's mode, whatever happened (a refused Save changes nothing).
+let hfFclFollowing = false
+function hfFclFollowRoot() {
+  const third = hfFclColumn(2)
+  const root = hfFclColumn(1)
+  const url = third?.dataset.hfUrl
+  if (hfFclFollowing || !root || !url || !/IsActiveEntity=(true|false)/.test(url)) return
+  const draft = !!root.querySelector('.hf-page--edit')
+  const wanted = url.replace(/IsActiveEntity=(?:true|false)/g, `IsActiveEntity=${!draft}`)
+  if (wanted === url) return
+  hfFclFollowing = true
+  htmx.ajax('GET', wanted, { target: '#app', swap: 'innerHTML', replace: wanted, headers: { 'X-Hf-Fcl': 'keep' } }).finally(() => { hfFclFollowing = false })
+}
+document.addEventListener('htmx:after:swap', () => setTimeout(hfFclFollowRoot, 0))
 
 // resizing: dragging a separator (or the arrow keys on it) moves the border between two columns; neither gets narrower than 15%
 const HF_FCL_MIN = 0.15

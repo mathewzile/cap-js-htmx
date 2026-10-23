@@ -26,19 +26,18 @@ describe('animations (sap.htmx.animations)', () => {
     assert.equal(cache.animationsFor('/odata/v4/catalog/', { appRoot: path.join(__dirname, '..', '..', '..', '..', 'app') }), 'full')
   })
 
-  test('with several manifests for a service the calmest wins (none over fast over full)', () => {
+  test('the settings of an htmx app are the app\'s own: the standalone scan of the folder ignores them', () => {
     const fs = require('node:fs')
     const os = require('node:os')
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'motion-'))
     try {
-      for (const [name, value] of [['a', 'fast'], ['b', undefined], ['c', 'full']]) {
+      for (const [name, value] of [['a', 'none'], ['b', 'fast']]) {
         fs.mkdirSync(path.join(dir, name, 'webapp'), { recursive: true })
         fs.writeFileSync(path.join(dir, name, 'webapp', 'manifest.json'), JSON.stringify(manifest(value)))
       }
-      assert.equal(scanService(dir, '/admin/').animations, 'fast')
-      fs.mkdirSync(path.join(dir, 'd', 'webapp'), { recursive: true })
-      fs.writeFileSync(path.join(dir, 'd', 'webapp', 'manifest.json'), JSON.stringify(manifest(false)))
-      assert.equal(scanService(dir, '/admin/').animations, 'none')
+      assert.equal(scanService(dir, '/admin/').animations, 'full')
+      assert.equal(scanManifest(manifest('none'), '/admin/').app, true)
+      assert.equal(scanManifest({ 'sap.app': manifest()['sap.app'] }, '/admin/').app, false)
     } finally { fs.rmSync(dir, { recursive: true, force: true }) }
   })
 
@@ -53,6 +52,7 @@ describe('animations (sap.htmx.animations)', () => {
   test('$shell tells the shell (Work Zone) the app\'s motion', async () => {
     // the catalog service has no app that sets it (the admin one does: manage-authors-htmx says fast)
     assert.equal((await GET('/htmx/catalog/$shell', { headers: HX })).data.animations, 'full')
-    assert.equal((await GET('/htmx/admin/$shell', { headers: HX })).data.animations, 'fast')
+    assert.equal((await GET('/htmx/admin/$shell', { headers: HX })).data.animations, 'full', 'standalone')
+    assert.equal((await GET('/htmx/admin/$shell', { headers: { ...HX, 'X-Htmx-App': 'manageauthors.htmx@1.0.0' } })).data.animations, 'fast', 'for the app')
   })
 })

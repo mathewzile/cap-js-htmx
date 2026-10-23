@@ -21,8 +21,8 @@ describe('table sections page', () => {
     const page = await get(AUTHOR)
     const total = countOf(page)
     assert.ok(total > 20, `total ${total}`)
-    assert.equal(sectionRows(page).length, 20)
-    assert.match(page, new RegExp(`id="op-section--AuthorBooks-growing"[\\s\\S]*?\\[ 20 / ${total.toLocaleString('en')} \\]`))
+    assert.equal(sectionRows(page).length, 10)
+    assert.match(page, new RegExp(`id="op-section--AuthorBooks-growing"[\\s\\S]*?\\[ 10 / ${total.toLocaleString('en')} \\]`))
     assert.match(page, /id="op-section--AuthorBooks-body"/)
     assert.match(page, /data-hf-table-url="[^"]*\/books\/\$table"/)
   })
@@ -30,7 +30,7 @@ describe('table sections page', () => {
   test('following the More button reads every row once, in a stable order', async () => {
     const total = countOf(await get(AUTHOR))
     const seen = sectionRows(await get(AUTHOR))
-    for (let skip = 20; skip < total + 40; skip += 20) {
+    for (let skip = 10; skip < total + 20; skip += 10) {
       const next = await get(`${AUTHOR}/books/$table?$skip=${skip}`)
       const rows = sectionRows(next)
       if (!rows.length) break
@@ -49,7 +49,7 @@ describe('table sections page', () => {
     assert.ok(shown.length > 0 && shown.every(t => /Crimson/i.test(t)), shown.join('|'))
     const count = Number(/\(([\d,]+)\)<\/hx-partial>/.exec(found)[1])
     assert.ok(count > 0 && count < all)
-    if (count > 20) assert.match(found.replace(/&amp;/g, '&'), /\$search=Crimson|%24search=Crimson/)
+    if (count > 10) assert.match(found.replace(/&amp;/g, '&'), /\$search=Crimson|%24search=Crimson/)
   })
 
   test('a sort is over the whole set, not the page', async () => {
@@ -79,7 +79,7 @@ describe('table sections page', () => {
   })
 
   test('rows are the section\'s own markup: they open the sub-object page', async () => {
-    const rows = await get(`${AUTHOR}/books/$table?$skip=20`)
+    const rows = await get(`${AUTHOR}/books/$table?$skip=10`)
     assert.match(rows, /hx-get="[^"]*\/Authors\(ID=&#39;9d703c23-7cf7-4cad-9f2b-0e1e1a8c0002&#39;\)\/books\(ID=/)
     assert.doesNotMatch(rows, /<input/, 'display mode: no inputs')
   })
@@ -100,7 +100,7 @@ describe('items per page: UI.PresentationVariant MaxItems', () => {
   test('without it the manifest\'s growingThreshold, then FE\'s default', () => {
     const settings = { controlConfiguration: { 'books/@com.sap.vocabularies.UI.v1.LineItem': { tableSettings: { growingThreshold: 9 } } } }
     assert.equal(booksSection(real, settings).growingThreshold, 9)
-    assert.equal(booksSection(real).growingThreshold, 20)
+    assert.equal(booksSection(real).growingThreshold, 10, 'FE shows 10 rows of a table section, 20 of a List Report table')
     assert.equal(booksSection(withMaxItems('AdminService.Books', 7), settings).growingThreshold, 7, 'MaxItems wins')
   })
 

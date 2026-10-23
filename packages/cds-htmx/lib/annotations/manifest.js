@@ -27,6 +27,8 @@ const normalize = uri => uri.replace(/\/+$/, '')
  *   - routing: with `routing.routes` the manifest decides where a page can navigate to. Each List Report / Object Page
  *     target then carries `$navigation`, `{ <entity set or navigation property>: true }` for every `navigation` entry
  *     whose `detail.route` is a route of the manifest; anything else is not navigable (as in FE)
+ *   - `app`: the manifest is an htmx app's (it has `sap.htmx`). The layout settings of an app (`fcl`, `animations`) belong to that app:
+ *     they apply to the pages requested for it (`X-Htmx-App`, the shell), not to the standalone pages, which follow the FE manifests
  *  Pure function of the manifest, so it serves both the `app/` folder scan and pulled app bundles. */
 function scanManifest(manifest, servicePath) {
   const dataSources = manifest['sap.app']?.dataSources || {}
@@ -34,7 +36,7 @@ function scanManifest(manifest, servicePath) {
     .find(([, ds]) => ds.type === 'OData' && normalize(ds.uri) === normalize(servicePath))
   if (!mainEntry) return null
 
-  const result = { annotationUris: [], listReports: {}, objectPages: {}, animations: motionOf(manifest['sap.htmx']?.animations) }
+  const result = { annotationUris: [], listReports: {}, objectPages: {}, app: !!manifest['sap.htmx'], animations: motionOf(manifest['sap.htmx']?.animations) }
   for (const key of mainEntry[1].settings?.annotations || []) {
     const annDs = dataSources[key]
     if (annDs?.type === 'ODataAnnotation' && annDs.settings?.localUri) result.annotationUris.push(annDs.settings.localUri)
@@ -101,7 +103,8 @@ function scanService(appRoot, servicePath) {
     for (const uri of scan.annotationUris) result.annotationFiles.push(path.join(webappDir, uri))
     Object.assign(result.listReports, scan.listReports)
     Object.assign(result.objectPages, scan.objectPages)
-    if (MOTION_RANK[scan.animations] > MOTION_RANK[result.animations]) result.animations = scan.animations // several apps: the calmest wins
+    if (scan.app) continue // the settings of an htmx app are the app's own (see `app` above)
+    if (MOTION_RANK[scan.animations] > MOTION_RANK[result.animations]) result.animations = scan.animations // several manifests: the calmest wins
     if (scan.fcl) result.fcl = { roots: [...(result.fcl?.roots || []), ...scan.fcl.roots], layouts: scan.fcl.layouts }
   }
   return result

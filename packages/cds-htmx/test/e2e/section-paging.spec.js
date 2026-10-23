@@ -12,12 +12,12 @@ test.describe('Object Page table sections page like the List Report', () => {
     await expect(rows(page).first()).toBeVisible()
     const total = await count(page)
     expect(total).toBeGreaterThan(40)
-    await expect(rows(page)).toHaveCount(20)
+    await expect(rows(page)).toHaveCount(10)
     const more = page.locator('#op-section--AuthorBooks-growing .hf-table__growing-button')
-    await expect(more).toContainText(`[ 20 / ${total.toLocaleString('en')} ]`)
+    await expect(more).toContainText(`[ 10 / ${total.toLocaleString('en')} ]`)
     await more.click()
-    await expect(rows(page)).toHaveCount(40)
-    await expect(more).toContainText(`[ 40 / ${total.toLocaleString('en')} ]`)
+    await expect(rows(page)).toHaveCount(20)
+    await expect(more).toContainText(`[ 20 / ${total.toLocaleString('en')} ]`)
     expect(await count(page)).toBe(total)
   })
 
@@ -43,7 +43,7 @@ test.describe('Object Page table sections page like the List Report', () => {
     const first = await rows(page).locator('td.hf-col-0').allTextContents()
     expect(first).toEqual([...first].sort((a, b) => b.localeCompare(a)))
     await page.locator('#op-section--AuthorBooks-growing .hf-table__growing-button').click()
-    await expect(rows(page)).toHaveCount(40)
+    await expect(rows(page)).toHaveCount(20)
     const all = await rows(page).locator('td.hf-col-0').allTextContents()
     expect(all).toEqual([...all].sort((a, b) => b.localeCompare(a)))
   })
@@ -61,8 +61,8 @@ test.describe('Object Page table sections page like the List Report', () => {
   test('a row still opens the book in the next column', async ({ page }) => {
     await page.goto(AUTHOR)
     await page.locator('#op-section--AuthorBooks-growing .hf-table__growing-button').click()
-    await expect(rows(page)).toHaveCount(40)
-    await rows(page).nth(25).click() // a row of the second page
+    await expect(rows(page)).toHaveCount(20)
+    await rows(page).nth(15).click() // a row of the second page
     await expect(page.locator('#c2-op-page')).toBeVisible()
   })
 })

@@ -1208,7 +1208,7 @@ class HtmxAdapter extends HttpAdapter {
     const base = this.basePath(req)
     const pathOf = n => segments.slice(0, n).map(s => `${s.set}${s.raw ? `(${s.raw})` : ''}`).join('/')
     const urls = Array.from({ length: Math.max(column, 0) }, (_, n) => n === 0 ? `${base}/${set}` : `${base}/${pathOf(n)}`)
-    return { layouts, column, urls, closeHref: column > 0 ? urls[column - 1] : undefined }
+    return { layouts, column, urls, url: column > 0 ? `${base}/${pathOf(column)}` : `${base}/${set}`, closeHref: column > 0 ? urls[column - 1] : undefined }
   }
 
   /** `X-Hf-Fcl: shown`: the page of this URL is already in its column (Close on a column), nothing is rendered, the
@@ -1238,9 +1238,11 @@ class HtmxAdapter extends HttpAdapter {
       const { partials, body: pageBody } = fclRender.hoistPartials(body)
       if (mode && this.isFragmentRequest(req)) {
         const keep = mode === 'keep'
+        // the first page being edited, saved or discarded with a page open in the third column: that column stays and follows (htmx-fiori.js)
+        const keepDeeper = req.headers['x-hf-fcl-keep'] === '1' && fcl.column >= 1
         const clear = keepMessages || keep ? '' : this.messagesPartial([])
         const swapLive = keep ? '' : `<hx-partial hx-target="#hf-live" hx-swap="outerHTML">${liveSpan.value}</hx-partial>`
-        const markup = `${keep ? '' : `<title>${String(html`${title}`)}</title>`}${clear}${partials}${fclRender.columnPartials(fcl.column, pageBody, { layouts: fcl.layouts, keep })}${swapLive}`
+        const markup = `${keep ? '' : `<title>${String(html`${title}`)}</title>`}${clear}${partials}${fclRender.columnPartials(fcl.column, pageBody, { layouts: fcl.layouts, keep, keepDeeper, url: fcl.url })}${swapLive}`
         return res.set('Content-Type', 'text/html').send(markup)
       }
       body = html`${rawHtml(partials)}${fclRender.structure(fcl.column, pageBody, fcl)}`

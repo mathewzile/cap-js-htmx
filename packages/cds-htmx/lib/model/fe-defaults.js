@@ -16,6 +16,8 @@ module.exports = {
   },
   objectPage: {
     editableHeaderContent: true,
-    sectionLayout: 'Page'
+    sectionLayout: 'Page',
+    // a table section shows 10 rows before its More button (seen in the Manage Authors FE app: Books of an author), a List Report table 20
+    table: { growingThreshold: 10 }
   }
 }

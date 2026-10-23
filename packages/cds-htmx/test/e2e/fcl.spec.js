@@ -27,9 +27,9 @@ test.describe('flexible column layout (admin Authors: List Report | Author | Boo
     await column(page, 1).locator('tbody tr[hx-get]', { hasText: 'Jane Eyre' }).click()
     await expect(page.locator('#c2-op-page')).toBeVisible()
     expect(pathOf(page).startsWith(`${AUTHOR}/books(`)).toBe(true)
-    expect(await layout(page)).toBe('ThreeColumnsEndExpanded')
+    expect(await layout(page)).toBe('ThreeColumnsMidExpanded') // standalone pages follow the FE manifest (manage-authors), the app's own End layout is for the shell
     await expect(page.locator('#op-page')).toBeVisible()
-    await expect.poll(async () => (await widthOf(page, 2)) > (await widthOf(page, 1))).toBe(true)
+    await expect.poll(async () => (await widthOf(page, 1)) > (await widthOf(page, 2))).toBe(true) // Mid expanded: 25 / 50 / 25
     await expect(page.locator('#op-page, #c2-op-page')).toHaveCount(2)
   })
 

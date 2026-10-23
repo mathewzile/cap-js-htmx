@@ -53,7 +53,7 @@ function buildFacet(model, store, entityType, facet, pageSettings) {
     // the table pages like a List Report table: MaxItems of the target's presentation variant, else the manifest, else FE's default
     const targetBag = targetEntityType ? store.raw(targetEntityType) : {}
     const presentationVariant = targetBag['@UI.PresentationVariant'] || targetBag['@UI.SelectionPresentationVariant']?.PresentationVariant
-    const growingThreshold = Number(presentationVariant?.MaxItems) || tableSettings.growingThreshold || feDefaults.listReport.table.growingThreshold
+    const growingThreshold = Number(presentationVariant?.MaxItems) || tableSettings.growingThreshold || feDefaults.objectPage.table.growingThreshold
     return { ...base, kind: 'ReferenceFacet', content: { kind: 'table', nav, targetEntityType, columns, composition: element?.type === 'cds.Composition', hierarchy, navigable, growingThreshold, sortOrder: presentationVariant?.SortOrder } }
   }
 
