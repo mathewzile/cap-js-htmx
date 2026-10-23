@@ -223,3 +223,15 @@ launchpad the theme and animation mode come from UI5.
 
 - **One instance holds the event streams.** The SSE channels (which browser page shows which object) and the `SourceEvents` listeners live in the memory of one CAP instance. Sticky sessions (`stickySessions`, the `JSESSIONID` cookie of Cloud Foundry) keep a browser on its instance, so field side effects work with several instances, but an event emitted on another instance does not reach the pages of this one. Carrying events between instances (CAP messaging) is future work.
 - **Caches are bounded.** Stores and layouts are cached per locale and the locale comes from the browser, so each cache keeps at most 200 entries; the table of deferred side effects keeps 5000.
+
+## 5. Where the server code is
+
+`lib/HtmxAdapter.js` is the router, the middleware (htmx check, session cookie, app resolution, request log) and the helpers every route uses (`render`, `reject`, `trigger`, `messagesPartial`, the Flexible Column Layout lookups). The routes themselves are methods in `lib/routes/*.js`, mixed into the adapter (`Object.assign(HtmxAdapter.prototype, ...)`), grouped by what they do:
+
+| Module | Routes |
+|---|---|
+| `routes/list.js` | List Report page, table rows (`$table`), tree children, CSV export |
+| `routes/object.js` | Object Page, sub-object page, table sections (`$table`, `$export` of a section) |
+| `routes/draft.js` | create, edit, save, discard, delete, bound actions |
+| `routes/fields.js` | field and cell PATCH, rows of a section (create, paste, delete), side effects flush, value help |
+| `routes/playground.js` | the development SSE playground |

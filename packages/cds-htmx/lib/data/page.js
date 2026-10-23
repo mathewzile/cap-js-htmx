@@ -73,4 +73,7 @@ async function loadObjectPage(tx, { service, servicePath, entityType, keys, cont
   return { layout, row, bundle, valueLists, children }
 }
 
-module.exports = { loadObjectPage, collectTableFacets, collectFormFields }
+/** The table sections (and table header facets) of an Object Page layout, in page order. */
+const tableFacets = layout => collectTableFacets([...(layout.headerFacets || []), ...(layout.sections || [])])
+
+module.exports = { loadObjectPage, collectTableFacets, collectFormFields, tableFacets }
