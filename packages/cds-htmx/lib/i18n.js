@@ -55,6 +55,7 @@ function bundleFor(appRoot, locale) {
   if (!bundle) {
     bundle = {}
     for (const dir of dirs) Object.assign(bundle, loadDir(dir, locale))
+    if (bundleCache.size >= 200) bundleCache.delete(bundleCache.keys().next().value) // bounded: the locale comes from the browser
     bundleCache.set(key, bundle)
   }
   return bundle

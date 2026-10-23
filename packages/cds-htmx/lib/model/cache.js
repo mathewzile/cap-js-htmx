@@ -14,6 +14,15 @@ const i18n = require('../i18n')
  *  `app/` folder (a request without `X-Htmx-App`). */
 const appOf = ({ appRoot, app } = {}) => app || standaloneApp(appRoot)
 
+/** Stores and layouts are cached per locale, and the locale comes from the browser's `Accept-Language`: the number of entries
+ *  is bounded (the oldest goes first) so a client that sends many different locales cannot grow the memory. */
+const MAX_ENTRIES = 200
+function remember(map, key, value) {
+  if (map.size >= MAX_ENTRIES) map.delete(map.keys().next().value)
+  map.set(key, value)
+  return value
+}
+
 function cachesFor(model, app) {
   let caches = app.caches.get(model)
   if (!caches) app.caches.set(model, caches = { stores: new Map(), layouts: new Map() })
@@ -41,7 +50,7 @@ function storeFor(model, service, servicePath, { appRoot, locale, app } = {}) {
   const { stores } = cachesFor(model, appOf({ appRoot, app }))
   const key = `${service}:${locale || ''}`
   let store = stores.get(key)
-  if (!store) stores.set(key, store = build(model, service, servicePath, { appRoot, locale, app }))
+  if (!store) store = remember(stores, key, build(model, service, servicePath, { appRoot, locale, app }))
   return store
 }
 
@@ -67,7 +76,7 @@ function listReportFor(model, service, servicePath, entityType, contextPath, { a
     const scan = manifestScanFor(appRoot, servicePath, app)
     const built = buildListReport(store, entityType, { pageSettings: scan.listReports[contextPath] })
     layout = i18n.translate(built, bundleFor({ appRoot, locale, app }))
-    layouts.set(key, layout)
+    remember(layouts, key, layout)
   }
   return layout
 }
@@ -81,7 +90,7 @@ function objectPageFor(model, service, servicePath, entityType, contextPath, { a
     const scan = manifestScanFor(appRoot, servicePath, app)
     const built = buildObjectPage(model, store, entityType, { pageSettings: scan.objectPages[contextPath] })
     layout = i18n.translate(built, bundleFor({ appRoot, locale, app }))
-    layouts.set(key, layout)
+    remember(layouts, key, layout)
   }
   return layout
 }

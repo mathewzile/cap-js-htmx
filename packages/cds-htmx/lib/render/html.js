@@ -20,4 +20,7 @@ function html(strings, ...values) {
   return raw(out)
 }
 
-module.exports = { html, raw, escape, Raw }
+/** An `<hx-partial>`: `content` (markup, already escaped) swapped into `target` (a selector) with `swap`. */
+const partial = (target, swap, content) => `<hx-partial hx-target="${escape(target)}" hx-swap="${escape(swap)}">${content}</hx-partial>`
+
+module.exports = { html, raw, escape, Raw, partial }

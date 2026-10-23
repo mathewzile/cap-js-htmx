@@ -8,6 +8,7 @@ const { invokeAction } = require('../data/actions')
 const { selectColumns, markDraftOwners } = require('../data/query')
 const objectPageRender = require('../render/object-page')
 const ids = require('../render/ids')
+const { partial } = require('../render/html')
 const { rowMarkup, rowId, isNumericColumn } = require('../render/table')
 const i18n = require('../i18n')
 const { config, appRoot } = require('../config')
@@ -73,7 +74,7 @@ function servicePaths(srv) {
  *  `hx-swap="none"`), followed by the named `htmx:fe:sideEffects` DOM event for client hooks. */
 function partialsMarkup(parts) {
   return parts
-    .map(p => `<hx-partial hx-target="${p.target}" hx-swap="${p.swap}">${String(p.html)}</hx-partial>`)
+    .map(p => partial(p.target, p.swap, String(p.html)))
     .join('\n')
 }
 
@@ -130,6 +131,7 @@ async function bindingParts(tx, view, { path, source, appRoot: root, locale, app
  *  Entries are per browser page and object; an abandoned one is dropped after ten minutes. */
 const deferred = new Map() // `${clientId}|${object path}` -> { properties: Set, at }
 const DEFER_TTL = 10 * 60 * 1000
+const DEFER_MAX = 5000 // the client id is the browser's: the table is bounded, the oldest entry goes first
 
 function defer(clientId, objectPath, property) {
   const now = Date.now()
@@ -139,6 +141,7 @@ function defer(clientId, objectPath, property) {
   entry.properties.add(property)
   entry.at = now
   deferred.set(key, entry)
+  while (deferred.size > DEFER_MAX) deferred.delete(deferred.keys().next().value)
 }
 
 /** The properties waiting for `objectPath` of this page, and forgets them. */

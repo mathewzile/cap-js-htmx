@@ -261,7 +261,7 @@ describe('FE parity: capabilities, direct editing, history, confirmations (round
     })
 
     test('searching only replaces the results (the table), never the whole dialog', async () => {
-      const res = await open('/htmx/catalog/Books/$vh/author_ID?$search=Poe', { 'HX-Target': 'div#vh-results' })
+      const res = await open('/htmx/catalog/Books/$vh/author_ID?mode=results&$search=Poe')
       assert.doesNotMatch(res.data, /hf-overlay/)
       assert.match(res.data, /Items \(1\)/)
       assert.match(res.data, /Edgar Allan Poe/)

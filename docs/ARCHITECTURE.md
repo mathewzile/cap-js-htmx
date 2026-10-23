@@ -218,3 +218,8 @@ launchpad the theme and animation mode come from UI5.
 | Annotations -> layout | `lib/model/*`, cache in `lib/model/cache.js` |
 | Layout + data -> HTML | `lib/render/*`, `lib/data/*` |
 | Browser start-up | `packages/cds-htmx-shell/shell/{shell,standalone,flp,hx-csrf}.js`, `Component.js` |
+
+## 4. Limits to know
+
+- **One instance holds the event streams.** The SSE channels (which browser page shows which object) and the `SourceEvents` listeners live in the memory of one CAP instance. Sticky sessions (`stickySessions`, the `JSESSIONID` cookie of Cloud Foundry) keep a browser on its instance, so field side effects work with several instances, but an event emitted on another instance does not reach the pages of this one. Carrying events between instances (CAP messaging) is future work.
+- **Caches are bounded.** Stores and layouts are cached per locale and the locale comes from the browser, so each cache keeps at most 200 entries; the table of deferred side effects keeps 5000.

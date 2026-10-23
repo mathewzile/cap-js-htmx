@@ -177,7 +177,7 @@ describe('App bundles and app-scoped rendering (Phase 7)', () => {
     test('an older browser version gets HX-Trigger hf:appUpdated; the current one does not', async () => {
       const { GET, expect } = api
       const old = await GET('/htmx/catalog/Books', { headers: { 'X-Htmx-App': 'fixture.alpha@1.0.0' } })
-      expect(old.headers['hx-trigger']).to.equal('hf:appUpdated')
+      expect(old.headers['hx-trigger']).to.equal('{"hf:appUpdated":""}') // JSON, so it can sit beside other events of the response
       const current = await GET('/htmx/catalog/Books', { headers: { 'X-Htmx-App': ALPHA } })
       expect(current.headers['hx-trigger']).to.equal(undefined)
       const newer = await GET('/htmx/catalog/Books', { headers: { 'X-Htmx-App': 'fixture.alpha@2.0.0' } })
@@ -352,7 +352,7 @@ describe('App bundles and app-scoped rendering (Phase 7)', () => {
       expect(fresh.status).to.equal(200)
       expect((await apps.resolve('fixture.alpha@1.3.0')).app.version).to.equal('1.3.0')
       const old = await get({ 'X-Htmx-App': ALPHA })
-      expect(old.headers['hx-trigger']).to.equal('hf:appUpdated')
+      expect(old.headers['hx-trigger']).to.equal('{"hf:appUpdated":""}') // JSON, so it can sit beside other events of the response
     })
 
     test('a failing refresh keeps serving the cached app', async () => {

@@ -2,7 +2,7 @@ const cds = require('@sap/cds')
 const express = require('express')
 const HttpAdapter = require('@sap/cds/lib/srv/protocols/http')
 const layout = require('./render/layout')
-const { html, raw: rawHtml } = require('./render/html')
+const { html, raw: rawHtml, partial } = require('./render/html')
 const channels = require('./sse/channels')
 const { open: openSse, write: writeSse } = require('./sse/stream')
 const cache = require('./model/cache')
@@ -47,6 +47,7 @@ function orderByFromTerms(terms) {
 }
 
 /** Most rows of one CSV export. */
+const csvLib = require('./data/csv')
 const EXPORT_LIMIT = 5000
 
 /** `X-Htmx-Base`: absolute path segments only. */
@@ -165,7 +166,7 @@ class HtmxAdapter extends HttpAdapter {
         await app.ensureLocale(cds.context?.locale)
         req.htmxApp = app
         // The browser runs an older version than the one served: let the shell offer a reload
-        if (outdated) res.set('HX-Trigger', 'hf:appUpdated')
+        if (outdated) this.trigger(res, JSON.stringify({ 'hf:appUpdated': '' }))
       }
       next()
     } catch (err) {
@@ -291,28 +292,18 @@ class HtmxAdapter extends HttpAdapter {
 
   /** `GET <object>/<nav>/$export`: the whole table of a section (with its search and sort, the visible columns `cols`) as CSV. */
   async sectionCsv(req, res, tx, { facet, parentType, parentKeys }) {
-    const pageSize = Math.max((cds.env.query?.limit?.max ?? 1000) - 1, 1)
-    const rows = []
-    for (let skip = 0; rows.length < EXPORT_LIMIT; skip += pageSize) {
-      const page = await require('./data/section').sectionPage(tx, { parentEntityType: parentType, parentKeys, content: facet.content, query: req.query, skip, limit: pageSize })
-      rows.push(...page.rows)
-      if (!page.hasMore) break
-    }
-    rows.length = Math.min(rows.length, EXPORT_LIMIT)
+    const { sectionPage } = require('./data/section')
+    const rows = await csvLib.readAll((skip, limit) => sectionPage(tx, { parentEntityType: parentType, parentKeys, content: facet.content, query: req.query, skip, limit }), EXPORT_LIMIT)
+    const columns = this.csvColumns(req, facet.content.columns)
+    const resolve = text => i18n.resolveText(text, cache.bundleFor(this.appOpts(req)))
+    res.set(csvLib.csvHeaders(facet.content.nav, resolve(facet.label ?? facet.content.nav)))
+    res.send(csvLib.toCsv(columns.map(({ col }) => resolve(col.label ?? col.field?.label ?? '')), rows.map(row => columns.map(({ col }) => cellText(col, row)))))
+  }
+
+  /** The columns of a table that an export covers: the ones with a field, and of those only the positions named by `cols` (all when absent). */
+  csvColumns(req, tableColumns) {
     const wanted = typeof req.query.cols === 'string' ? new Set(req.query.cols.split(',').map(Number)) : null
-    const columns = facet.content.columns.map((col, index) => ({ col, index })).filter(({ col, index }) => col.field && (!wanted || wanted.has(index)))
-    const bundle = cache.bundleFor(this.appOpts(req))
-    const resolve = text => i18n.resolveText(text, bundle)
-    const cell = value => {
-      let text = String(value ?? '')
-      if (/^[=+\-@\t\r]/.test(text) && Number.isNaN(Number(text))) text = `'${text}` // spreadsheet formula injection
-      return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
-    }
-    const lines = [columns.map(({ col }) => cell(resolve(col.label ?? col.field?.label ?? ''))).join(',')]
-    for (const row of rows) lines.push(columns.map(({ col }) => cell(cellText(col, row))).join(','))
-    const name = String(resolve(facet.label ?? facet.content.nav)).replace(/[^\w .-]/g, '_')
-    res.set({ 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="${facet.content.nav}.csv"; filename*=UTF-8''${encodeURIComponent(name)}.csv` })
-    res.send('\ufeff' + lines.join('\r\n') + '\r\n')
+    return tableColumns.map((col, index) => ({ col, index })).filter(({ col, index }) => col.field && (!wanted || wanted.has(index)))
   }
 
   /** What the user may do with an entity set: draft vs direct editing and the `Capabilities.*Restrictions`
@@ -327,9 +318,17 @@ class HtmxAdapter extends HttpAdapter {
     return i18n.t(cache.bundleFor(this.appOpts(req)), key)
   }
 
+  /** Adds events to the response's `HX-Trigger` (a JSON object of event names), keeping those an earlier step set, such as
+   *  `hf:appUpdated` from the app check. Returns `res`. */
+  trigger(res, json) {
+    const before = res.getHeader('HX-Trigger')
+    if (!before) return res.set('HX-Trigger', json)
+    return res.set('HX-Trigger', JSON.stringify({ ...JSON.parse(before), ...JSON.parse(json) }))
+  }
+
   /** `<hx-partial>` that puts message strips into `#messages` (outside `#app`, so it also has to be cleared). */
   messagesPartial(msgs) {
-    return `<hx-partial hx-target="#messages" hx-swap="outerHTML">${messageRender.messages(msgs).value}</hx-partial>`
+    return partial('#messages', 'outerHTML', messageRender.messages(msgs).value)
   }
 
   /** Refuses an action with a message strip and leaves the page as it is (only the partial is swapped). */
@@ -352,7 +351,7 @@ class HtmxAdapter extends HttpAdapter {
    *  swapped by htmx, and an empty one would empty the page. */
   validationFailed(req, res, entityType, messages, { status = 422, contextPath } = {}) {
     const layout = cache.objectPageFor(cds.model, this.service.name, this.odataServicePath(), entityType, contextPath ?? `/${entityType.split('.').pop()}`, this.appOpts(req))
-    res.status(status).set('HX-Trigger', draftMessages.triggerHeader({ set: draftMessages.labelled(messages, layout) })).type('html').send(this.messagesPartial([]))
+    this.trigger(res.status(status), draftMessages.triggerHeader({ set: draftMessages.labelled(messages, layout) })).type('html').send(this.messagesPartial([]))
   }
 
   /** Object Page (§routes: `GET /:Set(keys)[/nav(keys)...]`): the full page/fragment -- header,
@@ -527,8 +526,8 @@ class HtmxAdapter extends HttpAdapter {
       .catch(err => { cds.log('htmx').error('binding refresh for', path, 'failed:', err.message); return { parts: [], layout: null, row: null, title: null } })
     // The value is valid again (clear its message) unless it is a mandatory field the user emptied
     const missing = layout ? draftMessages.missingMandatory(layout, row, [path], this.text(req, 'MissingValue')) : []
-    res.set('HX-Trigger', draftMessages.triggerHeader({ clear: [path], set: draftMessages.labelled(missing, layout ?? {}), title }))
-    const status = `<hx-partial hx-target="#${ids.opDraftStatus()}" hx-swap="innerHTML">${this.text(req, 'DraftSavedStatus')}</hx-partial>`
+    this.trigger(res, draftMessages.triggerHeader({ clear: [path], set: draftMessages.labelled(missing, layout ?? {}), title }))
+    const status = partial(`#${ids.opDraftStatus()}`, 'innerHTML', this.text(req, 'DraftSavedStatus'))
     // clears a stale validation strip as well
     const markup = [this.messagesPartial([]), status, ...(parts.length ? [engine.partialsMarkup(parts)] : [])].join('\n')
     res.status(200).type('html').send(markup)
@@ -617,14 +616,14 @@ class HtmxAdapter extends HttpAdapter {
     const ownPage = ids.unprefixed(source ?? '').startsWith('op-field--')
     // a field of the child's own page is in the child's column, a cell of a table section is in its parent's
     if (this.fclOf(req, n.root.set)) ids.setColumn(ownPage ? n.segments.length : n.segments.length - 1)
-    const status = `<hx-partial hx-target="#${ids.opDraftStatus()}" hx-swap="innerHTML">${this.text(req, 'DraftSavedStatus')}</hx-partial>`
+    const status = partial(`#${ids.opDraftStatus()}`, 'innerHTML', this.text(req, 'DraftSavedStatus'))
     if (ownPage) {
       // A field of the child's own page: same as a field of the root page (other occurrences, header title, validation)
       const view = { service: this.service.name, servicePath: this.odataServicePath(), entityType: n.entityType, keys: n.keys, contextPath: n.parent.contextPath + `/${n.nav}`, basePath: this.basePath(req), entitySetPath: n.path }
       const { parts, layout: childLayout, row: childRow } = await engine.bindingParts(tx, view, { path: n.property, source, ...this.appOpts(req) })
         .catch(err => { cds.log('htmx').error('binding refresh for', n.property, 'failed:', err.message); return { parts: [], layout: null, row: null } })
       const missingField = childLayout ? draftMessages.missingMandatory(childLayout, childRow, [n.property], this.text(req, 'MissingValue')) : []
-      res.set('HX-Trigger', draftMessages.triggerHeader({ clear: [n.property], set: draftMessages.labelled(missingField, childLayout ?? {}) }))
+      this.trigger(res, draftMessages.triggerHeader({ clear: [n.property], set: draftMessages.labelled(missingField, childLayout ?? {}) }))
       res.status(200).type('html').send([this.messagesPartial([]), status, ...(parts.length ? [engine.partialsMarkup(parts)] : [])].join('\n'))
     } else {
       // A cell of the table section that shows this row: a mandatory cell the user emptied is flagged
@@ -635,7 +634,7 @@ class HtmxAdapter extends HttpAdapter {
       const row = await tx.run(SELECT.one.from(n.entityType).where(entityDef(cds.model, n.entityType)?.elements?.IsActiveEntity ? { ...plain, IsActiveEntity: false } : plain))
       const missing = column && row && require('./render/field').isMandatory(column.field, row) && draftMessages.isEmpty(row[column.field.cqlPath])
         ? [{ path: key, text: this.text(req, 'MissingValue'), severity: 'error', label: column.field.label }] : []
-      res.set('HX-Trigger', draftMessages.triggerHeader({ clear: [key], set: missing }))
+      this.trigger(res, draftMessages.triggerHeader({ clear: [key], set: missing }))
       res.status(200).type('html').send([this.messagesPartial([]), status].join('\n'))
     }
     // Annotated side effects of the root (e.g. Chapters -> totalPages) are pushed over SSE after the response
@@ -754,7 +753,7 @@ class HtmxAdapter extends HttpAdapter {
     // Type-ahead under the input while typing: the best matches only
     if (suggest) return res.type('html').send(String(valueHelpRender.valueHelpSuggest(columns, rows, { valueProp, t })))
     // Searching only replaces the results, opening sends the whole dialog (into #dialogs)
-    if (req.headers['hx-target'] === 'div#vh-results') {
+    if (req.query.mode === 'results') {
       return res.type('html').send(String(valueHelpRender.valueHelpResults(columns, rows, { valueProp, t })))
     }
     const entitySetPath = keyRaw ? `${set}(${keyRaw})` : set
@@ -930,39 +929,16 @@ class HtmxAdapter extends HttpAdapter {
     if (edit.mode === 'node') return this.reject(req, res, 405, 'NotAllowed')
     const opts = this.appOpts(req)
     const lrLayout = cache.listReportFor(cds.model, this.service.name, this.odataServicePath(), entity.name, `/${req.params.Set}`, opts)
-    const parsedFilters = filtersLib.parseFilters(req.query, lrLayout)
+    const filters = filtersLib.parseFilters(req.query, lrLayout)
     const search = filtersLib.parseSearch(req.query)
-    // A query returns at most `cds.query.limit.max` rows (1000 by default), so a long list is read page by page; each page
-    // asks for one row more than it keeps (the has-more probe), which must still fit under that maximum
-    const pageSize = Math.max((cds.env.query?.limit?.max ?? 1000) - 1, 1)
-    const rows = []
-    for (let skip = 0; rows.length < EXPORT_LIMIT; skip += pageSize) {
-      const batch = await tx.run(queryLib.listReportQuery(cds.model, entity.name, entity.name, lrLayout, { filters: parsedFilters, search, query: req.query, skip, limit: pageSize }))
-      rows.push(...batch.slice(0, pageSize))
-      if (batch.length <= pageSize) break
-    }
-    rows.length = Math.min(rows.length, EXPORT_LIMIT)
-
-    const wanted = typeof req.query.cols === 'string' ? new Set(req.query.cols.split(',').map(Number)) : null
-    const columns = lrLayout.table.columns
-      .map((col, index) => ({ col, index }))
-      .filter(({ col, index }) => col.field && (!wanted || wanted.has(index)))
-    const cell = value => {
-      let text = String(value ?? '')
-      // Spreadsheet formula injection: a cell starting with = + - @ would be run by Excel
-      if (/^[=+\-@\t\r]/.test(text) && Number.isNaN(Number(text))) text = `'${text}`
-      return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
-    }
-    const bundle = cache.bundleFor(opts)
-    const resolve = text => i18n.resolveText(text, bundle)
-    const lines = [columns.map(({ col }) => cell(resolve(col.label ?? col.field?.label ?? ''))).join(',')]
-    for (const row of rows) lines.push(columns.map(({ col }) => cell(cellText(col, row))).join(','))
-    const name = String(resolve(lrLayout.header.typeNamePlural || req.params.Set)).replace(/[^\w .-]/g, '_')
-    res.set({
-      'Content-Type': 'text/csv; charset=utf-8',
-      'Content-Disposition': `attachment; filename="${req.params.Set}.csv"; filename*=UTF-8''${encodeURIComponent(name)}.csv`
-    })
-    res.send('﻿' + lines.join('\r\n') + '\r\n')
+    const rows = await csvLib.readAll(async (skip, limit) => {
+      const batch = await tx.run(queryLib.listReportQuery(cds.model, entity.name, entity.name, lrLayout, { filters, search, query: req.query, skip, limit }))
+      return { rows: batch.slice(0, limit), hasMore: batch.length > limit }
+    }, EXPORT_LIMIT)
+    const columns = this.csvColumns(req, lrLayout.table.columns)
+    const resolve = text => i18n.resolveText(text, cache.bundleFor(opts))
+    res.set(csvLib.csvHeaders(req.params.Set, resolve(lrLayout.header.typeNamePlural || req.params.Set)))
+    res.send(csvLib.toCsv(columns.map(({ col }) => resolve(col.label ?? col.field?.label ?? '')), rows.map(row => columns.map(({ col }) => cellText(col, row)))))
   }
 
   /** Table body partial (§routes: `GET /:Set/$table`): sort (header click), search/filter ("Go"),
@@ -1005,7 +981,7 @@ class HtmxAdapter extends HttpAdapter {
       const params = new URLSearchParams(Object.entries(req.query).filter(([k, v]) => v !== '' && !(k === 'f.EditingStatus' && v === 'ALL')))
       res.set('HX-Replace-Url', `${base}/${req.params.Set}${params.size ? '?' + params : ''}`)
       // the header (outside the swapped rows) shows which column the rows are sorted by
-      res.set('HX-Trigger', JSON.stringify({ 'hf:sorted': { path: orderBy?.path ?? '', desc: !!orderBy?.desc } }))
+      this.trigger(res, JSON.stringify({ 'hf:sorted': { path: orderBy?.path ?? '', desc: !!orderBy?.desc } }))
     }
     res.set('Content-Type', 'text/html').send(String(body))
   }
@@ -1131,7 +1107,7 @@ class HtmxAdapter extends HttpAdapter {
         // the first page being edited, saved or discarded with a page open in the third column: that column stays and follows (htmx-fiori.js)
         const keepDeeper = req.headers['x-hf-fcl-keep'] === '1' && fcl.column >= 1
         const clear = keepMessages || keep ? '' : this.messagesPartial([])
-        const swapLive = keep ? '' : `<hx-partial hx-target="#hf-live" hx-swap="outerHTML">${liveSpan.value}</hx-partial>`
+        const swapLive = keep ? '' : partial('#hf-live', 'outerHTML', liveSpan.value)
         const markup = `${keep ? '' : `<title>${String(html`${title}`)}</title>`}${clear}${partials}${fclRender.columnPartials(fcl.column, pageBody, { layouts: fcl.layouts, keep, keepDeeper, url: fcl.url })}${swapLive}`
         return res.set('Content-Type', 'text/html').send(markup)
       }

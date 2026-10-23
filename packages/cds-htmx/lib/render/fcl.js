@@ -1,4 +1,4 @@
-const { html, raw, escape } = require('./html')
+const { html, raw, escape, partial } = require('./html')
 
 /** Flexible Column Layout (`sap.f.FlexibleColumnLayout`, the container FE uses when an app's manifest asks for it).
  *  Column 0 is the List Report, column 1 its Object Page, column 2 a sub-object page (deeper pages replace it).
@@ -38,8 +38,6 @@ function structure(column, inner, { layouts, urls, url }) {
   const columns = Array.from({ length: COLUMNS }, (_, n) => n < column ? lazyColumn(n, urls[n]) : n === column ? columnElement(n, inner, url) : emptyColumn(n))
   return html`<div id="fcl" class="hf-fcl" data-hf-layout="${layoutFor(column, layouts)}" data-hf-deepest="${column}">${columns}${markerElement(column, layouts)}</div>`
 }
-
-const partial = (target, swap, content) => `<hx-partial hx-target="${target}" hx-swap="${swap}">${content}</hx-partial>`
 
 /** The columns to the right of `column` are emptied and the marker follows the column. */
 function trim(column, layouts) {

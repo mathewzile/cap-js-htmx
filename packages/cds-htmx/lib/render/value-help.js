@@ -62,6 +62,7 @@ function valueHelpDialog(field, columns, rows, { basePath, entitySetPath, valueP
         <div class="hf-dialog__body">
           ${searchSupported ? html`
           <form class="hf-vh__search" hx-get="${url}" hx-target="#vh-results" hx-swap="innerHTML" hx-push-url="false" hx-trigger="submit, input delay:300ms">
+            <input type="hidden" name="mode" value="results">
             <div class="fd-input-group hf-input-group">
               <input type="search" name="$search" class="fd-input" value="${search ?? ''}" placeholder="${t('Search')}" aria-label="${t('Search')}" data-hf-autofocus autocomplete="off">
               <span class="hf-input-group__addon"><button type="submit" class="fd-button fd-button--compact fd-button--transparent" aria-label="${t('Go')}"><i class="sap-icon--search" aria-hidden="true"></i></button></span>
