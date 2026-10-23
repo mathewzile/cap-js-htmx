@@ -59,12 +59,12 @@ test.describe('dialogs animate like FE\'s', () => {
     await expect(page.locator('[name="f.author_ID"]')).not.toHaveValue('')
   })
 
-  test('with animations: fast the durations are a quarter, with none the dialog opens and closes at once', async ({ page }) => {
+  test('with animations: fast the durations are half, with none the dialog opens and closes at once', async ({ page }) => {
     await page.goto('/htmx/catalog/Books')
     await page.evaluate(() => document.body.classList.add('hf-motion-fast'))
     await page.getByRole('button', { name: 'View Settings' }).click()
     await expect(overlay(page)).toBeVisible()
-    expect(await animations(page)).toEqual(expect.arrayContaining(['hf-dialog-in:50']))
+    expect(await animations(page)).toEqual(expect.arrayContaining(['hf-dialog-in:100']))
     await page.getByRole('button', { name: 'Cancel' }).click()
     await expect(overlay(page)).toHaveCount(0)
 

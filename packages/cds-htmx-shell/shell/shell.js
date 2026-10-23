@@ -154,7 +154,10 @@
       current = route
       if (type === 'push') adapter.push(route); else adapter.replace(route)
     })
-    adapter.attach({ onRoute: route => { if (route && route !== current) show(route) } })
+    // The launchpad hands the route back through its hash, which may encode it (`(`, `=`, `,` in a key): the hash event of our own push
+    // is the same route, not a navigation, and a real one (back, forward) is fetched in the form the server knows.
+    const decoded = route => { try { return decodeURIComponent(route) } catch { return route } }
+    adapter.attach({ onRoute: route => { if (route && route !== current && decoded(route) !== decoded(current ?? '')) show(decoded(route)) } })
     document.addEventListener('htmx:after:swap', e => {
       if (!root.contains(e.target)) return
       adapter.setTitle(document.title)
