@@ -173,6 +173,7 @@ test.describe('table tools', () => {
     await page.locator('[data-hf-filter=author_ID] .hf-vh-open').click()
     await page.locator('.hf-vh-row', { hasText: 'Poe' }).click()
     await expect(page.locator('[name="f.author_ID"]')).toHaveValue(/0003$/)
+    await expect(page.locator('.hf-overlay')).toHaveCount(0) // the value help is gone once its closing animation is over
     await page.getByRole('button', { name: 'Go' }).click()
     await expect(page.locator('#lr-table-body tr')).toHaveCount(20) // a page of Poe's books
     await expect(page.locator('#lr-table-body td.hf-col-3').filter({ hasNotText: 'Edgar Allan Poe' })).toHaveCount(0)

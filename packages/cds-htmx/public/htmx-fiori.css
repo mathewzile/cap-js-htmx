@@ -820,6 +820,22 @@ tr[aria-busy=true] { cursor: progress; }
 .hf-no-motion .hf-busy::before { animation: hf-busy-in 0s 1s forwards !important; }
 .hf-no-motion .hf-busy::after { animation: hf-busy-show 0s 1s forwards !important; }
 
+/* ---------- dialog animation ---------- */
+/* Like FE's dialogs: the block layer fades in, the dialog fades in while it grows from 90% (0.2s); closing (`.is-closing`, set by
+   hfDismiss, which removes the overlay when the animation ends) is the same backwards and a little faster. The durations follow
+   --hf-motion-scale (`fast`); `none` and reduced motion switch the animation off, and the dialog then closes at once. */
+.hf-overlay { animation: hf-overlay-in calc(.2s * var(--hf-motion-scale, 1)) linear both; }
+.hf-overlay > .hf-dialog, .hf-overlay > .hf-message-box { animation: hf-dialog-in calc(.2s * var(--hf-motion-scale, 1)) cubic-bezier(.4, 0, .2, 1) both; }
+.hf-overlay.is-closing { pointer-events: none; animation: hf-overlay-out calc(.15s * var(--hf-motion-scale, 1)) linear both; }
+.hf-overlay.is-closing > .hf-dialog, .hf-overlay.is-closing > .hf-message-box { animation: hf-dialog-out calc(.15s * var(--hf-motion-scale, 1)) cubic-bezier(.4, 0, .2, 1) both; }
+@keyframes hf-overlay-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes hf-overlay-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes hf-dialog-in { from { opacity: 0; transform: scale(.9); } to { opacity: 1; transform: scale(1); } }
+@keyframes hf-dialog-out { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(.9); } }
+@media (prefers-reduced-motion: reduce) {
+  .hf-overlay, .hf-overlay > .hf-dialog, .hf-overlay > .hf-message-box, .hf-overlay.is-closing, .hf-overlay.is-closing > .hf-dialog, .hf-overlay.is-closing > .hf-message-box { animation: none; }
+}
+
 /* ---------- Flexible Column Layout (render/fcl.js): List Report | Object Page | sub-object page ---------- */
 
 /* A column is as wide as --hf-w says: the layout type sets it, a dragged separator overrides it (--hf-c<n> on #fcl). Width changes

@@ -56,7 +56,7 @@
       tabs ? content : el('div', { class: 'hf-dialog__body' }, body),
       footer)
     const overlay = el('div', { class: 'hf-overlay', 'data-hf-dialog': true }, dialog)
-    const close = () => overlay.remove()
+    const close = () => hfDismiss(overlay)
     const api = { overlay, dialog, close, markChanged: () => { if (resetButton) resetButton.disabled = false } }
     if (resetButton) {
       resetButton.addEventListener('click', () => { reset.action(api); resetButton.disabled = true })
@@ -884,7 +884,7 @@
     if (!row || !target?.startsWith('f.')) return
     e.stopImmediatePropagation()
     const input = document.querySelector(`form.hf-filter-bar [name="${CSS.escape(target)}"]`)
-    document.querySelectorAll('.hf-overlay[data-hf-dialog]').forEach(o => o.remove())
+    document.querySelectorAll('.hf-overlay[data-hf-dialog]').forEach(hfDismiss)
     if (input) { input.value = row.dataset.value; input.focus() }
   }, true)
 

@@ -55,8 +55,22 @@ document.addEventListener('change', e => {
 // Elements keep their `hx-confirm="<text>"`; htmx asks via `htmx:confirm` and we answer with a UI
 // dialog. `{count}` in the text is replaced by the number of ticked rows (List Report Delete).
 // Optional data attributes: data-hf-confirm-title / -ok / -cancel, data-hf-confirm-critical.
+/** Closes a modal overlay (dialog or message box) the way FE does: it fades and shrinks away (`.is-closing`, see the CSS) and is
+ *  removed when that animation ends; without animation (`sap.htmx.animations: none`, reduced motion) it goes at once. */
+function hfDismiss(overlay) {
+  if (!overlay?.isConnected || overlay.classList.contains('is-closing')) return
+  overlay.classList.add('is-closing')
+  const box = overlay.firstElementChild
+  const seconds = box ? parseFloat(getComputedStyle(box).animationDuration) || 0 : 0
+  if (!seconds) return overlay.remove()
+  const done = () => overlay.remove()
+  box.addEventListener('animationend', done, { once: true })
+  setTimeout(done, seconds * 1000 + 150) // in case the animation never ends (a hidden tab)
+}
+
 function hfConfirmDialog({ title, text, ok, cancel, critical }) {
   return new Promise(resolve => {
+    document.querySelectorAll('.hf-overlay.is-closing').forEach(o => o.remove()) // a dialog still on its way out makes way for this one
     const overlay = document.createElement('div')
     overlay.className = 'hf-overlay'
     overlay.innerHTML = `
@@ -79,7 +93,7 @@ function hfConfirmDialog({ title, text, ok, cancel, critical }) {
     const previous = document.activeElement
     const close = result => {
       document.removeEventListener('keydown', onKey, true)
-      overlay.remove()
+      hfDismiss(overlay)
       previous?.focus?.()
       resolve(result)
     }
@@ -398,7 +412,7 @@ document.addEventListener('htmx:before:request', e => {
 
 // ---------- modal dialogs (value help): Cancel / Escape close, a row writes its value into the field ----------
 function hfCloseDialog() {
-  document.querySelectorAll('.hf-overlay[data-hf-dialog]').forEach(o => o.remove())
+  document.querySelectorAll('.hf-overlay[data-hf-dialog]').forEach(hfDismiss)
 }
 
 document.addEventListener('click', e => {
