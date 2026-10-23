@@ -86,7 +86,12 @@ async function resolve(ref) {
       pending.set(id, job)
     }
     try {
+      const loadedBefore = entry?.app
       entry = await job
+      if (entry.app !== loadedBefore) {
+        // its annotations may name SourceEvents; a failure here must not fail the request
+        try { require('../sse/side-effects-engine').appLoaded(entry.app) } catch (err) { cds.log('sse').error('SourceEvents of app', id, 'not registered:', err.message) }
+      }
       failures.delete(id)
       registry.delete(id) // re-insert last: Map order is the LRU order
       registry.set(id, entry)

@@ -1,5 +1,5 @@
 const { build } = require('../annotations/store')
-const { scanService } = require('../annotations/manifest')
+const { standaloneApp } = require('../apps/standalone')
 const { buildListReport } = require('./list-report')
 const { buildObjectPage } = require('./object-page')
 const i18n = require('../i18n')
@@ -9,28 +9,20 @@ const i18n = require('../i18n')
  *  the model object itself means a `cds watch` reload -- a brand-new model instance --
  *  invalidates everything for free, with no explicit eviction logic needed.
  *
- *  Requests without an app share one set of caches (the `app/` folder scan). A request for a
- *  pulled app (design doc §2) uses caches that live ON that `App` instance, so a new app version
- *  starts clean and an evicted one takes its caches with it. */
-const sharedCaches = new WeakMap() // model -> { stores, layouts }
-const manifestCache = new Map() // `${appRoot}:${servicePath}` -> scanService() result
+ *  The caches live ON the app that serves the request: a pulled app (design doc §2), so a new app
+ *  version starts clean and an evicted one takes its caches with it, or the standalone app of the
+ *  `app/` folder (a request without `X-Htmx-App`). */
+const appOf = ({ appRoot, app } = {}) => app || standaloneApp(appRoot)
 
 function cachesFor(model, app) {
-  const holder = app ? app.caches : sharedCaches
-  let caches = holder.get(model)
-  if (!caches) holder.set(model, caches = { stores: new Map(), layouts: new Map() })
+  let caches = app.caches.get(model)
+  if (!caches) app.caches.set(model, caches = { stores: new Map(), layouts: new Map() })
   return caches
 }
 
-/** Page settings (`ListReport`/`ObjectPage` routing-target settings) for a service: from the app
- *  when one is given, otherwise from every FE manifest in the `app/` folder. */
+/** Page settings (`ListReport`/`ObjectPage` routing-target settings, column layout, motion) for a service. */
 function manifestScanFor(appRoot, servicePath, app) {
-  if (app) return app.scanFor(servicePath)
-  if (!appRoot) return { annotationFiles: [], listReports: {}, objectPages: {}, fcl: undefined, animations: 'full' }
-  const key = `${appRoot}:${servicePath}`
-  let scan = manifestCache.get(key)
-  if (!scan) manifestCache.set(key, scan = scanService(appRoot, servicePath))
-  return scan
+  return appOf({ appRoot, app }).scanFor(servicePath)
 }
 
 /** The Flexible Column Layout an entity set opens in (`{ two, three }`: the default layout types), or `undefined` when
@@ -46,7 +38,7 @@ function animationsFor(servicePath, { appRoot, app } = {}) {
 }
 
 function storeFor(model, service, servicePath, { appRoot, locale, app } = {}) {
-  const { stores } = cachesFor(model, app)
+  const { stores } = cachesFor(model, appOf({ appRoot, app }))
   const key = `${service}:${locale || ''}`
   let store = stores.get(key)
   if (!store) stores.set(key, store = build(model, service, servicePath, { appRoot, locale, app }))
@@ -67,7 +59,7 @@ function bundleFor({ appRoot, locale, app } = {}) {
 /** `entityType` is the full `$Annotations`-style type (`CatalogService.Books`); `contextPath`
  *  is the FE-manifest-style lookup key for that entity's page settings (`/Books`, `/Books/chapters`). */
 function listReportFor(model, service, servicePath, entityType, contextPath, { appRoot, locale, app } = {}) {
-  const { layouts } = cachesFor(model, app)
+  const { layouts } = cachesFor(model, appOf({ appRoot, app }))
   const key = `LR:${contextPath}:${entityType}:${locale || ''}`
   let layout = layouts.get(key)
   if (!layout) {
@@ -81,7 +73,7 @@ function listReportFor(model, service, servicePath, entityType, contextPath, { a
 }
 
 function objectPageFor(model, service, servicePath, entityType, contextPath, { appRoot, locale, app } = {}) {
-  const { layouts } = cachesFor(model, app)
+  const { layouts } = cachesFor(model, appOf({ appRoot, app }))
   const key = `OP:${contextPath}:${entityType}:${locale || ''}`
   let layout = layouts.get(key)
   if (!layout) {

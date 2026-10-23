@@ -1,4 +1,5 @@
 const fs = require('node:fs')
+const cds = require('@sap/cds')
 const path = require('node:path')
 const { findManifests } = require('../../annotations/manifest')
 const { appRoot } = require('../../config')
@@ -20,7 +21,7 @@ function newestMtime(dir) {
 module.exports = function local({ root } = {}) {
   return {
     kind: 'local',
-    volatile: true,
+    volatile: !cds.env.production, // a deployed instance does not change its files: the TTL applies instead of a recheck
     async resolve(appId) {
       for (const manifestPath of findManifests(root || appRoot())) {
         let manifest

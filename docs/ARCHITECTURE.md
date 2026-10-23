@@ -98,7 +98,7 @@ flowchart LR
 
 | Source | Use |
 |---|---|
-| `local` | the `webapp/manifest.json` files under `app/`. Development and co-deployed apps. Marked *volatile*: it is re-checked for edits (newest mtime) instead of trusted for a TTL, so `cds watch` picks up an edited `annotation.xml` |
+| `local` | the `webapp/manifest.json` files under `app/`. Development and co-deployed apps. Marked *volatile* outside production: it is re-checked for edits (newest mtime) instead of trusted for a TTL, so `cds watch` picks up an edited `annotation.xml`. A deployed instance (`NODE_ENV=production`) uses the TTL |
 | remote kinds | an app deployed elsewhere (see `FRONTEND_DEPLOYMENT_AND_EXTENSIBILITY.md`). Cached with a TTL, refetched when the browser runs another version, an already loaded app is kept when a refresh fails |
 
 Concurrent requests for one app share a single load, and a failed load is remembered for a few seconds.
@@ -131,8 +131,9 @@ The rules:
    `CatalogService.Books/title`). It is compiled once per `cds.model` instance, service and locale, so a `cds watch` reload
    (a new model object) invalidates it.
 2. **Layer 1..n** are the `annotation.xml` files the app's manifest declares as annotation data sources for that service,
-   **in manifest order**. A pulled app (`X-Htmx-App`) uses *only its own* layers. Without one, the plugin scans `app/` for the
-   manifests that point to the same service path.
+   **in manifest order**. A pulled app (`X-Htmx-App`) uses *only its own* layers. A request without one is served by the
+   *standalone app* (`lib/apps/standalone.js`): the manifests under `app/` that point to the same service path, seen as one
+   app with the same interface (`scanFor`, `caches`), so there is one code path for both.
 3. **Merging** is `mergeLayer`: for each target, each `@Alias.Term#Qualifier` key from a later layer **replaces** the earlier
    one wholesale. There is no deep merge inside a collection or record. That is how FE layers annotations, so an
    `annotation.xml` that redefines `UI.LineItem` replaces the whole line item of the CDS file, while `UI.LineItem#Books` is a

@@ -216,11 +216,17 @@ async function pushListRow(tx, client, { srv, servicePath, entityType, view, key
   }])
 }
 
+const served = new Set() // the `@htmx` services, for the apps that are loaded later
+const registered = new WeakMap() // srv -> Set of the event names it already listens for
+
 /** Registers `srv.on(<event>)` for every event named as a `SourceEvents` of some entity's
- *  `Common.SideEffects` (§4.2.3). Runs once per `@htmx` service from `cds-plugin.js`. */
-function registerSourceEvents(srv) {
+ *  `Common.SideEffects` (§4.2.3). Runs once per `@htmx` service from `cds-plugin.js`, and again for an
+ *  `app` that is loaded later: its `annotation.xml` may name events the service's own annotations do not. */
+function registerSourceEvents(srv, app) {
+  served.add(srv)
+  const known = registered.get(srv) ?? registered.set(srv, new Set()).get(srv)
   const { odata } = servicePaths(srv)
-  const store = cache.storeFor(cds.model, srv.name, odata, { appRoot: appRoot() })
+  const store = cache.storeFor(cds.model, srv.name, odata, { appRoot: appRoot(), app })
   const wanted = new Map() // event name -> [entityType]
   for (const entity of Object.values(srv.entities)) {
     if (!entity.name || entity.name.endsWith('.drafts')) continue
@@ -230,6 +236,8 @@ function registerSourceEvents(srv) {
     }
   }
   for (const [eventName, entityTypes] of wanted) {
+    if (known.has(eventName)) continue
+    known.add(eventName)
     srv.on(eventName, async (msg, next) => {
       // Defer until the emitting transaction finished, so the re-read sees its committed changes
       const run = () => Promise.all(entityTypes.map(entityType => onSourceEvent(srv, { entityType, eventName, data: msg.data })))
@@ -242,4 +250,9 @@ function registerSourceEvents(srv) {
   }
 }
 
-module.exports = { defer, takeDeferred, needsStream, registerSourceEvents, onChange, onSourceEvent, bindingParts, partialsMarkup, collectTargets, servicePaths, publish }
+/** A pulled app was loaded (`apps/index.js`): listen for the events its annotations name. */
+function appLoaded(app) {
+  for (const srv of served) registerSourceEvents(srv, app)
+}
+
+module.exports = { appLoaded, defer, takeDeferred, needsStream, registerSourceEvents, onChange, onSourceEvent, bindingParts, partialsMarkup, collectTargets, servicePaths, publish }
