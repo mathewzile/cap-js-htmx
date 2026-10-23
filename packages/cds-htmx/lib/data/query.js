@@ -98,19 +98,25 @@ function parseOrderBy(query, columns) {
 /** Builds the List Report table SELECT (§3.3): columns from the layout model, `.where()` from the
  *  parsed filters, `.search()` for free text, `.orderBy()` from `$orderby` or the layout's default
  *  `PresentationVariant.SortOrder`, and `.limit()` for growing ("More"). */
-function listReportQuery(model, entitySet, entityType, layout, { filters = [], search, query, skip = 0, limit } = {}) {
+function listReportQuery(model, entitySet, entityType, layout, { filters = [], search, query, skip = 0, limit, tieBreak = false } = {}) {
   const columns = selectColumns(model, entityType, layout)
   let q = SELECT.from(entitySet).columns(columns)
   if (filters.length) q = q.where(filters)
   if (search) q = q.search(search)
   const orderBy = parseOrderBy(query, columns) || defaultOrderBy(layout)
-  if (orderBy.length) {
+  if (orderBy.length || tieBreak) {
     // Paging with `$skip` needs a total order: rows that tie on the sort column would otherwise repeat or go missing between pages
     const keys = keyElements(entityDef(model, entityType)).map(k => k.name).filter(k => k !== 'IsActiveEntity' && !orderBy.some(t => t.split(' ')[0] === k))
     q = q.orderBy(...orderBy, ...keys)
   }
   q = q.limit((limit ?? layout.table.growingThreshold) + 1, skip) // +1: cheap has-more-rows probe, trimmed by the caller
   return q
+}
+
+/** The rows of a table section: the child rows that belong to one parent object, as a `where` for `listReportQuery` (the
+ *  same filter `objectPageChildQuery` builds, in CXN form). */
+function parentFilter(model, parentEntityType, parentKeys, childEntityType) {
+  return objectPageChildQuery(model, parentEntityType, parentKeys, childEntityType, ['*']).SELECT.where || []
 }
 
 function listReportCountQuery(entitySet, { filters = [], search } = {}) {
@@ -188,5 +194,5 @@ function objectPageChildQuery(model, parentEntityType, parentKeys, childEntityTy
 
 module.exports = {
   selectColumns, listReportQuery, listReportCountQuery, defaultOrderBy, parseOrderBy,
-  objectPageColumns, objectPageQuery, objectPageChildQuery, markDraftOwners, draftLockUser
+  objectPageColumns, objectPageQuery, objectPageChildQuery, parentFilter, markDraftOwners, draftLockUser
 }

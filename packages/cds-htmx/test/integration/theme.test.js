@@ -45,7 +45,8 @@ describe('theme', () => {
     const info = await withTheme('auto', async () => (await GET('/htmx/catalog/$shell', { headers: { 'HX-Request': 'true' } })).data)
     assert.equal(info.auto, true)
     assert.equal(info.theme, 'sap_horizon')
-    const fixed = (await GET('/htmx/catalog/$shell', { headers: { 'HX-Request': 'true' } })).data
+    const fixed = await withTheme('sap_horizon_dark', async () => (await GET('/htmx/catalog/$shell', { headers: { 'HX-Request': 'true' } })).data)
     assert.equal(fixed.auto, false)
+    assert.equal(fixed.theme, 'sap_horizon_dark')
   })
 })

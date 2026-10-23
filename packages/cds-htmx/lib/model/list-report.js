@@ -145,7 +145,8 @@ function buildListReport(store, entityType, { pageSettings } = {}) {
       type: hierarchy ? 'TreeTable' : tableSettings.type !== 'TreeTable' && tableSettings.type || feDefaults.listReport.table.type,
       hierarchy,
       selectionMode: tableSettings.selectionMode || feDefaults.listReport.table.selectionMode,
-      growingThreshold: tableSettings.growingThreshold || feDefaults.listReport.table.growingThreshold,
+      // items per page: the presentation variant's MaxItems, else the manifest's growingThreshold, else FE's default
+      growingThreshold: Number(presentationVariant?.MaxItems) || tableSettings.growingThreshold || feDefaults.listReport.table.growingThreshold,
       condensedTableLayout: tableSettings.condensedTableLayout ?? feDefaults.listReport.table.condensedTableLayout,
       sortOrder: presentationVariant?.SortOrder,
       groupBy: presentationVariant?.GroupBy

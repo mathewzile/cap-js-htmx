@@ -94,12 +94,14 @@ function isSelectable(layout) {
   return layout.edit ? canDelete(layout.edit) : true
 }
 
-function headerCell(col, { basePath, entitySetPath, orderBy, numeric, sortable, index, editing }) {
+function headerCell(col, { basePath, entitySetPath, orderBy, numeric, sortable, index, editing, sortKeys }) {
   const cls = `fd-table__cell hf-th hf-col-${index}${numeric ? ' hf-cell--end' : ''}`
   if (!sortable || !col.field?.cqlPath || col.kind !== 'UI.DataField') {
     // the columns a paste can fill (editable cells of a section table in a draft)
     const pasteTarget = editing && col.kind === 'UI.DataField' && col.field?.cqlPath && !col.field.cqlPath.includes('.') && !require('./field').isReadOnly(col.field, {}, 'draft')
-    return html`<th class="${cls}" role="columnheader"${pasteTarget ? html` data-hf-paste-path="${col.field.path}"` : html``}><span class="hf-th__text">${col.label ?? col.field?.label ?? ''}</span>${editing && col.field && require('./field').isMandatory(col.field, {}) ? html`<span class="hf-field__required" aria-hidden="true">*</span>` : html``}</th>`
+    // a paged section sorts on the server: its headers say by which property (the column menu asks the section's `$table`)
+    const sortKey = sortKeys && col.kind === 'UI.DataField' && col.field?.cqlPath
+    return html`<th class="${cls}" role="columnheader"${sortKey ? html` data-hf-sort="${col.field.cqlPath}" data-hf-label="${col.label ?? col.field.label ?? ''}"` : html``}${pasteTarget ? html` data-hf-paste-path="${col.field.path}"` : html``}><span class="hf-th__text">${col.label ?? col.field?.label ?? ''}</span>${editing && col.field && require('./field').isMandatory(col.field, {}) ? html`<span class="hf-field__required" aria-hidden="true">*</span>` : html``}</th>`
   }
   const path = col.field.cqlPath
   const label = col.label ?? col.field.label ?? ''
@@ -252,13 +254,27 @@ function growingButton(basePath, entitySetPath, { skip, hasMore, loaded, count, 
     </div>`
 }
 
+/** The More button of a table section (its twin is the List Report's `growingButton`): the same `[ loaded / total ]`, asking the
+ *  section's own `$table` for the rows after the ones shown. `query` carries the search and sort it was loaded with. */
+function sectionGrowing(sectionId, tableUrl, { skip, hasMore, count, bundle, t, query, locale }) {
+  if (!hasMore) return html`<div id="${sectionId}-growing" class="hf-table__growing"></div>`
+  const params = new URLSearchParams({ ...query, $skip: String(skip) })
+  return html`
+    <div id="${sectionId}-growing" class="hf-table__growing">
+      <button type="button" class="hf-table__growing-button" hx-get="${tableUrl}?${params.toString()}" hx-target="#${sectionId}-body" hx-swap="beforeend">
+        <span class="hf-table__growing-title">${t(bundle, 'More')}</span>
+        <span class="hf-table__growing-info">[ ${formatCount(skip, locale)} / ${formatCount(count, locale)} ]</span>
+      </button>
+    </div>`
+}
+
 /** Header row shared by the List Report table and Object Page table sections. */
-function tableHead(columns, rows, { basePath, entitySetPath, orderBy, selectable = true, sortable = true, editing = false } = {}) {
+function tableHead(columns, rows, { basePath, entitySetPath, orderBy, selectable = true, sortable = true, editing = false, sortKeys = false } = {}) {
   return html`
     <thead>
       <tr class="fd-table__row" role="row">
         ${selectable ? html`<th class="fd-table__cell fd-table__cell--checkbox" role="columnheader">${checkbox('Select all')}</th>` : html``}
-        ${columns.map((col, index) => headerCell(col, { basePath, entitySetPath, orderBy, sortable, index, numeric: isNumericColumn(col, rows), editing }))}
+        ${columns.map((col, index) => headerCell(col, { basePath, entitySetPath, orderBy, sortable, index, numeric: isNumericColumn(col, rows), editing, sortKeys }))}
         <th class="fd-table__cell hf-col-nav" role="columnheader"></th>
       </tr>
     </thead>`
@@ -285,4 +301,4 @@ function table(layout, rows, ctx) {
   `
 }
 
-module.exports = { table, treeAttributes, growingButton, tableHead, isSelectable, rowsHtml, rowMarkup, rowId, isNumericColumn, cellText, rowHref, keyValues, objectStatus, columnBreakpoints, columnVisibilityStyle }
+module.exports = { table, treeAttributes, growingButton, sectionGrowing, tableHead, isSelectable, rowsHtml, rowMarkup, rowId, isNumericColumn, cellText, rowHref, keyValues, objectStatus, columnBreakpoints, columnVisibilityStyle }

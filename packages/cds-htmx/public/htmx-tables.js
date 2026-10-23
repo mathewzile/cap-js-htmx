@@ -260,6 +260,20 @@
     download(`${button.dataset.hfFilename || 'export'}.csv`, 'text/csv;charset=utf-8', '﻿' + lines.join('\r\n') + '\r\n')
   }
 
+  /** A paged section's CSV comes from the server: every row, with the section's search and sort and the visible columns. */
+  function exportSectionServer(button, container) {
+    const params = new URLSearchParams()
+    const { hfOrderby } = sectionState(container)
+    const search = container.querySelector('[data-hf-table-search]')?.value.trim() // what the box says now, not what was last loaded (the reload is debounced)
+    if (search) params.set('$search', search)
+    if (hfOrderby) params.set('$orderby', hfOrderby)
+    params.set('cols', visibleColumns(container).join(','))
+    const a = el('a', { href: `${button.dataset.hfExport}?${params}`, download: '' })
+    document.body.append(a)
+    a.click()
+    a.remove()
+  }
+
   function exportList(button) {
     const lr = button.closest('.hf-page--lr')
     const form = lr.querySelector('form.hf-filter-bar')
@@ -273,10 +287,49 @@
     a.remove()
   }
 
+  // ---------------------------------------------------------------- section tables
+  // A section that pages (`data-hf-table-url` on its table) searches and sorts on the server, over the whole set: its own `$table`
+  // with `$search` / `$orderby`, replacing the rows (the More button asks for the following pages with the same two).
+  const sectionUrlOf = container => tableOf(container)?.dataset.hfTableUrl
+  const sectionState = container => tableOf(container).dataset
+
+  function loadSection(container, { search = sectionState(container).hfSearch ?? '', orderby = sectionState(container).hfOrderby ?? '' } = {}) {
+    const table = tableOf(container)
+    table.dataset.hfSearch = search
+    table.dataset.hfOrderby = orderby
+    const params = new URLSearchParams()
+    if (search) params.set('$search', search)
+    if (orderby) params.set('$orderby', orderby)
+    const [path, ...term] = [orderby.split(',')[0].trim()]
+    const key = path.split(' ')[0]
+    for (const th of table.querySelectorAll('thead th.hf-th')) {
+      if (key && th.dataset.hfSort === key) th.setAttribute('aria-sort', / desc$/.test(path) ? 'descending' : 'ascending'); else th.removeAttribute('aria-sort')
+    }
+    void term
+    return htmx.ajax('GET', `${sectionUrlOf(container)}${params.size ? '?' + params : ''}`, { source: table, target: '#' + table.querySelector('tbody').id, swap: 'innerHTML' })
+  }
+
+  /** Sorts a paged section by a column (`direction` null: back to the default order); a grouped column leads the sort. */
+  function sortSection(container, key, direction) {
+    const group = groupOf(container)
+    const groupKey = group == null ? null : tableOf(container).querySelector(`thead th.hf-col-${group}`)?.dataset.hfSort
+    const terms = [groupKey && groupKey !== key ? groupKey : null, key && direction ? key + (direction === 'desc' ? ' desc' : '') : null].filter(Boolean)
+    return loadSection(container, { orderby: terms.join(',') })
+  }
+
+  const sectionSearchTimers = new WeakMap()
+  document.addEventListener('input', e => {
+    const box = e.target.closest?.('[data-hf-table-search]')
+    const container = box?.closest('[data-hf-view]')
+    if (!box || !container || !sectionUrlOf(container)) return
+    clearTimeout(sectionSearchTimers.get(box))
+    sectionSearchTimers.set(box, setTimeout(() => loadSection(container, { search: box.value.trim() }), 300))
+  })
+
   // ---------------------------------------------------------------- section search
   document.addEventListener('input', e => {
     const box = e.target.closest?.('[data-hf-table-search]')
-    if (!box) return
+    if (!box || sectionUrlOf(box.closest('[data-hf-view]'))) return
     const query = box.value.trim().toLowerCase()
     const table = tableOf(box.closest('[data-hf-view]'))
     for (const row of table.querySelectorAll('tbody tr:not(.hf-table__nodata)')) {
@@ -728,21 +781,22 @@
     const sortKey = th.dataset.hfSort
     const current = th.getAttribute('aria-sort')
     const editing = !!container.querySelector('tbody input:not([type=checkbox]):not([type=hidden])')
-    const canSort = lr ? !!sortKey : !editing && !!container.querySelector('tbody tr') && !tableOf(container).dataset.hfTree
+    const server = !lr && !!sectionUrlOf(container) // a paged section sorts and groups on the server
+    const canSort = lr || server ? !!sortKey : !editing && !!container.querySelector('tbody tr') && !tableOf(container).dataset.hfTree
     const canGroup = canSort && !tableOf(container).dataset.hfTree
     const grouped = groupOf(container) === index
     const canFilter = !!lr && !!sortKey && (!!lr.querySelector(`.hf-filter[data-hf-filter="${CSS.escape(sortKey)}"]`) || availableFilters(lr).some(f => f.path === sortKey))
 
-    const sortBy = direction => lr ? sortList(lr, sortKey + (direction === 'desc' ? ' desc' : '')) : sortRows(container, index, direction)
+    const sortBy = direction => lr ? sortList(lr, sortKey + (direction === 'desc' ? ' desc' : '')) : server ? sortSection(container, sortKey, direction) : sortRows(container, index, direction)
     const setGroup = value => {
       updateView(container, { group: value })
       if (value == null) return
-      if (lr) sortList(lr, sortKey); else sortRows(container, index, 'asc') // a group's rows sit together
+      if (lr) sortList(lr, sortKey); else if (server) sortSection(container, sortKey, 'asc'); else sortRows(container, index, 'asc') // a group's rows sit together
     }
     const entries = [
       canSort && { text: T('SortAscending'), icon: 'sort-ascending', selected: current === 'ascending', run: () => sortBy('asc') },
       canSort && { text: T('SortDescending'), icon: 'sort-descending', selected: current === 'descending', run: () => sortBy('desc') },
-      canSort && lr && current && { text: T('ResetSort'), icon: 'decline', run: () => sortList(lr, '') },
+      canSort && (lr || server) && current && { text: T('ResetSort'), icon: 'decline', run: () => lr ? sortList(lr, '') : sortSection(container, null, null) },
       canGroup && { text: grouped ? T('Ungroup') : T('Group'), icon: 'group-2', run: () => setGroup(grouped ? null : index) },
       canFilter && { text: T('FilterColumn'), icon: 'filter', run: () => focusFilter(lr, sortKey) },
       'separator',
@@ -811,6 +865,7 @@
       case 'settings': if (container) openViewSettings(container); break
       case 'export': exportList(button); break
       case 'export-dom': exportSection(button); break
+      case 'export-section': exportSectionServer(button, container); break
       case 'adapt-filters': openAdaptFilters(button.closest('.hf-page--lr')); break
     }
   })

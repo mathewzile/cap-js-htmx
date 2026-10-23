@@ -50,7 +50,11 @@ function buildFacet(model, store, entityType, facet, pageSettings) {
     const hierarchy = targetEntityType && tableSettings.type === 'TreeTable' ? buildHierarchy(store, targetEntityType, tableSettings.hierarchyQualifier, tableSettings.initialExpansionLevel) : undefined
     // with routing in the manifest the page only opens a sub-object page for a navigation the manifest has a route for
     const navigable = pageSettings?.$navigation ? !!pageSettings.$navigation[nav] : true
-    return { ...base, kind: 'ReferenceFacet', content: { kind: 'table', nav, targetEntityType, columns, composition: element?.type === 'cds.Composition', hierarchy, navigable } }
+    // the table pages like a List Report table: MaxItems of the target's presentation variant, else the manifest, else FE's default
+    const targetBag = targetEntityType ? store.raw(targetEntityType) : {}
+    const presentationVariant = targetBag['@UI.PresentationVariant'] || targetBag['@UI.SelectionPresentationVariant']?.PresentationVariant
+    const growingThreshold = Number(presentationVariant?.MaxItems) || tableSettings.growingThreshold || feDefaults.listReport.table.growingThreshold
+    return { ...base, kind: 'ReferenceFacet', content: { kind: 'table', nav, targetEntityType, columns, composition: element?.type === 'cds.Composition', hierarchy, navigable, growingThreshold, sortOrder: presentationVariant?.SortOrder } }
   }
 
   const ref = parseAnnotationPathTarget(facet.Target)

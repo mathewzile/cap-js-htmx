@@ -2,7 +2,8 @@ const { html, raw } = require('./html')
 const ids = require('./ids')
 const { evaluate, paths: pathsOf } = require('../annotations/expressions')
 const { formField, fieldLabel } = require('./field')
-const { rowsHtml, tableHead, columnVisibilityStyle, rowHref, treeAttributes } = require('./table')
+const { rowsHtml, tableHead, columnVisibilityStyle, rowHref, treeAttributes, sectionGrowing } = require('./table')
+const { formatCount } = require('../data/format')
 const { criticalityClass } = require('../data/format')
 const { toast } = require('./toast')
 const { canEdit, canDelete } = require('../model/edit-capabilities')
@@ -107,12 +108,16 @@ function tableBlock(facet, ctx) {
   const keyNames = child?.keyNames || []
   const bundle = ctx.bundle
   const t = key => ctx.t(bundle, key)
+  // A table that pages (everything but a tree and the rows of a non-draft object being edited): the section's own `$table` serves
+  // the next pages, a search and a sort, like the List Report's
+  const paged = child?.count != null
+  const tableUrl = `${ctx.basePath}/${entitySetPath}/$table`
   // While the draft is edited the rows are inputs; a change is PATCHed to the child's own draft
   const edit = direct ? { direct: true, nav }
     : editing ? { nav, rowPath: row => rowHref(ctx.basePath, entitySetPath, keyNames, row) } : undefined
   return html`
     <div class="hf-table-toolbar hf-table-toolbar--section">
-      <h2 class="hf-section__title">${facet.label}${tree ? html`` : html` (${rows.length})`}</h2>
+      <h2 class="hf-section__title">${facet.label}${tree ? html`` : html`<span id="${sectionId}-count"> (${paged ? formatCount(child.count, ctx.locale) : rows.length})</span>`}</h2>
       <div class="hf-spacer"></div>
       <div class="hf-input-group hf-section-search">
         <input type="search" class="fd-input" data-hf-table-search placeholder="${t('Search')}" aria-label="${t('Search')}">
@@ -129,14 +134,15 @@ function tableBlock(facet, ctx) {
           data-hf-confirm-title="${t('Delete')}" data-hf-confirm-ok="${t('Delete')}" data-hf-confirm-cancel="${t('Cancel')}" data-hf-confirm-critical>${t('Delete')}</button>` : html``}
       <span class="hf-toolbar-separator"></span>
       ${editing && !direct ? html`<button type="button" class="fd-button fd-button--transparent hf-icon-button" data-hf-action="paste" data-hf-paste-url="${ctx.basePath}/${entitySetPath}/$paste" aria-label="${t('Paste')}" title="${t('Paste')}"><i class="sap-icon--paste" aria-hidden="true"></i></button>` : html``}
-      <button type="button" class="fd-button fd-button--transparent hf-icon-button" data-hf-action="export-dom" data-hf-filename="${facet.label}" aria-label="${t('ExportCsv')}" title="${t('ExportCsv')}"><i class="sap-icon--excel-attachment" aria-hidden="true"></i></button>
+      <button type="button" class="fd-button fd-button--transparent hf-icon-button" data-hf-action="${paged ? 'export-section' : 'export-dom'}" data-hf-export="${tableUrl.replace(/\$table$/, '$export')}" data-hf-filename="${facet.label}" aria-label="${t('ExportCsv')}" title="${t('ExportCsv')}"><i class="sap-icon--excel-attachment" aria-hidden="true"></i></button>
       <button type="button" class="fd-button fd-button--transparent hf-icon-button" data-hf-action="settings" aria-label="${t('ViewSettings')}" title="${t('ViewSettings')}"><i class="sap-icon--action-settings" aria-hidden="true"></i></button>
     </div>
     ${columnVisibilityStyle(`#${sectionId}`, facet.content.columns, rows, { selectable: editing })}
-    <table class="fd-table hf-table" role="${tree ? 'treegrid' : 'table'}"${treeAttributes(miniLayout, ctx.basePath, rowSetPath)}>
-      ${tableHead(facet.content.columns, rows, { selectable: editing, sortable: false, editing })}
-      <tbody>${rowsHtml(miniLayout, rows, { basePath: ctx.basePath, entitySetPath: rowSetPath, keyNames, bundle, t: ctx.t, selectable: editing, edit })}</tbody>
+    <table class="fd-table hf-table" role="${tree ? 'treegrid' : 'table'}"${treeAttributes(miniLayout, ctx.basePath, rowSetPath)}${paged ? html` data-hf-table-url="${tableUrl}"` : html``}>
+      ${tableHead(facet.content.columns, rows, { selectable: editing, sortable: false, editing, sortKeys: paged })}
+      <tbody id="${sectionId}-body">${rowsHtml(miniLayout, rows, { basePath: ctx.basePath, entitySetPath: rowSetPath, keyNames, bundle, t: ctx.t, selectable: editing, edit })}</tbody>
     </table>
+    ${paged ? sectionGrowing(sectionId, tableUrl, { skip: rows.length, hasMore: child.hasMore, count: child.count, bundle, t: ctx.t, locale: ctx.locale }) : html``}
     ${direct ? html`
       <input type="hidden" name="${nav}:present" value="1">
       <template data-hf-row-template>${rowsHtml(miniLayout, [{}], { basePath: ctx.basePath, entitySetPath, keyNames, bundle, t: ctx.t, selectable: true, edit: { ...edit, index: '__i__' } })}</template>` : html``}`
@@ -477,4 +483,14 @@ function titleIfChanged(layout, row, ctx, properties) {
   return String(titleOf(layout, row, ctx))
 }
 
-module.exports = { objectPageFragment, breadcrumbs, facetBlock, facetContent, footerBar, sideEffectParts, visibilityParts, titleIfChanged }
+/** The rows of a table section as the section itself renders them (display, or draft: inputs), for its `$table` partials. */
+function sectionRowsHtml(facet, rows, keyNames, ctx) {
+  const nav = facet.content.nav
+  const entitySetPath = `${ctx.entitySetPath}/${nav}`
+  const editing = !!ctx.isDraft
+  const miniLayout = { navigable: facet.content.navigable, table: { columns: facet.content.columns } }
+  const edit = editing ? { nav, rowPath: row => rowHref(ctx.basePath, entitySetPath, keyNames, row) } : undefined
+  return rowsHtml(miniLayout, rows, { basePath: ctx.basePath, entitySetPath, keyNames, bundle: ctx.bundle, t: ctx.t, selectable: editing, edit })
+}
+
+module.exports = { sectionRowsHtml, sectionGrowing, objectPageFragment, breadcrumbs, facetBlock, facetContent, footerBar, sideEffectParts, visibilityParts, titleIfChanged }

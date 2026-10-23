@@ -5,6 +5,8 @@ const column = (page, n) => page.locator(`#fcl-col-${n}`)
 const width = async (page, n) => (await column(page, n).boundingBox())?.width ?? 0
 const layout = page => page.locator('#fcl').getAttribute('data-hf-layout')
 const separator = (page, n) => column(page, n).locator('[data-hf-sep]')
+// the Authors app of this repo says "animations": "fast" in its manifest; the timing tests want the full-length animation
+const fullMotion = page => page.evaluate(() => document.body.classList.remove('hf-motion-fast', 'hf-no-motion'))
 
 test.describe('flexible column layout: separator and animation', () => {
   test('dragging the separator resizes the two columns beside it, within limits', async ({ page }) => {
@@ -56,6 +58,7 @@ test.describe('flexible column layout: separator and animation', () => {
   test('the arrow swaps which column is wide, animated', async ({ page }) => {
     await page.goto(AUTHOR)
     await expect(page.locator('#op-page')).toBeVisible()
+    await fullMotion(page)
     await page.waitForTimeout(800)
     expect(await layout(page)).toBe('TwoColumnsMidExpanded')
     const start = await width(page, 0)
@@ -81,6 +84,7 @@ test.describe('flexible column layout: separator and animation', () => {
 
   test('a column that opens grows from nothing', async ({ page }) => {
     await page.goto('/htmx/admin/Authors')
+    await fullMotion(page)
     await expect(page.locator('#lr-table-body tr').first()).toBeVisible()
     expect(await width(page, 1)).toBe(0)
     await page.locator('#lr-table-body tr').first().click()
@@ -129,6 +133,7 @@ test.describe('sap.htmx.animations: fast', () => {
   test('hf-motion-fast makes every duration a quarter as long', async ({ page }) => {
     await page.goto(AUTHOR)
     await expect(page.locator('#op-page')).toBeVisible()
+    await fullMotion(page)
     const seconds = async () => page.evaluate(() => [...document.querySelectorAll('.hf-fcl__col, .hf-fcl__grip, .hf-fcl__arrow')]
       .map(el => getComputedStyle(el).transitionDuration.split(',').map(d => parseFloat(d))).flat())
     const full = await seconds()

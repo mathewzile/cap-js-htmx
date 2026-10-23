@@ -481,7 +481,7 @@ describe('FE parity: capabilities, direct editing, history, confirmations (round
       const page = (await get("/htmx/catalog/Books(ID='3d2d2d2d-1c1c-4b4b-8a8a-000000000002',IsActiveEntity=true)")).data
       assert.match(page, /data-hf-view="section:CatalogService\.Chapters:Chapters"/)
       assert.match(page, /data-hf-table-search/)
-      assert.match(page, /data-hf-action="export-dom" data-hf-filename="Chapters"/)
+      assert.match(page, /data-hf-action="export-section" data-hf-export="[^"]*\/chapters\/\$export" data-hf-filename="Chapters"/) // a paged section exports on the server
       assert.match(page, /data-hf-action="settings"/)
     })
 

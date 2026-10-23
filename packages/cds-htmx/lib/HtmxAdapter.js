@@ -26,6 +26,7 @@ const { textsFor } = require('./render/texts')
 const toastRender = require('./render/toast')
 const listReportRender = require('./render/list-report')
 const { cellText } = require('./render/table')
+const { formatCount } = require('./data/format')
 const objectPageRender = require('./render/object-page')
 const fclRender = require('./render/fcl')
 const ids = require('./render/ids')
@@ -255,6 +256,8 @@ class HtmxAdapter extends HttpAdapter {
    *  (CSN only; the layout itself still comes from the annotation store, §3.2). */
   async subObjectPage(req, res, tx) {
     const full = (req.params.splat || []).join('/')
+    if (/\/\$table$/.test(full)) return this.sectionTable(req, res, tx, full.slice(0, -'/$table'.length))
+    if (/\/\$export$/.test(full)) return this.sectionTable(req, res, tx, full.slice(0, -'/$export'.length), { csv: true })
     const segments = keysLib.splitSegments(full)
     if (segments.length < 2) return res.sendStatus(404)
     const top = this.entitySet(segments[0].set)
@@ -270,6 +273,73 @@ class HtmxAdapter extends HttpAdapter {
     const keys = keysLib.parseKeys(last.raw)
     const contextPath = `/${segments[0].set}/${segments.slice(1).map(s => s.set).join('/')}`
     return this.objectPage(req, res, tx, { entityType, keys, segments, contextPath })
+  }
+
+  /** `GET <object>/<nav>/$table`: rows of a table section of an Object Page, the way `$table` serves the List Report's: the next
+   *  page (`$skip`, appended by the More button), or the first page of a search (`$search`) or a sort (`$orderby`) that replaces the
+   *  rows. The section's total and its More button follow as partials. The parent is the object path (any depth) before `<nav>`. */
+  async sectionTable(req, res, tx, path, { csv = false } = {}) {
+    const segments = keysLib.splitSegments(path)
+    if (segments.length < 2 || segments[0].raw == null) return res.sendStatus(404)
+    const nav = segments[segments.length - 1]
+    const parents = segments.slice(0, -1)
+    if (nav.raw != null || parents.some(s => s.raw == null)) return res.sendStatus(404)
+    const top = this.entitySet(parents[0].set)
+    if (!top) return res.sendStatus(404)
+    let parentType = top.name
+    for (const seg of parents.slice(1)) {
+      const element = resolveElement(cds.model, parentType, seg.set)
+      if (!element?.target) return res.sendStatus(404)
+      parentType = element.target
+    }
+    const parentKeys = keysLib.parseKeys(parents[parents.length - 1].raw)
+    const contextPath = `/${parents[0].set}${parents.slice(1).map(s => `/${s.set}`).join('')}`
+    const opts = this.appOpts(req)
+    const layout = cache.objectPageFor(cds.model, this.service.name, this.odataServicePath(), parentType, contextPath, opts)
+    const facet = require('./data/page').collectTableFacets([...(layout.headerFacets || []), ...(layout.sections || [])]).find(f => f.content.nav === nav.set)
+    if (!facet || facet.content.hierarchy) return res.sendStatus(404)
+    const fcl = this.fclPage(req, parents[0].set, parents.length, parents)
+    if (fcl) ids.setColumn(fcl.column)
+
+    if (csv) return this.sectionCsv(req, res, tx, { facet, parentType, parentKeys })
+    const skip = Math.max(Number(req.query.$skip) || 0, 0)
+    const page = await require('./data/section').sectionPage(tx, { parentEntityType: parentType, parentKeys, content: facet.content, query: req.query, skip })
+    const base = this.basePath(req)
+    const entitySetPath = parents.map(s => `${s.set}(${s.raw})`).join('/')
+    const bundle = cache.bundleFor(opts)
+    const keyNames = keyElements(entityDef(cds.model, facet.content.targetEntityType)).map(k => k.name)
+    const sectionId = ids.opSection(facet.id)
+    const tableUrl = `${base}/${entitySetPath}/${nav.set}/$table`
+    const query = Object.fromEntries(Object.entries(req.query).filter(([k]) => k === '$search' || k === '$orderby'))
+    const rows = objectPageRender.sectionRowsHtml(facet, page.rows, keyNames, { basePath: base, entitySetPath, bundle, t: i18n.t, isDraft: parentKeys.IsActiveEntity === false })
+    const growing = objectPageRender.sectionGrowing(sectionId, tableUrl, { skip: skip + page.rows.length, hasMore: page.hasMore, count: page.count, bundle, t: i18n.t, query, locale: cds.context.locale })
+    res.set('Content-Type', 'text/html').send(String(html`${rows}<hx-partial hx-target="#${sectionId}-count" hx-swap="innerHTML"> (${formatCount(page.count, cds.context.locale)})</hx-partial><hx-partial hx-target="#${sectionId}-growing" hx-swap="outerHTML">${growing}</hx-partial>`))
+  }
+
+  /** `GET <object>/<nav>/$export`: the whole table of a section (with its search and sort, the visible columns `cols`) as CSV. */
+  async sectionCsv(req, res, tx, { facet, parentType, parentKeys }) {
+    const pageSize = Math.max((cds.env.query?.limit?.max ?? 1000) - 1, 1)
+    const rows = []
+    for (let skip = 0; rows.length < EXPORT_LIMIT; skip += pageSize) {
+      const page = await require('./data/section').sectionPage(tx, { parentEntityType: parentType, parentKeys, content: facet.content, query: req.query, skip, limit: pageSize })
+      rows.push(...page.rows)
+      if (!page.hasMore) break
+    }
+    rows.length = Math.min(rows.length, EXPORT_LIMIT)
+    const wanted = typeof req.query.cols === 'string' ? new Set(req.query.cols.split(',').map(Number)) : null
+    const columns = facet.content.columns.map((col, index) => ({ col, index })).filter(({ col, index }) => col.field && (!wanted || wanted.has(index)))
+    const bundle = cache.bundleFor(this.appOpts(req))
+    const resolve = text => i18n.resolveText(text, bundle)
+    const cell = value => {
+      let text = String(value ?? '')
+      if (/^[=+\-@\t\r]/.test(text) && Number.isNaN(Number(text))) text = `'${text}` // spreadsheet formula injection
+      return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
+    }
+    const lines = [columns.map(({ col }) => cell(resolve(col.label ?? col.field?.label ?? ''))).join(',')]
+    for (const row of rows) lines.push(columns.map(({ col }) => cell(cellText(col, row))).join(','))
+    const name = String(resolve(facet.label ?? facet.content.nav)).replace(/[^\w .-]/g, '_')
+    res.set({ 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="${facet.content.nav}.csv"; filename*=UTF-8''${encodeURIComponent(name)}.csv` })
+    res.send('\ufeff' + lines.join('\r\n') + '\r\n')
   }
 
   /** What the user may do with an entity set: draft vs direct editing and the `Capabilities.*Restrictions`
@@ -345,7 +415,7 @@ class HtmxAdapter extends HttpAdapter {
 
     let body = objectPageRender.objectPageFragment(opLayout, row, {
       basePath: base, entitySetPath, trail, children, bundle, t: i18n.t, valueLists, editMode,
-      successMessage: req.successMessage, messages: persisted, fcl
+      successMessage: req.successMessage, messages: persisted, fcl, locale: cds.context.locale
     })
     if (messages?.length) body = html`${rawHtml(this.messagesPartial(messages))}${body}`
     if (status) res.status(status)

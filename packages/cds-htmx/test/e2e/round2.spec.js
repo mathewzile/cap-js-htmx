@@ -199,7 +199,7 @@ test.describe('table tools', () => {
     await section.locator('[data-hf-table-search]').fill('Lowood')
     await expect(section.locator('tbody tr:not([hidden])')).toHaveCount(1)
     await section.locator('[data-hf-table-search]').fill('')
-    const [download] = await Promise.all([page.waitForEvent('download'), section.locator('[data-hf-action=export-dom]').click()])
+    const [download] = await Promise.all([page.waitForEvent('download'), section.locator('[data-hf-action=export-section]').click()])
     const file = testInfo.outputPath('chapters.csv')
     await download.saveAs(file)
     expect(fs.readFileSync(file, 'utf8')).toContain('Title,Pages\r\nI. Gateshead,14\r\nII. Lowood School,20')

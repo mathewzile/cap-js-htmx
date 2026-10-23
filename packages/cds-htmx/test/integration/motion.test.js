@@ -51,6 +51,8 @@ describe('animations (sap.htmx.animations)', () => {
   })
 
   test('$shell tells the shell (Work Zone) the app\'s motion', async () => {
-    assert.equal((await GET('/htmx/admin/$shell', { headers: HX })).data.animations, 'full')
+    // the catalog service has no app that sets it (the admin one does: manage-authors-htmx says fast)
+    assert.equal((await GET('/htmx/catalog/$shell', { headers: HX })).data.animations, 'full')
+    assert.equal((await GET('/htmx/admin/$shell', { headers: HX })).data.animations, 'fast')
   })
 })
