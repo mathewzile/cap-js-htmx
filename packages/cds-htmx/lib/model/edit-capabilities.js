@@ -6,9 +6,9 @@ const { evaluate } = require('../annotations/expressions')
  *   - `mode: 'draft'`  a draft root (`Common.DraftRoot`): Edit creates a draft, Save activates it
  *   - `mode: 'node'`   a draft node (`Common.DraftNode`, e.g. the composition child `Chapters`):
  *                      only editable inside its draft root, never on its own
- *   - `mode: 'direct'` not draft-enabled: FE V4 edits the active entity directly. Edit only switches
- *                      the page into edit mode on the client; Save sends the changes (PATCH),
- *                      Cancel drops them; Create opens an empty page and POSTs on Save.
+ *   - `mode: 'direct'` not draft-enabled: like FE V4 (which needs a draft or a sticky session to edit or create), the
+ *                      entity can only be shown and deleted: no Edit, no Create. Enable `@odata.draft.enabled`
+ *                      to make it editable.
  *  `insertable`/`updatable`/`deletable` are the `Capabilities.*Restrictions` values (boolean or a
  *  per-object expression, `@readonly` compiles to `false`), `*Hidden` the `UI.*Hidden` ones. */
 function editCapabilities(store, entityType) {
@@ -31,14 +31,14 @@ function editCapabilities(store, entityType) {
 const allowed = (value, row) => evaluate(value, row ?? {}) !== false
 const hidden = (value, row) => value != null && evaluate(value, row ?? {}) === true
 
-/** Create button / `POST`: a draft node can't be created on its own, only inside its root. */
+/** Create button / `POST`: only a draft root is created (a draft node only inside its root, a non-draft entity not at all). */
 function canCreate(edit) {
-  return edit.mode !== 'node' && allowed(edit.insertable) && !hidden(edit.createHidden)
+  return edit.mode === 'draft' && allowed(edit.insertable) && !hidden(edit.createHidden)
 }
 
 /** Edit button: the object's own `row` feeds path-based restrictions (`Updatable: {$Path: ...}`). */
 function canEdit(edit, row) {
-  return edit.mode !== 'node' && allowed(edit.updatable, row) && !hidden(edit.updateHidden, row)
+  return edit.mode === 'draft' && allowed(edit.updatable, row) && !hidden(edit.updateHidden, row)
 }
 
 function canDelete(edit, row) {

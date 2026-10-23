@@ -1,12 +1,15 @@
 const { test, expect } = require('@playwright/test')
 
 const CHARLOTTE = '9d703c23-7cf7-4cad-9f2b-0e1e1a8c0002'
-const AUTHOR = `/htmx/admin/Authors(ID='${CHARLOTTE}')`
+const AUTHOR = `/htmx/admin/Authors(ID='${CHARLOTTE}',IsActiveEntity=true)`
 
 const pathOf = page => decodeURIComponent(page.url().replace(/^https?:\/\/[^/]+/, ''))
 const column = (page, n) => page.locator(`#fcl-col-${n}`)
 const layout = page => page.locator('#fcl').getAttribute('data-hf-layout')
 const widthOf = async (page, n) => Math.round((await column(page, n).boundingBox())?.width ?? 0)
+
+// Authors is a draft root: an Edit leaves a draft, which would hide the next test's Edit
+test.afterEach(async ({ request }) => { await request.delete(`/admin/Authors(ID=${CHARLOTTE},IsActiveEntity=false)`).catch(() => {}) })
 
 test.describe('flexible column layout (admin Authors: List Report | Author | Book)', () => {
   test('a row opens the Object Page beside the List Report, a book opens the third column', async ({ page }) => {
@@ -66,7 +69,8 @@ test.describe('flexible column layout (admin Authors: List Report | Author | Boo
     await expect(page.locator('input[name=name]')).toBeVisible()
     expect(await layout(page)).toBe('TwoColumnsMidExpanded')
     await expect(column(page, 0).locator('#lr-table-body tr').first()).toBeVisible()
-    await page.getByRole('button', { name: 'Cancel' }).click()
+    await page.getByRole('button', { name: 'Discard Draft' }).click()
+    await page.locator('.hf-message-box [data-hf-ok]').click()
     await expect(page.locator('#op-page').getByRole('button', { name: 'Edit' })).toBeVisible()
     expect(await layout(page)).toBe('TwoColumnsMidExpanded')
   })
@@ -92,7 +96,7 @@ test.describe('closing a column that is being edited', () => {
     await expect(dialog).toBeVisible()
     await dialog.locator('[data-hf-cancel]').click()
     await expect(dialog).toHaveCount(0)
-    expect(pathOf(page)).toBe(AUTHOR)
+    expect(pathOf(page)).toContain('IsActiveEntity=false') // the draft
     await expect(page.locator('input[name=name]')).toHaveValue('Charlotte Brontë (edited)')
 
     await close.click()

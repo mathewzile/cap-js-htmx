@@ -113,6 +113,15 @@
             "AuthorsObjectPage",
             "Authors_booksObjectPage"
           ]
+        },
+        {
+          "name": "Authors_awardsObjectPage",
+          "pattern": "Authors({key})/awards({awardsKey}):?query:",
+          "target": [
+            "AuthorsList",
+            "AuthorsObjectPage",
+            "Authors_awardsObjectPage"
+          ]
         }
       ],
       "targets": {
@@ -156,12 +165,22 @@
                   "tableSettings": {
                     "type": "ResponsiveTable"
                   }
+                },
+                "awards/@com.sap.vocabularies.UI.v1.LineItem#Awards": {
+                  "tableSettings": {
+                    "type": "ResponsiveTable"
+                  }
                 }
               },
               "navigation": {
                 "books": {
                   "detail": {
                     "route": "Authors_booksObjectPage"
+                  }
+                },
+                "awards": {
+                  "detail": {
+                    "route": "Authors_awardsObjectPage"
                   }
                 }
               }
@@ -182,6 +201,19 @@
             }
           },
           "contextPattern": "/Authors({key})/books({booksKey})"
+        },
+        "Authors_awardsObjectPage": {
+          "type": "Component",
+          "id": "Authors_awardsObjectPage",
+          "name": "sap.fe.templates.ObjectPage",
+          "controlAggregation": "endColumnPages",
+          "options": {
+            "settings": {
+              "navigation": {},
+              "contextPath": "/Authors/awards"
+            }
+          },
+          "contextPattern": "/Authors({key})/awards({awardsKey})"
         }
       }
     },

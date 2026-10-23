@@ -11,7 +11,8 @@
     </edmx:Reference>
     <edmx:DataServices>
         <Schema xmlns="http://docs.oasis-open.org/odata/ns/edm" Namespace="local">
-            <!-- The author page gets a section with the author's books; a book opens in the third column. -->
+            <!-- What this app adds to the project's own annotations (app/manage-authors/annotations.cds, the ones the FE app uses: the
+                 sections of the author, book and award pages): readable titles, a list of books, a date-time range filter. -->
             <Annotations Target="AdminService.Authors">
                 <Annotation Term="UI.HeaderInfo">
                     <Record Type="UI.HeaderInfoType">
@@ -24,19 +25,18 @@
                         </PropertyValue>
                     </Record>
                 </Annotation>
-                <Annotation Term="UI.Facets">
-                    <Collection>
-                        <Record Type="UI.ReferenceFacet">
-                            <PropertyValue Property="ID" String="GeneratedFacet1"/>
-                            <PropertyValue Property="Label" String="General Information"/>
-                            <PropertyValue Property="Target" AnnotationPath="@UI.FieldGroup#GeneratedGroup"/>
-                        </Record>
-                        <Record Type="UI.ReferenceFacet">
-                            <PropertyValue Property="ID" String="AuthorBooks"/>
-                            <PropertyValue Property="Label" String="Books"/>
-                            <PropertyValue Property="Target" AnnotationPath="books/@UI.LineItem"/>
-                        </Record>
-                    </Collection>
+            </Annotations>
+            <Annotations Target="AdminService.Awards">
+                <Annotation Term="UI.HeaderInfo">
+                    <Record Type="UI.HeaderInfoType">
+                        <PropertyValue Property="TypeName" String="Award"/>
+                        <PropertyValue Property="TypeNamePlural" String="Awards"/>
+                        <PropertyValue Property="Title">
+                            <Record Type="UI.DataField">
+                                <PropertyValue Property="Value" Path="name"/>
+                            </Record>
+                        </PropertyValue>
+                    </Record>
                 </Annotation>
             </Annotations>
             <!-- a date-time filter (createdAt) as a range picker -->
@@ -74,39 +74,6 @@
                         <Record Type="UI.DataField">
                             <PropertyValue Property="Value" Path="price"/>
                             <PropertyValue Property="Label" String="Price"/>
-                        </Record>
-                    </Collection>
-                </Annotation>
-                <Annotation Term="UI.FieldGroup" Qualifier="BookGeneral">
-                    <Record Type="UI.FieldGroupType">
-                        <PropertyValue Property="Data">
-                            <Collection>
-                                <Record Type="UI.DataField">
-                                    <PropertyValue Property="Value" Path="title"/>
-                                    <PropertyValue Property="Label" String="Title"/>
-                                </Record>
-                                <Record Type="UI.DataField">
-                                    <PropertyValue Property="Value" Path="descr"/>
-                                    <PropertyValue Property="Label" String="Description"/>
-                                </Record>
-                                <Record Type="UI.DataField">
-                                    <PropertyValue Property="Value" Path="stock"/>
-                                    <PropertyValue Property="Label" String="Stock"/>
-                                </Record>
-                                <Record Type="UI.DataField">
-                                    <PropertyValue Property="Value" Path="price"/>
-                                    <PropertyValue Property="Label" String="Price"/>
-                                </Record>
-                            </Collection>
-                        </PropertyValue>
-                    </Record>
-                </Annotation>
-                <Annotation Term="UI.Facets">
-                    <Collection>
-                        <Record Type="UI.ReferenceFacet">
-                            <PropertyValue Property="ID" String="BookGeneral"/>
-                            <PropertyValue Property="Label" String="General Information"/>
-                            <PropertyValue Property="Target" AnnotationPath="@UI.FieldGroup#BookGeneral"/>
                         </Record>
                     </Collection>
                 </Annotation>

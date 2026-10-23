@@ -1,16 +1,18 @@
 const { test, expect } = require('@playwright/test')
 
-const AUTHOR = "/htmx/admin/Authors(ID='9d703c23-7cf7-4cad-9f2b-0e1e1a8c0002')"
+const AUTHOR = "/htmx/admin/Authors(ID='9d703c23-7cf7-4cad-9f2b-0e1e1a8c0002',IsActiveEntity=true)"
 const column = (page, n) => page.locator(`#fcl-col-${n}`)
 const scroller = (page, n) => column(page, n).locator('.hf-fcl__scroll')
 // the author page with its first ten books fits a tall window: show more, so that there is something to scroll
 const showMoreBooks = async page => {
   for (const loaded of [20, 30]) {
-    await page.locator('#op-section--AuthorBooks-growing .hf-table__growing-button').click()
-    await expect(page.locator('#op-section--AuthorBooks tbody tr[hx-get]')).toHaveCount(loaded)
+    await page.locator('#op-section--Books-growing .hf-table__growing-button').click()
+    await expect(page.locator('#op-section--Books tbody tr[hx-get]')).toHaveCount(loaded)
   }
 }
 const metrics = (page, n) => scroller(page, n).evaluate(el => ({ top: el.scrollTop, height: el.scrollHeight, client: el.clientHeight, overflowY: getComputedStyle(el).overflowY }))
+
+test.afterEach(async ({ request }) => { await request.delete('/admin/Authors(ID=9d703c23-7cf7-4cad-9f2b-0e1e1a8c0002,IsActiveEntity=false)').catch(() => {}) })
 
 test.describe('every column of the layout scrolls on its own', () => {
   test('the window does not scroll, the column does', async ({ page }) => {
@@ -27,7 +29,7 @@ test.describe('every column of the layout scrolls on its own', () => {
   })
 
   test('scrolling one column leaves the others where they are; header and footer stay in their column', async ({ page }) => {
-    await page.goto("/htmx/admin/Authors(ID='9d703c23-7cf7-4cad-9f2b-0e1e1a8c0002')")
+    await page.goto("/htmx/admin/Authors(ID='9d703c23-7cf7-4cad-9f2b-0e1e1a8c0002',IsActiveEntity=true)")
     await expect(page.locator('#op-page')).toBeVisible()
     await expect(column(page, 0).locator('#lr-table-body tr').first()).toBeVisible()
     await showMoreBooks(page)
@@ -59,7 +61,7 @@ test.describe('every column of the layout scrolls on its own', () => {
 
   test('a third column scrolls on its own too, and its separator is the column\'s', async ({ page }) => {
     await page.goto(AUTHOR)
-    await page.locator('#op-section--AuthorBooks tbody tr[hx-get]').first().click()
+    await page.locator('#op-section--Books tbody tr[hx-get]').first().click()
     await expect(page.locator('#c2-op-page')).toBeVisible()
     await showMoreBooks(page)
     await page.waitForTimeout(700)

@@ -13,15 +13,12 @@ const { canCreate, canDelete } = require('../model/edit-capabilities')
 function toolbar({ typeNamePlural, count, basePath, entitySetPath, bundle, t, edit, locale, tree }) {
   const create = !edit || canCreate(edit)
   const del = !edit || canDelete(edit)
-  const draft = !edit || edit.mode === 'draft'
   return html`
     <div id="${ids.lrToolbar()}" class="hf-table-toolbar">
       <h2 class="hf-table-toolbar__title">${typeNamePlural || entitySetPath}${tree ? html`` : html` (<span id="${ids.lrCount()}">${formatCount(count, locale)}</span>)`}</h2>
       <div class="hf-spacer"></div>
       ${create ? html`<button class="fd-button fd-button--transparent" aria-label="${t(bundle, 'Create')}"
-        ${draft
-          ? raw(`hx-post="${basePath}/${entitySetPath}" hx-push-url="false"`)
-          : raw(`hx-get="${basePath}/${entitySetPath}/$new"`)}
+        hx-post="${basePath}/${entitySetPath}" hx-push-url="false"
         hx-target="#app" hx-swap="innerHTML show:window:top">${t(bundle, 'Create')}</button>` : html``}
       ${del ? html`<button class="fd-button fd-button--transparent" disabled data-hf-needs-selection="#${ids.lrTableBody()}" aria-label="${t(bundle, 'Delete')}"
         hx-post="${basePath}/${entitySetPath}/$delete" hx-include="#${ids.lrTableBody()}" hx-target="#app" hx-swap="innerHTML show:window:top"

@@ -58,7 +58,8 @@ async function edit(tx, entityType, keys) {
 async function patch(tx, entityType, keys, data) {
   const Entity = entityDef(entityType)
   const { IsActiveEntity: _ignored, ...plainKeys } = keys
-  return tx.run(UPDATE(Entity).set(data).where({ ...plainKeys, IsActiveEntity: false }))
+  // a draft node is patched in its draft; a child that is not draft-enabled (Authors.books of a draft root) is patched as it is
+  return tx.run(UPDATE(Entity).set(data).where(Entity.elements?.IsActiveEntity ? { ...plainKeys, IsActiveEntity: false } : plainKeys))
 }
 
 /** `SAVE` (-> `draftActivate`): activates the draft into the active instance, deleting the draft

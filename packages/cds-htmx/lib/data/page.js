@@ -66,16 +66,6 @@ async function loadObjectPage(tx, { service, servicePath, entityType, keys, cont
       continue
     }
     const childKeyNames = keyElements(entityDef(cds.model, targetEntityType)).map(k => k.name)
-    // A non-draft object being edited sends every row of its compositions back with the form (rows that are not in it are deleted
-    // on save), so those tables carry all rows; every other table pages like the List Report's: one page, a More row for the rest
-    const direct = editing && row.IsActiveEntity !== false
-    if (direct) {
-      const childLayout = { table: { columns: childFacetColumns }, filterBar: { fields: [] } }
-      const childColumns = queryLib.selectColumns(cds.model, targetEntityType, childLayout)
-      const childRows = await tx.run(queryLib.objectPageChildQuery(cds.model, entityType, keys, targetEntityType, childColumns))
-      children[facet.id] = { rows: childRows, keyNames: childKeyNames }
-      continue
-    }
     const page = await sectionLib.sectionPage(tx, { parentEntityType: entityType, parentKeys: keys, content: facet.content })
     children[facet.id] = { rows: page.rows, keyNames: childKeyNames, hasMore: page.hasMore, count: page.count, pageSize: page.pageSize }
   }

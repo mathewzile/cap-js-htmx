@@ -610,35 +610,6 @@
     pasteRows(section, e.clipboardData?.getData('text') ?? '')
   })
 
-  // ---------------------------------------------------------------- rows of a composition in a non-draft Object Page
-  // Rows are added/removed in the page only; the object's Save posts what is there and the server replaces the composition.
-  const renumber = section => {
-    const count = section.querySelectorAll('tbody tr[data-hf-row]').length
-    const title = section.querySelector('.hf-section__title')
-    if (title) title.textContent = title.textContent.replace(/\(\d+\)\s*$/, `(${count})`)
-  }
-  document.addEventListener('click', e => {
-    const add = e.target.closest('[data-hf-action=row-add]')
-    const remove = e.target.closest('[data-hf-action=row-remove]')
-    if (!add && !remove) return
-    const section = (add || remove).closest('.hf-section--table')
-    const body = section.querySelector('tbody')
-    if (add) {
-      const template = section.querySelector('template[data-hf-row-template]')
-      body.querySelector('.hf-table__nodata')?.remove()
-      const id = `n${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`
-      const row = template.content.firstElementChild.cloneNode(true)
-      for (const input of row.querySelectorAll('[name]')) input.name = input.name.replace('~__i__.', `~${id}.`)
-      body.prepend(row)
-      row.querySelector('input:not([type=hidden]):not([type=checkbox])')?.focus()
-    } else {
-      body.querySelectorAll('tr[data-hf-row] .hf-checkbox:checked').forEach(box => box.closest('tr').remove())
-      section.querySelectorAll('thead .hf-checkbox').forEach(box => { box.checked = false })
-    }
-    renumber(section)
-    remove?.setAttribute('disabled', '')
-  })
-
   // ---------------------------------------------------------------- tree table
   // A node's children are fetched when it is first expanded (`$children`, inserted below its row) and kept afterwards:
   // collapsing only hides them, so expanding again is instant. Rows carry `data-hf-level` and `data-hf-state`.

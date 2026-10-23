@@ -4,19 +4,28 @@
     "id": "manageauthors.htmx",
     "type": "application",
     "i18n": "i18n/i18n.properties",
-    "applicationVersion": { "version": "1.0.0" },
+    "applicationVersion": {
+      "version": "1.0.0"
+    },
     "title": "{{appTitle}}",
     "description": "{{appDescription}}",
     "dataSources": {
       "mainService": {
         "uri": "/admin/",
         "type": "OData",
-        "settings": { "annotations": ["annotation"], "odataVersion": "4.0" }
+        "settings": {
+          "annotations": [
+            "annotation"
+          ],
+          "odataVersion": "4.0"
+        }
       },
       "annotation": {
         "type": "ODataAnnotation",
         "uri": "annotations/annotation.xml",
-        "settings": { "localUri": "annotations/annotation.xml" }
+        "settings": {
+          "localUri": "annotations/annotation.xml"
+        }
       }
     },
     "crossNavigation": {
@@ -25,22 +34,57 @@
           "semanticObject": "Authors",
           "action": "manageHtmx",
           "title": "{{tileTitle}}",
-          "signature": { "parameters": {}, "additionalParameters": "allowed" }
+          "signature": {
+            "parameters": {},
+            "additionalParameters": "allowed"
+          }
         }
       }
     }
   },
   "sap.ui": {
     "technology": "UI5",
-    "deviceTypes": { "desktop": true, "tablet": true, "phone": true }
+    "deviceTypes": {
+      "desktop": true,
+      "tablet": true,
+      "phone": true
+    }
   },
   "sap.ui5": {
-    "dependencies": { "minUI5Version": "1.120.0", "libs": { "sap.ui.core": {} } },
-    "contentDensities": { "compact": true, "cozy": true },
-    "resourceRoots": { "cds.htmx.shell": "./shell" },
-    "services": { "ShellUIService": { "factoryName": "sap.ushell.ui5service.ShellUIService", "lazy": false } },
-    "models": { "i18n": { "type": "sap.ui.model.resource.ResourceModel", "settings": { "bundleName": "manageauthors.htmx.i18n.i18n" } } },
-    "rootView": { "viewName": "sap.fe.templates.RootContainer.view.Fcl", "type": "XML", "async": true, "id": "appRootView" },
+    "dependencies": {
+      "minUI5Version": "1.120.0",
+      "libs": {
+        "sap.ui.core": {},
+        "sap.f": {}
+      }
+    },
+    "contentDensities": {
+      "compact": true,
+      "cozy": true
+    },
+    "resourceRoots": {
+      "cds.htmx.shell": "./shell"
+    },
+    "services": {
+      "ShellUIService": {
+        "factoryName": "sap.ushell.ui5service.ShellUIService",
+        "lazy": false
+      }
+    },
+    "models": {
+      "i18n": {
+        "type": "sap.ui.model.resource.ResourceModel",
+        "settings": {
+          "bundleName": "manageauthors.htmx.i18n.i18n"
+        }
+      }
+    },
+    "rootView": {
+      "viewName": "sap.fe.templates.RootContainer.view.Fcl",
+      "type": "XML",
+      "async": true,
+      "id": "appRootView"
+    },
     "routing": {
       "config": {
         "routerClass": "sap.f.routing.Router",
@@ -50,9 +94,39 @@
         }
       },
       "routes": [
-        { "pattern": ":?query:", "name": "AuthorsList", "target": ["AuthorsList"] },
-        { "pattern": "Authors({key}):?query:", "name": "AuthorsObjectPage", "target": ["AuthorsList", "AuthorsObjectPage"] },
-        { "pattern": "Authors({key})/books({key2}):?query:", "name": "AuthorBooksObjectPage", "target": ["AuthorsList", "AuthorsObjectPage", "AuthorBooksObjectPage"] }
+        {
+          "pattern": ":?query:",
+          "name": "AuthorsList",
+          "target": [
+            "AuthorsList"
+          ]
+        },
+        {
+          "pattern": "Authors({key}):?query:",
+          "name": "AuthorsObjectPage",
+          "target": [
+            "AuthorsList",
+            "AuthorsObjectPage"
+          ]
+        },
+        {
+          "pattern": "Authors({key})/books({key2}):?query:",
+          "name": "AuthorBooksObjectPage",
+          "target": [
+            "AuthorsList",
+            "AuthorsObjectPage",
+            "AuthorBooksObjectPage"
+          ]
+        },
+        {
+          "pattern": "Authors({key})/awards({awardsKey}):?query:",
+          "name": "AuthorAwardsObjectPage",
+          "target": [
+            "AuthorsList",
+            "AuthorsObjectPage",
+            "AuthorAwardsObjectPage"
+          ]
+        }
       ],
       "targets": {
         "AuthorsList": {
@@ -60,28 +134,67 @@
           "options": {
             "settings": {
               "contextPath": "/Authors",
-              "navigation": { "Authors": { "detail": { "route": "AuthorsObjectPage" } } }
+              "navigation": {
+                "Authors": {
+                  "detail": {
+                    "route": "AuthorsObjectPage"
+                  }
+                }
+              }
             }
           },
           "controlAggregation": "beginColumnPages",
-          "contextPattern": ""
+          "contextPattern": "",
+          "type": "Component",
+          "id": "AuthorsList"
         },
         "AuthorsObjectPage": {
           "name": "sap.fe.templates.ObjectPage",
           "options": {
             "settings": {
               "contextPath": "/Authors",
-              "navigation": { "books": { "detail": { "route": "AuthorBooksObjectPage" } } }
+              "navigation": {
+                "books": {
+                  "detail": {
+                    "route": "AuthorBooksObjectPage"
+                  }
+                },
+                "awards": {
+                  "detail": {
+                    "route": "AuthorAwardsObjectPage"
+                  }
+                }
+              }
             }
           },
           "controlAggregation": "midColumnPages",
-          "contextPattern": "/Authors({key})"
+          "contextPattern": "/Authors({key})",
+          "type": "Component",
+          "id": "AuthorsObjectPage"
+        },
+        "AuthorAwardsObjectPage": {
+          "name": "sap.fe.templates.ObjectPage",
+          "options": {
+            "settings": {
+              "contextPath": "/Authors/awards"
+            }
+          },
+          "controlAggregation": "endColumnPages",
+          "contextPattern": "/Authors({key})/awards({awardsKey})",
+          "type": "Component",
+          "id": "AuthorAwardsObjectPage"
         },
         "AuthorBooksObjectPage": {
           "name": "sap.fe.templates.ObjectPage",
-          "options": { "settings": { "contextPath": "/Authors/books" } },
+          "options": {
+            "settings": {
+              "contextPath": "/Authors/books"
+            }
+          },
           "controlAggregation": "endColumnPages",
-          "contextPattern": "/Authors({key})/books({key2})"
+          "contextPattern": "/Authors({key})/books({key2})",
+          "type": "Component",
+          "id": "AuthorBooksObjectPage"
         }
       }
     }
@@ -91,5 +204,8 @@
     "entry": "/htmx/admin/Authors",
     "animations": "fast"
   },
-  "sap.cloud": { "public": true, "service": "cap.htmx" }
+  "sap.cloud": {
+    "public": true,
+    "service": "cap.htmx"
+  }
 }

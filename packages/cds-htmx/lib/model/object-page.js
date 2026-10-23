@@ -17,8 +17,14 @@ function parseAnnotationPathTarget(target) {
 /** A `nav/@UI.LineItem`-shaped facet target (sub-object-page / inline table section, §3.2
  *  Facets row) -> the navigation segment, e.g. `chapters/@UI.LineItem` -> `chapters`. */
 function parseNavigationLineItemTarget(target) {
-  if (typeof target !== 'string' || !target.endsWith('/@UI.LineItem')) return undefined
-  return target.slice(0, -'/@UI.LineItem'.length)
+  return parseNavigationLineItem(target)?.nav
+}
+
+/** The same with the qualifier of the line item (`awards/@UI.LineItem#Awards` -> `{ nav: 'awards', qualifier: 'Awards' }`), the
+ *  vocabulary written out (`@com.sap.vocabularies.UI.v1.LineItem`) or as the alias. */
+function parseNavigationLineItem(target) {
+  const m = typeof target === 'string' && /^(.+)\/@(?:UI|com\.sap\.vocabularies\.UI\.v1)\.LineItem(?:#(.+))?$/.exec(target)
+  return m ? { nav: m[1], qualifier: m[2] } : undefined
 }
 
 /** One `Facets`/`HeaderFacets` entry -> a section/subsection content descriptor (§3.2: Facets row).
@@ -38,15 +44,15 @@ function buildFacet(model, store, entityType, facet, pageSettings) {
     return { ...base, kind: 'CollectionFacet', facets: (facet.Facets || []).map(f => buildFacet(model, store, entityType, f, pageSettings)) }
   }
 
-  const nav = parseNavigationLineItemTarget(facet.Target)
+  const { nav, qualifier } = parseNavigationLineItem(facet.Target) || {}
   if (nav) {
     const element = resolveElement(model, entityType, nav)
     const targetEntityType = element?.target
     const columns = targetEntityType
-      ? (store.get(targetEntityType, 'UI.LineItem') || []).map(r => buildColumn(store, targetEntityType, r))
+      ? (store.get(targetEntityType, 'UI.LineItem', qualifier) || []).map(r => buildColumn(store, targetEntityType, r))
       : []
-    // a section table is a tree when the manifest says so for this navigation's line item (`<nav>/@com.sap.vocabularies.UI.v1.LineItem`)
-    const tableSettings = pageSettings?.controlConfiguration?.[`${nav}/@com.sap.vocabularies.UI.v1.LineItem`]?.tableSettings || {}
+    // a section table is a tree when the manifest says so for this navigation's line item (`<nav>/@com.sap.vocabularies.UI.v1.LineItem[#qualifier]`)
+    const tableSettings = pageSettings?.controlConfiguration?.[`${nav}/@com.sap.vocabularies.UI.v1.LineItem${qualifier ? `#${qualifier}` : ''}`]?.tableSettings || {}
     const hierarchy = targetEntityType && tableSettings.type === 'TreeTable' ? buildHierarchy(store, targetEntityType, tableSettings.hierarchyQualifier, tableSettings.initialExpansionLevel) : undefined
     // with routing in the manifest the page only opens a sub-object page for a navigation the manifest has a route for
     const navigable = pageSettings?.$navigation ? !!pageSettings.$navigation[nav] : true
@@ -112,4 +118,4 @@ function buildObjectPage(model, store, entityType, { pageSettings } = {}) {
   }
 }
 
-module.exports = { buildObjectPage, buildFacet, parseAnnotationPathTarget, parseNavigationLineItemTarget }
+module.exports = { buildObjectPage, buildFacet, parseAnnotationPathTarget, parseNavigationLineItemTarget, parseNavigationLineItem }

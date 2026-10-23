@@ -32,7 +32,7 @@ const fclRender = require('./render/fcl')
 const ids = require('./render/ids')
 const valueHelpRender = require('./render/value-help')
 const { loadObjectPage } = require('./data/page')
-const { formValues, InputError, invalidValueListKeys, childRowValues } = require('./data/form')
+const { InputError } = require('./data/form')
 const { editCapabilities, canCreate, canEdit, canDelete } = require('./model/edit-capabilities')
 const engine = require('./sse/side-effects-engine')
 const treeLib = require('./data/tree')
@@ -71,7 +71,6 @@ class HtmxAdapter extends HttpAdapter {
     router.get('/$playground/clients', this.handle(this.playgroundClients))
     router.post('/$playground/watch', this.handle(this.playgroundWatch))
     router.post('/$playground/action/:name', this.handle(this.playgroundAction))
-    router.get('/:Set/$new', this.handle(this.newObject))
     router.get('/:Set/$export', this.handle(this.exportCsv))
     router.get('/:Set/$table', this.handle(this.tablePartial))
     router.get('/:Set/$children', this.handle(this.treeChildren))
@@ -89,7 +88,6 @@ class HtmxAdapter extends HttpAdapter {
     router.get('/:Set', this.handle(this.entityRoute))
     router.get('/*splat', this.handle(this.subObjectPage))
     router.patch('/*splat', this.handle(this.patchNested))
-    router.delete('/*splat', this.handle(this.deleteNested))
     router.post('/*splat', this.handle(this.postNested))
 
     return router
@@ -464,18 +462,6 @@ class HtmxAdapter extends HttpAdapter {
     })
   }
 
-  /** `GET /:Set/$new`: the empty create form of a non-draft entity (FE V4 creates these directly: nothing
-   *  is stored until Create). No URL of its own is pushed; Cancel returns to the List Report. */
-  async newObject(req, res, tx) {
-    const entity = this.entitySet(req.params.Set)
-    if (!entity) return res.sendStatus(404)
-    const edit = this.editOf(req, entity.name)
-    if (edit.mode !== 'direct' || !canCreate(edit)) return this.reject(req, res, 405, 'NotAllowed')
-    return this.objectPage(req, res, tx, {
-      entityType: entity.name, keys: null, segments: [{ set: req.params.Set }], contextPath: `/${req.params.Set}`, editMode: 'create'
-    })
-  }
-
   /** `POST /:Set(keys)/:nav`: Create in a table section of a draft. Like FE (creation mode "NewPage") it makes the
    *  child's own draft row, linked to the parent through the composition's foreign key, and opens its page. */
   async createChild(req, res, tx) {
@@ -512,9 +498,6 @@ class HtmxAdapter extends HttpAdapter {
     if (!current) return res.sendStatus(404)
     if (!canEdit(edit, current)) return this.reject(req, res, 405, 'NotAllowed')
 
-    if (edit.mode === 'direct') {
-      return this.objectPage(req, res, tx, { entityType: entity.name, keys: plainKeys, segments: [{ set, raw }], contextPath: `/${set}`, editMode: 'direct' })
-    }
     try {
       await draftLib.edit(tx, entity.name, { ...plainKeys, IsActiveEntity: true })
     } catch (err) {
@@ -666,7 +649,7 @@ class HtmxAdapter extends HttpAdapter {
       const column = require('./data/page').collectTableFacets([...(layout.headerFacets || []), ...(layout.sections || [])])
         .find(f => f.content.nav === n.nav)?.content.columns.find(c => c.field?.path === n.property)
       const { IsActiveEntity: _a, ...plain } = n.keys
-      const row = await tx.run(SELECT.one.from(n.entityType).where({ ...plain, IsActiveEntity: false }))
+      const row = await tx.run(SELECT.one.from(n.entityType).where(entityDef(cds.model, n.entityType)?.elements?.IsActiveEntity ? { ...plain, IsActiveEntity: false } : plain))
       const missing = column && row && require('./render/field').isMandatory(column.field, row) && draftMessages.isEmpty(row[column.field.cqlPath])
         ? [{ path: key, text: this.text(req, 'MissingValue'), severity: 'error', label: column.field.label }] : []
       res.set('HX-Trigger', draftMessages.triggerHeader({ clear: [key], set: missing }))
@@ -680,23 +663,19 @@ class HtmxAdapter extends HttpAdapter {
       .catch(err => console.error('[sse] side effects for', n.nav, 'failed:', err.message))
   }
 
-  /** `DELETE …/chapters(k)`: deletes a child of the draft (Delete on its page), back to the parent. */
-  async deleteNested(req, res, tx) {
-    const n = this.parseNested(req)
-    if (!n || n.action || !n.keys) return res.sendStatus(404)
-    if (this.editOf(req, n.root.entityType).mode !== 'draft') return this.reject(req, res, 405, 'NotAllowed')
-    await draftLib.discard(tx, n.entityType, n.keys) // CANCEL of the child draft; a plain DELETE would remove the saved row
-    return this.parentPage(req, res, tx, n, { push: true })
-  }
-
-  /** `POST …/chapters/$delete`: deletes the ticked rows of a table section of the draft. */
+  /** `POST …/chapters/$delete`: deletes the ticked rows of a table section of the draft: the draft rows of a composition (CANCEL of
+   *  the child draft, the saved row stays until the root is saved), the rows of an association table (a non-draft entity such as
+   *  Authors.books) for real, like FE. */
   async postNested(req, res, tx) {
     const n = this.parseNested(req)
     if (n?.action === 'paste') return this.pasteRows(req, res, tx, n)
     if (!n || n.action !== 'delete') return res.sendStatus(404)
     if (this.editOf(req, n.root.entityType).mode !== 'draft') return this.reject(req, res, 405, 'NotAllowed')
+    const draftNode = !!entityDef(cds.model, n.entityType)?.elements?.IsActiveEntity
     for (const raw of [].concat(req.body?.keys ?? []).slice(0, 200)) {
-      await draftLib.discard(tx, n.entityType, keysLib.parseKeys(raw))
+      const keys = keysLib.parseKeys(raw)
+      if (draftNode) await draftLib.discard(tx, n.entityType, keys)
+      else await tx.run(DELETE.from(n.entityType).where(keys))
     }
     // the segment list of the section is the parent's own
     return this.objectPage(req, res, tx, { entityType: n.parent.entityType, keys: n.parent.keys, segments: n.parent.segments, contextPath: n.parent.contextPath })
@@ -843,71 +822,7 @@ class HtmxAdapter extends HttpAdapter {
         entityType: entity.name, keys: activeKeys, segments: [{ set, raw: activeRaw }], contextPath: `/${set}`
       })
     }
-    if (edit.mode !== 'direct') return this.reject(req, res, 405, 'NotAllowed')
-
-    const creating = raw == null
-    const keys = creating ? null : keysLib.parseKeys(raw)
-    if (creating ? !canCreate(edit) : false) return this.reject(req, res, 405, 'NotAllowed')
-    const layout = cache.objectPageFor(cds.model, this.service.name, this.odataServicePath(), entity.name, `/${set}`, this.appOpts(req))
-    const current = keys && await tx.run(SELECT.one.from(entity.name).where(keys))
-    if (keys && !current) return res.sendStatus(404)
-    if (keys && !canEdit(edit, current)) return this.reject(req, res, 405, 'NotAllowed')
-    const editMode = creating ? 'create' : 'direct'
-    const segments = [{ set, raw }]
-    const contextPath = `/${set}`
-    let values = {}
-    try {
-      values = formValues(cds.model, entity.name, layout, req.body, { editMode, row: current || {} })
-      const badKeys = await invalidValueListKeys(tx, layout, values, this.text(req, 'InvalidValue'))
-      if (badKeys.length) return this.validationFailed(req, res, entity.name, badKeys, { status: 422, contextPath })
-      const childSets = await childRowValues(tx, cds.model, entity.name, layout, req.body, keys) // composition tables, saved with the object
-      if (creating) {
-        // keys the service would otherwise generate are needed to show the new object
-        for (const key of keyElements(entityDef(cds.model, entity.name))) {
-          if (key.type === 'cds.UUID' && values[key.name] == null) values[key.name] = cds.utils.uuid()
-        }
-        await tx.run(INSERT.into(entity.name).entries(values))
-      } else if (Object.keys(values).length) {
-        await tx.run(UPDATE(entity.name).set(values).where(keys))
-      }
-      const parentKeys = creating ? Object.fromEntries(keyElements(entityDef(cds.model, entity.name)).map(k => [k.name, values[k.name]])) : keys
-      await this.saveChildRows(tx, entity.name, parentKeys, childSets)
-    } catch (err) {
-      if (!HtmxAdapter.isUserError(err)) throw err
-      return this.validationFailed(req, res, entity.name, draftMessages.fromError(err), { status: 422, contextPath })
-    }
-    req.successMessage = this.text(req, creating ? 'ObjectCreated' : 'ObjectSaved')
-    if (!creating) return this.objectPage(req, res, tx, { entityType: entity.name, keys, segments, contextPath })
-    const newKeys = Object.fromEntries(keyElements(entityDef(cds.model, entity.name)).map(k => [k.name, values[k.name]]))
-    const newRaw = keysLib.formatKeys(newKeys)
-    res.set('HX-Push-Url', `${this.basePath(req)}/${set}(${newRaw})`)
-    return this.objectPage(req, res, tx, { entityType: entity.name, keys: newKeys, segments: [{ set, raw: newRaw }], contextPath })
-  }
-
-  /** The posted rows of composition tables become the object's children: rows no longer posted are deleted,
-   *  known ones updated, new ones inserted (linked to the parent through the composition's foreign key). */
-  async saveChildRows(tx, entityType, parentKeys, childSets) {
-    for (const [nav, rows] of Object.entries(childSets)) {
-      const target = resolveElement(cds.model, entityType, nav)?.target
-      if (!target) continue
-      const assoc = backlinkElement(cds.model, target, entityType)
-      const fk = assoc ? Object.fromEntries(Object.entries(parentKeys).filter(([k]) => k !== 'IsActiveEntity').map(([k, v]) => [`${assoc}_${k}`, v])) : {}
-      const keyNames = keyElements(entityDef(cds.model, target)).map(k => k.name).filter(n => n !== 'IsActiveEntity')
-      const keyOf = r => keyNames.map(n => r[n]).join('|')
-      const keyWhere = r => Object.fromEntries(keyNames.map(n => [n, r[n]]))
-      const existing = await tx.run(SELECT.from(target).columns(keyNames).where(fk))
-      const known = new Set(existing.map(keyOf))
-      const kept = new Set(rows.map(keyOf))
-      for (const row of existing) if (!kept.has(keyOf(row))) await tx.run(DELETE.from(target).where(keyWhere(row)))
-      for (const row of rows) {
-        if (known.has(keyOf(row))) {
-          const data = Object.fromEntries(Object.entries(row).filter(([k]) => !keyNames.includes(k)))
-          if (Object.keys(data).length) await tx.run(UPDATE(target).set(data).where(keyWhere(row)))
-        } else {
-          await tx.run(INSERT.into(target).entries({ ...row, ...fk }))
-        }
-      }
-    }
+    return this.reject(req, res, 405, 'NotAllowed') // only a draft root is saved: nothing else is edited
   }
 
   /** `POST /…(keys)/$discard` and `POST /:Set/$discard` (§routes). Draft root: DISCARD deletes the draft; a
@@ -919,14 +834,6 @@ class HtmxAdapter extends HttpAdapter {
     const entity = this.entitySet(set)
     if (!entity) return res.sendStatus(404)
     const edit = this.editOf(req, entity.name)
-    if (edit.mode === 'direct') {
-      if (raw == null) {
-        res.set('HX-Replace-Url', `${this.basePath(req)}/${set}`)
-        req.params.Set = set
-        return this.listReport(req, res, tx)
-      }
-      return this.objectPage(req, res, tx, { entityType: entity.name, keys: keysLib.parseKeys(raw), segments: [{ set, raw }], contextPath: `/${set}` })
-    }
     if (edit.mode !== 'draft') return this.reject(req, res, 405, 'NotAllowed')
     const keys = keysLib.parseKeys(raw)
     const { IsActiveEntity: _ignored, ...plainKeys } = keys

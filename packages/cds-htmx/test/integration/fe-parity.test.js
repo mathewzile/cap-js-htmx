@@ -26,7 +26,7 @@ describe('FE parity: capabilities, direct editing, history, confirmations (round
       assert.equal(authors.mode, 'direct')
       assert.equal(genres.mode, 'direct')
       assert.deepEqual([canCreate(books), canEdit(books, {}), canDelete(books, {})], [true, true, true])
-      assert.deepEqual([canCreate(authors), canEdit(authors, {}), canDelete(authors, {})], [true, true, true])
+      assert.deepEqual([canCreate(authors), canEdit(authors, {}), canDelete(authors, {})], [false, false, true], 'not draft-enabled: like FE, Delete only')
       assert.deepEqual([canCreate(genres), canEdit(genres, {}), canDelete(genres, {})], [false, false, false], '@readonly')
       assert.deepEqual([canCreate(chapters), canEdit(chapters, {}), canDelete(chapters, {})], [false, false, false], 'a draft node is only editable inside its root')
     })
@@ -42,7 +42,7 @@ describe('FE parity: capabilities, direct editing, history, confirmations (round
     })
 
     test('path-based restrictions are evaluated per object', () => {
-      const edit = { mode: 'direct', insertable: true, updatable: { $Path: 'editable' }, deletable: true }
+      const edit = { mode: 'draft', insertable: true, updatable: { $Path: 'editable' }, deletable: true }
       assert.equal(canEdit(edit, { editable: true }), true)
       assert.equal(canEdit(edit, { editable: false }), false)
     })
@@ -71,7 +71,7 @@ describe('FE parity: capabilities, direct editing, history, confirmations (round
       const { expect } = api
       const call = (method, url) => api.axios.request({ method, url, headers: HX, ...(method === 'get' ? {} : { data: {} }), validateStatus: () => true })
       expect((await call('post', '/htmx/catalog/Genres')).status).to.equal(405)
-      expect((await call('get', '/htmx/catalog/Genres/$new')).status).to.equal(405)
+      expect((await call('get', '/htmx/catalog/Genres/$new')).status).to.equal(404) // there is no create form of a non-draft entity
       expect((await call('post', '/htmx/catalog/Genres/$save')).status).to.equal(405)
       expect((await call('post', '/htmx/catalog/Genres/$delete')).status).to.equal(405)
       expect((await call('delete', '/htmx/catalog/Genres(ID=10aaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa)')).status).to.equal(405)
@@ -87,124 +87,61 @@ describe('FE parity: capabilities, direct editing, history, confirmations (round
     })
   })
 
-  describe('non-draft entity (Authors) is edited directly', () => {
-    let keysRaw
-    const created = []
+  // Like FE, which edits and creates only through a draft (or a sticky session): a non-draft entity can be shown and deleted
+  describe('non-draft entity (catalog Authors) offers Delete only', () => {
+    const form = { headers: { ...HX, 'Content-Type': 'application/x-www-form-urlencoded' } }
+    const AUTHOR = "ID='9d703c23-7cf7-4cad-9f2b-0e1e1a8c0003'"
 
-    test('Create opens an empty form without storing anything or pushing a URL', async () => {
+    test('the List Report has no Create, but Delete and row selection', async () => {
       const { GET, expect } = api
-      const before = (await GET('/odata/v4/catalog/Authors?$count=true&$top=0'))['data']['@odata.count']
-      const res = await GET('/htmx/catalog/Authors/$new', { headers: HX })
-      expect(res.status).to.equal(200)
-      expect(res.headers['hx-push-url']).to.equal(undefined)
-      expect(res.data).to.match(/<input type="text" class="fd-input"[^>]*name="name"/)
-      expect(res.data).not.to.match(/hx-patch=/) // nothing is patched while typing
-      expect(res.data).to.match(/hx-post="\/htmx\/catalog\/Authors\/\$save"[^>]*hx-include="#op-page"/)
-      expect((await GET('/odata/v4/catalog/Authors?$count=true&$top=0'))['data']['@odata.count']).to.equal(before)
+      const res = await GET('/htmx/catalog/Authors', { headers: HX })
+      expect(res.data).not.to.match(/aria-label="Create"/)
+      expect(res.data).to.match(/aria-label="Delete"/)
+      expect(res.data).to.include('data-hf-needs-selection')
+      expect(res.data).not.to.include('/$new')
     })
 
-    test('Create posts the form: the new Author exists and its page is shown with a toast', async () => {
-      const { POST, GET, expect } = api
-      const res = await POST('/htmx/catalog/Authors/$save', new URLSearchParams({ name: 'Parity Author', email: 'p@example.com' }).toString(), { headers: { ...HX, 'Content-Type': 'application/x-www-form-urlencoded' } })
-      expect(res.status).to.equal(200)
-      expect(res.headers['hx-push-url']).to.match(/^\/htmx\/catalog\/Authors\(ID='[0-9a-f-]{36}'\)$/)
-      expect(res.data).to.include('Parity Author')
-      expect(res.data).to.include('Object created.')
-      keysRaw = res.headers['hx-push-url'].match(/Authors\((.*)\)/)[1]
-      created.push(keysRaw)
-      const odata = await GET(`/odata/v4/catalog/Authors(${keysRaw.replace(/'/g, '')})`)
-      expect(odata.data.email).to.equal('p@example.com')
-    })
-
-    test('a missing mandatory value answers 422 with a message for that field and leaves the page (and what was typed) alone', async () => {
-      const { expect } = api
-      const res = await api.axios.post('/htmx/catalog/Authors/$save', new URLSearchParams({ name: '', email: 'keep@me.com' }).toString(), { headers: { ...HX, 'Content-Type': 'application/x-www-form-urlencoded' }, validateStatus: () => true })
-      expect(res.status).to.equal(422)
-      const trigger = JSON.parse(res.headers['hx-trigger'])['hf:messages']
-      expect(trigger.set).to.deep.include({ path: 'name', text: 'Provide the missing value.', severity: 'error', label: 'Name' })
-      expect(res.data).not.to.include('<input') // nothing to swap: the page keeps the form as typed
-    })
-
-    test('Edit shows the same page in edit mode: no draft, no URL', async () => {
-      const { POST, expect } = api
-      const res = await POST(`/htmx/catalog/Authors(${keysRaw})/$edit`, {}, { headers: HX })
-      expect(res.status).to.equal(200)
-      expect(res.headers['hx-push-url']).to.equal(undefined)
-      expect(res.data).to.match(/name="name"[^>]*value="Parity Author"|value="Parity Author"[^>]*name="name"|name="name" value="Parity Author"/)
-      expect(res.data).to.match(/hx-post="[^"]*\$save"[^>]*hx-include="#op-page"/)
-      expect(res.data).to.include('>Cancel<')
-    })
-
-    test('Save PATCHes the active entity; Cancel changes nothing', async () => {
-      const { POST, GET, expect } = api
-      const form = { headers: { ...HX, 'Content-Type': 'application/x-www-form-urlencoded' } }
-      const saved = await POST(`/htmx/catalog/Authors(${keysRaw})/$save`, new URLSearchParams({ name: 'Parity Renamed', email: 'p@example.com' }).toString(), form)
-      expect(saved.data).to.include('Parity Renamed')
-      expect(saved.data).to.include('Object saved.')
-      const cancelled = await POST(`/htmx/catalog/Authors(${keysRaw})/$discard`, {}, { headers: HX })
-      expect(cancelled.data).to.include('Parity Renamed')
-      expect((await GET(`/odata/v4/catalog/Authors(${keysRaw.replace(/'/g, '')})`)).data.name).to.equal('Parity Renamed')
-    })
-
-    test('a composition table is edited inline and saved with the object (rows added, changed and removed)', async () => {
-      const { POST, GET, expect } = api
-      const form = { headers: { ...HX, 'Content-Type': 'application/x-www-form-urlencoded' } }
-      const plain = keysRaw.replace(/'/g, '')
-      const awards = async () => (await GET(`/odata/v4/catalog/Authors(${plain})/awards`)).data.value
-      const FOREIGN = 'a1a1a1a1-0001-4a4a-8a8a-000000000003' // an award of another author
-      const post = fields => POST(`/htmx/catalog/Authors(${keysRaw})/$save`, new URLSearchParams(fields).toString(), form)
-
-      // the edit page has the inputs, the marker, the row template and the buttons
-      const edit = await POST(`/htmx/catalog/Authors(${keysRaw})/$edit`, {}, { headers: HX })
-      expect(edit.data).to.include('name="awards:present"')
-      expect(edit.data).to.include('data-hf-row-template')
-      expect(edit.data).to.include('data-hf-action="row-add"')
-      expect(edit.data).to.match(/name="awards~__i__\.name"/)
-      const display = await GET(`/htmx/catalog/Authors(${keysRaw})`, { headers: HX })
-      expect(display.data).not.to.include('data-hf-row-template')
-
-      await post({ name: 'Parity Renamed', 'awards:present': '1', 'awards~a.name': 'First', 'awards~a.year': '2001', 'awards~b.name': 'Second', 'awards~b.year': '2002' })
-      let rows = await awards()
-      expect(rows.map(r => r.name).sort()).to.deep.equal(['First', 'Second'])
-
-      const first = rows.find(r => r.name === 'First')
-      // change one, drop the other, add one; a posted key of somebody else's row is not adopted
-      await post({ name: 'Parity Renamed', 'awards:present': '1', 'awards~a.ID': first.ID, 'awards~a.name': 'First Renamed', 'awards~a.year': '2001', 'awards~c.ID': FOREIGN, 'awards~c.name': 'Third', 'awards~c.year': '2003' })
-      rows = await awards()
-      expect(rows.map(r => r.name).sort()).to.deep.equal(['First Renamed', 'Third'])
-      expect(rows.find(r => r.name === 'First Renamed').ID).to.equal(first.ID)
-      expect((await GET(`/odata/v4/catalog/Awards(${FOREIGN})`)).data.name).to.equal('Classic of Literature')
-
-      await post({ name: 'Parity Renamed', 'awards:present': '1' }) // every row removed
-      expect(await awards()).to.have.length(0)
-      await post({ name: 'Parity Renamed' }) // table not part of the form: left alone
-    })
-
-    test('the Delete button carries a confirmation the client shows as a UI dialog', async () => {
+    test("the Author's page has no Edit and no inline editing, only Delete (with a confirmation the client shows as a UI dialog)", async () => {
       const { GET, expect } = api
-      const res = await GET(`/htmx/catalog/Authors(${keysRaw})`, { headers: HX })
+      const res = await GET(`/htmx/catalog/Authors(${AUTHOR})`, { headers: HX })
+      expect(res.status).to.equal(200)
+      expect(res.data).not.to.match(/aria-label="Edit"/)
+      expect(res.data).not.to.include('row-add')
       expect(res.data).to.match(/hx-delete="[^"]*"[^>]*hx-confirm="Delete this object\?"/)
       expect(res.data).to.include('data-hf-confirm-critical')
     })
 
+    test('create, edit, save and cancel are refused and change nothing', async () => {
+      const { POST, GET, expect } = api
+      const before = (await GET(`/odata/v4/catalog/Authors(${AUTHOR.replace(/'/g, '')})`)).data.name
+      const refused = async (url, body = {}, options = { headers: HX }) => expect((await api.axios.post(url, body, { ...options, validateStatus: () => true })).status, url).to.equal(405)
+      await refused('/htmx/catalog/Authors')
+      await refused(`/htmx/catalog/Authors(${AUTHOR})/$edit`)
+      await refused('/htmx/catalog/Authors/$save', new URLSearchParams({ name: 'Created anyway' }).toString(), form)
+      await refused(`/htmx/catalog/Authors(${AUTHOR})/$save`, new URLSearchParams({ name: 'Renamed anyway' }).toString(), form)
+      await refused(`/htmx/catalog/Authors(${AUTHOR})/$discard`)
+      expect((await GET(`/odata/v4/catalog/Authors(${AUTHOR.replace(/'/g, '')})`)).data.name).to.equal(before)
+      void POST
+    })
+
     test('DELETE removes it and answers with the List Report and a toast', async () => {
-      const { expect } = api
-      const res = await api.axios.delete(`/htmx/catalog/Authors(${keysRaw})`, { headers: HX })
+      const { POST, expect } = api
+      const id = (await POST('/odata/v4/catalog/Authors', { name: 'To be deleted' })).data.ID
+      const res = await api.axios.delete(`/htmx/catalog/Authors(ID='${id}')`, { headers: HX })
       expect(res.status).to.equal(200)
       expect(res.headers['hx-replace-url']).to.equal('/htmx/catalog/Authors')
       expect(res.data).to.include('Object deleted.')
-      expect((await api.axios.get(`/odata/v4/catalog/Authors(${keysRaw.replace(/'/g, '')})`, { validateStatus: () => true })).status).to.equal(404)
+      expect((await api.axios.get(`/odata/v4/catalog/Authors(${id})`, { validateStatus: () => true })).status).to.equal(404)
     })
 
     test('List Report Delete removes every ticked row', async () => {
-      const { POST, GET, expect } = api
+      const { POST, expect } = api
       const ids = []
       for (const name of ['Bulk 1', 'Bulk 2']) ids.push((await POST('/odata/v4/catalog/Authors', { name })).data.ID)
       const body = new URLSearchParams(); ids.forEach(id => body.append('keys', `ID='${id}'`))
-      const res = await POST('/htmx/catalog/Authors/$delete', body.toString(), { headers: { ...HX, 'Content-Type': 'application/x-www-form-urlencoded' } })
+      const res = await POST('/htmx/catalog/Authors/$delete', body.toString(), form)
       expect(res.status).to.equal(200)
       for (const id of ids) expect((await api.axios.get(`/odata/v4/catalog/Authors(${id})`, { validateStatus: () => true })).status).to.equal(404)
-      expect((await GET('/htmx/catalog/Authors', { headers: HX })).data).to.include('data-hf-needs-selection')
     })
   })
 
@@ -390,7 +327,8 @@ describe('FE parity: capabilities, direct editing, history, confirmations (round
       assert.equal((await send([['x']].concat(Array(201).fill(['y'])))).status, 400, 'too many rows')
       // clean up: the later tests count the chapters
       const drafts = (await api.axios.get(`/odata/v4/catalog/Books(ID=3d2d2d2d-1c1c-4b4b-8a8a-000000000002,IsActiveEntity=false)/chapters`)).data.value.filter(c => /^Pasted/.test(c.title))
-      for (const c of drafts) await api.axios.delete(`/htmx/catalog/Books(${JANE},IsActiveEntity=false)/chapters(ID='${c.ID}',IsActiveEntity=false)`, { headers: HX })
+      const removal = new URLSearchParams(drafts.map(c => ['keys', `ID='${c.ID}',IsActiveEntity=false`])).toString()
+      if (drafts.length) await api.axios.post(`/htmx/catalog/Books(${JANE},IsActiveEntity=false)/chapters/$delete`, removal, form)
       assert.equal(await count(), before)
     })
 
@@ -404,14 +342,15 @@ describe('FE parity: capabilities, direct editing, history, confirmations (round
       await api.axios.patch(`/htmx/catalog/Books(${JANE},IsActiveEntity=false)/chapters(${CH1})/$field/title`, 'title=I.%20Gateshead', form)
     })
 
-    test('Create makes a child draft linked to the book and opens its own page (Apply, Delete, New Chapter)', async () => {
+    test('Create makes a child draft linked to the book and opens its own page (Apply, no Save, no Delete: rows are deleted from the table)', async () => {
       const res = await api.axios.post(`/htmx/catalog/Books(${JANE},IsActiveEntity=false)/chapters`, {}, { headers: HX })
       assert.equal(res.status, 200)
       assert.match(res.headers['hx-push-url'], /\/htmx\/catalog\/Books\(ID='[^']*',IsActiveEntity=false\)\/chapters\(ID='[0-9a-f-]{36}',IsActiveEntity=false\)$/)
       assert.match(res.data, /New Chapter/)
       assert.match(res.data, />Apply</)
       assert.doesNotMatch(res.data, />Save</)
-      assert.match(res.data, /hx-delete="[^"]*\/chapters\([^"]*"/) // Delete of the child row
+      assert.doesNotMatch(res.data, /hx-delete=/, 'a sub-object page has no Delete of its own (FE deletes rows from the table of the first page)')
+      assert.doesNotMatch(res.data, /aria-label="Edit"/)
       const childPath = res.headers['hx-push-url']
       // the child belongs to the book: the book page lists it
       const book = await api.axios.get(`/htmx/catalog/Books(${JANE},IsActiveEntity=false)`, { headers: HX })
@@ -420,9 +359,10 @@ describe('FE parity: capabilities, direct editing, history, confirmations (round
       const source = 'op-field--ChapterInfo--title'
       const patched = await api.axios.patch(childPath.replace('/htmx/catalog', '/htmx/catalog') + '/$field/title', 'title=Typed%20title', { headers: { ...form.headers, 'X-Hf-Source': source } })
       assert.match(patched.data, /hx-target="#op-title"[\s\S]*Typed title/)
-      // delete the child again (CANCEL of the child draft), back on the book
-      const removed = await api.axios.delete(childPath, { headers: HX })
-      assert.equal(removed.headers['hx-replace-url'], `/htmx/catalog/Books(${JANE},IsActiveEntity=false)`)
+      // delete the child again from the book's table (CANCEL of the child draft)
+      const childKey = /chapters\((ID='[0-9a-f-]{36}',IsActiveEntity=false)\)$/.exec(childPath)[1]
+      const removed = await api.axios.post(`/htmx/catalog/Books(${JANE},IsActiveEntity=false)/chapters/$delete`, new URLSearchParams([['keys', childKey]]).toString(), form)
+      assert.equal(removed.status, 200)
       assert.equal(rowPatches((await api.axios.get(`/htmx/catalog/Books(${JANE},IsActiveEntity=false)`, { headers: HX })).data), 2)
     })
 

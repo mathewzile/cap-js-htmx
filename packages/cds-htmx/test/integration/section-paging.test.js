@@ -14,7 +14,7 @@ const AUTHOR = "/htmx/admin/Authors(ID='9d703c23-7cf7-4cad-9f2b-0e1e1a8c0002')"
 const get = async (url, headers = HX) => String((await api.GET(url, { headers })).data)
 const sectionRows = html => [...html.matchAll(/<tr id="lr-row--([^"]+)"[^>]*hx-get="[^"]*\/books\(/g)].map(m => m[1])
 const titles = html => [...html.matchAll(/<tr id="lr-row--[^"]+"[^>]*hx-get="[^"]*\/books\([\s\S]*?<td class="fd-table__cell hf-col-0">([^<]*)</g)].map(m => m[1])
-const countOf = html => Number(/id="op-section--AuthorBooks-count"> \(([\d,]+)\)/.exec(html)?.[1].replace(/,/g, ''))
+const countOf = html => Number(/id="op-section--Books-count"> \(([\d,]+)\)/.exec(html)?.[1].replace(/,/g, ''))
 
 describe('table sections page', () => {
   test('the first page is one page, the title has the total and a More button the rest', async () => {
@@ -22,8 +22,8 @@ describe('table sections page', () => {
     const total = countOf(page)
     assert.ok(total > 20, `total ${total}`)
     assert.equal(sectionRows(page).length, 10)
-    assert.match(page, new RegExp(`id="op-section--AuthorBooks-growing"[\\s\\S]*?\\[ 10 / ${total.toLocaleString('en')} \\]`))
-    assert.match(page, /id="op-section--AuthorBooks-body"/)
+    assert.match(page, new RegExp(`id="op-section--Books-growing"[\\s\\S]*?\\[ 10 / ${total.toLocaleString('en')} \\]`))
+    assert.match(page, /id="op-section--Books-body"/)
     assert.match(page, /data-hf-table-url="[^"]*\/books\/\$table"/)
   })
 
@@ -35,7 +35,7 @@ describe('table sections page', () => {
       const rows = sectionRows(next)
       if (!rows.length) break
       seen.push(...rows)
-      assert.match(next, /<hx-partial hx-target="#op-section--AuthorBooks-count"/)
+      assert.match(next, /<hx-partial hx-target="#op-section--Books-count"/)
       if (skip + rows.length >= total) assert.doesNotMatch(next, /hf-table__growing-button/, 'the last page has no More button')
     }
     assert.equal(seen.length, total)
@@ -91,14 +91,14 @@ describe('items per page: UI.PresentationVariant MaxItems', () => {
   const withMaxItems = (type, maxItems) => Object.assign(Object.create(real), {
     raw: t => t === type ? { ...real.raw(t), '@UI.PresentationVariant': { MaxItems: maxItems } } : real.raw(t)
   })
-  const booksSection = (store, pageSettings) => buildObjectPage(cds.model, store, 'AdminService.Authors', { pageSettings }).sections.find(s => s.id === 'AuthorBooks').content
+  const booksSection = (store, pageSettings) => buildObjectPage(cds.model, store, 'AdminService.Authors', { pageSettings }).sections.find(s => s.id === 'Books').content
 
   test('a section\'s page size is the MaxItems of its table\'s presentation variant', () => {
     assert.equal(booksSection(withMaxItems('AdminService.Books', 7)).growingThreshold, 7)
   })
 
   test('without it the manifest\'s growingThreshold, then FE\'s default', () => {
-    const settings = { controlConfiguration: { 'books/@com.sap.vocabularies.UI.v1.LineItem': { tableSettings: { growingThreshold: 9 } } } }
+    const settings = { controlConfiguration: { 'books/@com.sap.vocabularies.UI.v1.LineItem#Books': { tableSettings: { growingThreshold: 9 } } } }
     assert.equal(booksSection(real, settings).growingThreshold, 9)
     assert.equal(booksSection(real).growingThreshold, 10, 'FE shows 10 rows of a table section, 20 of a List Report table')
     assert.equal(booksSection(withMaxItems('AdminService.Books', 7), settings).growingThreshold, 7, 'MaxItems wins')

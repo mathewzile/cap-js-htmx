@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test')
 
-const AUTHOR = "/htmx/admin/Authors(ID='9d703c23-7cf7-4cad-9f2b-0e1e1a8c0002')"
+const AUTHOR = "/htmx/admin/Authors(ID='9d703c23-7cf7-4cad-9f2b-0e1e1a8c0002',IsActiveEntity=true)"
 const column = (page, n) => page.locator(`#fcl-col-${n}`)
 const width = async (page, n) => (await column(page, n).boundingBox())?.width ?? 0
 const layout = page => page.locator('#fcl').getAttribute('data-hf-layout')

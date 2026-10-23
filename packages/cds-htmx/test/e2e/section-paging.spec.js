@@ -1,11 +1,11 @@
 const { test, expect } = require('@playwright/test')
 
-const AUTHOR = "/htmx/admin/Authors(ID='9d703c23-7cf7-4cad-9f2b-0e1e1a8c0002')"
+const AUTHOR = "/htmx/admin/Authors(ID='9d703c23-7cf7-4cad-9f2b-0e1e1a8c0002',IsActiveEntity=true)"
 
 test.describe('Object Page table sections page like the List Report', () => {
-  const section = page => page.locator('#op-section--AuthorBooks')
+  const section = page => page.locator('#op-section--Books')
   const rows = page => section(page).locator('tbody tr[hx-get]')
-  const count = async page => Number((await page.locator('#op-section--AuthorBooks-count').textContent()).replace(/[^\d]/g, ''))
+  const count = async page => Number((await page.locator('#op-section--Books-count').textContent()).replace(/[^\d]/g, ''))
 
   test('first page, More with [loaded / total], the title keeps the total', async ({ page }) => {
     await page.goto(AUTHOR)
@@ -13,7 +13,7 @@ test.describe('Object Page table sections page like the List Report', () => {
     const total = await count(page)
     expect(total).toBeGreaterThan(40)
     await expect(rows(page)).toHaveCount(10)
-    const more = page.locator('#op-section--AuthorBooks-growing .hf-table__growing-button')
+    const more = page.locator('#op-section--Books-growing .hf-table__growing-button')
     await expect(more).toContainText(`[ 10 / ${total.toLocaleString('en')} ]`)
     await more.click()
     await expect(rows(page)).toHaveCount(20)
@@ -42,7 +42,7 @@ test.describe('Object Page table sections page like the List Report', () => {
     await expect.poll(async () => (await rows(page).first().locator('td.hf-col-0').textContent())).toMatch(/^[W-Z]/)
     const first = await rows(page).locator('td.hf-col-0').allTextContents()
     expect(first).toEqual([...first].sort((a, b) => b.localeCompare(a)))
-    await page.locator('#op-section--AuthorBooks-growing .hf-table__growing-button').click()
+    await page.locator('#op-section--Books-growing .hf-table__growing-button').click()
     await expect(rows(page)).toHaveCount(20)
     const all = await rows(page).locator('td.hf-col-0').allTextContents()
     expect(all).toEqual([...all].sort((a, b) => b.localeCompare(a)))
@@ -60,7 +60,7 @@ test.describe('Object Page table sections page like the List Report', () => {
 
   test('a row still opens the book in the next column', async ({ page }) => {
     await page.goto(AUTHOR)
-    await page.locator('#op-section--AuthorBooks-growing .hf-table__growing-button').click()
+    await page.locator('#op-section--Books-growing .hf-table__growing-button').click()
     await expect(rows(page)).toHaveCount(20)
     await rows(page).nth(15).click() // a row of the second page
     await expect(page.locator('#c2-op-page')).toBeVisible()

@@ -20,41 +20,26 @@ test.describe('@readonly entity (Genres)', () => {
   })
 })
 
-test.describe('non-draft entity (Authors) is edited directly', () => {
-  test('create, edit, cancel, save and delete without a draft or htmx-specific URLs', async ({ page }) => {
+// Like FE, which edits and creates only through a draft: a non-draft entity (the catalog's Authors) can be shown and deleted
+test.describe('non-draft entity (catalog Authors) offers Delete only', () => {
+  test('no Create, no Edit; Delete asks first and removes it', async ({ page, request }) => {
+    const created = await (await request.post('/odata/v4/catalog/Authors', { data: { name: 'E2E Author' } })).json()
     await page.goto('/htmx/catalog/Authors')
-    await page.getByRole('button', { name: 'Create' }).click()
-    await expect(title(page)).toHaveText('New Author')
-    expect(pathOf(page)).toBe('/htmx/catalog/Authors')
-
-    await page.locator('input[name=name]').fill('E2E Author')
-    await page.getByRole('button', { name: 'Create' }).last().click()
+    await expect(page.getByRole('button', { name: 'Create' })).toHaveCount(0)
+    await page.locator('#lr-table-body tr', { hasText: 'E2E Author' }).click()
     await expect(title(page)).toHaveText('E2E Author')
-    await expect(page.locator('#toast')).toContainText('Object created.')
-    const objectUrl = pathOf(page)
-    expect(objectUrl).toMatch(/^\/htmx\/catalog\/Authors\(ID='[0-9a-f-]{36}'\)$/)
-
-    await page.getByRole('button', { name: 'Edit' }).click()
-    expect(pathOf(page)).toBe(objectUrl) // edit mode is not a URL
-    await page.locator('input[name=name]').fill('E2E Author Renamed')
-    expect(pathOf(page)).toBe(objectUrl)
-    await page.getByRole('button', { name: 'Cancel' }).click()
-    await expect(title(page)).toHaveText('E2E Author')
-
-    await page.getByRole('button', { name: 'Edit' }).click()
-    await page.locator('input[name=name]').fill('E2E Author Renamed')
-    await page.getByRole('button', { name: 'Save' }).click()
-    await expect(title(page)).toHaveText('E2E Author Renamed')
+    expect(pathOf(page)).toContain(created.ID)
+    await expect(page.getByRole('button', { name: 'Edit' })).toHaveCount(0)
+    await expect(page.locator('input[name=name]')).toHaveCount(0)
 
     await page.locator('#op-page').getByRole('button', { name: 'Delete' }).click()
     await expect(confirmDialog(page)).toBeVisible() // a UI dialog, not window.confirm
     await confirmDialog(page).locator('[data-hf-cancel]').click()
     await expect(confirmDialog(page)).toHaveCount(0)
-    expect(pathOf(page)).toBe(objectUrl)
     await page.locator('#op-page').getByRole('button', { name: 'Delete' }).click()
     await confirmDialog(page).locator('[data-hf-ok]').click()
     await expect(page).toHaveURL(/\/htmx\/catalog\/Authors$/)
-    await expect(page.locator('body')).not.toContainText('E2E Author Renamed')
+    await expect(page.locator('body')).not.toContainText('E2E Author')
   })
 
   test('List Report Delete works on the ticked rows after a confirmation', async ({ page, request }) => {

@@ -21,14 +21,14 @@ describe('sub-object pages and Edit', () => {
     assert.doesNotMatch(child, /\$edit/)
   })
 
-  test('while the first page is edited the sub-object page is the draft: Apply and Delete, no Edit', async () => {
+  test('while the first page is edited the sub-object page is the draft: Apply, no Edit and no Delete (as in FE)', async () => {
     const { POST, expect } = api
     expect((await POST(`${ACTIVE}/$edit`, {}, { headers: HX })).status).to.equal(200)
     try {
       const child = await page(`${DRAFT}/chapters(ID='${CHAPTER}',IsActiveEntity=false)`)
       assert.match(child, /hf-page--edit/)
       assert.ok(!editButton(child))
-      assert.match(child, /aria-label="Delete"|>Delete</)
+      assert.doesNotMatch(child, /aria-label="Delete"|>Delete</)
       assert.match(child, />Apply</)
       assert.match(child, /<input[^>]*name="title"/, 'the fields are inputs')
     } finally {

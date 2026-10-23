@@ -107,13 +107,13 @@ test.describe('composition children in a draft', () => {
     await expect(page).toHaveURL(draftUrl)
     await expect(rows).toHaveCount(3)
 
-    // the arrow opens a child, Back returns, Delete on the child page asks first
+    // the arrow opens a child (no Delete or Edit of its own: rows are deleted from the table), Apply returns
     await section(page).locator('tbody tr').nth(2).locator('.hf-col-nav').click()
     await expect(page).toHaveURL(/\/chapters\(/)
-    await page.locator('.hf-op-title__actions').getByRole('button', { name: 'Delete' }).click()
-    await confirmOk(page).click()
+    await expect(page.locator('.hf-op-title__actions').getByRole('button', { name: 'Delete' })).toHaveCount(0)
+    await page.getByRole('button', { name: 'Apply' }).click()
     await expect(page).toHaveURL(draftUrl)
-    await expect(rows).toHaveCount(2)
+    await expect(rows).toHaveCount(3)
 
     // bulk delete of ticked rows has its own (section-scoped) button
     const remove = section(page).getByRole('button', { name: 'Delete' })
@@ -122,7 +122,7 @@ test.describe('composition children in a draft', () => {
     await expect(remove).toBeEnabled()
     await remove.click()
     await confirmOk(page).click()
-    await expect(rows).toHaveCount(1)
+    await expect(rows).toHaveCount(2)
 
     await page.getByRole('button', { name: 'Discard Draft' }).click()
     await confirmOk(page).click()

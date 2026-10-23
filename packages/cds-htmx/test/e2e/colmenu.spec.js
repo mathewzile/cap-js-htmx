@@ -34,8 +34,8 @@ test.describe('column menu opens on a click on the header', () => {
   })
 
   test('a section table header opens it too, a column without a sort link as well', async ({ page }) => {
-    await page.goto("/htmx/admin/Authors(ID='9d703c23-7cf7-4cad-9f2b-0e1e1a8c0002')")
-    const header = page.locator('#op-section--AuthorBooks thead th.hf-th').first()
+    await page.goto("/htmx/admin/Authors(ID='9d703c23-7cf7-4cad-9f2b-0e1e1a8c0002',IsActiveEntity=true)")
+    const header = page.locator('#op-section--Books thead th.hf-th').first()
     await header.click()
     await expect(page.locator('.hf-colmenu')).toBeVisible()
     await page.keyboard.press('Escape')

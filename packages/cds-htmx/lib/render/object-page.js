@@ -99,9 +99,7 @@ function tableBlock(facet, ctx) {
   const nav = facet.content.nav
   const entitySetPath = `${ctx.entitySetPath}/${nav}`
   const sectionId = ids.opSection(facet.id)
-  // A composition of a non-draft object being edited/created: rows are plain inputs saved with the object
-  const direct = !ctx.isDraft && (ctx.editMode === 'direct' || ctx.editMode === 'create') && !!facet.content.composition
-  const editing = !!ctx.isDraft || direct
+  const editing = !!ctx.isDraft
   // A tree table (display mode): its rows and the children of an expanded node are the hierarchy entity's own set
   const tree = !editing && child?.tree
   const miniLayout = { navigable: facet.content.navigable, table: { columns: facet.content.columns, hierarchy: tree ? facet.content.hierarchy : undefined } }
@@ -114,8 +112,7 @@ function tableBlock(facet, ctx) {
   const paged = child?.count != null
   const tableUrl = `${ctx.basePath}/${entitySetPath}/$table`
   // While the draft is edited the rows are inputs; a change is PATCHed to the child's own draft
-  const edit = direct ? { direct: true, nav }
-    : editing ? { nav, rowPath: row => rowHref(ctx.basePath, entitySetPath, keyNames, row) } : undefined
+  const edit = editing ? { nav, rowPath: row => rowHref(ctx.basePath, entitySetPath, keyNames, row) } : undefined
   return html`
     <div class="hf-table-toolbar hf-table-toolbar--section">
       <h2 class="hf-section__title">${facet.label}${tree ? html`` : html`<span id="${sectionId}-count"> (${paged ? formatCount(child.count, ctx.locale) : rows.length})</span>`}</h2>
@@ -124,17 +121,15 @@ function tableBlock(facet, ctx) {
         <input type="search" class="fd-input" data-hf-table-search placeholder="${t('Search')}" aria-label="${t('Search')}">
         <span class="hf-input-group__addon"><span class="hf-input-icon"><i class="sap-icon--search" aria-hidden="true"></i></span></span>
       </div>
-      ${direct ? html`
-        <button type="button" class="fd-button fd-button--transparent" data-hf-action="row-add">${t('Create')}</button>
-        <button type="button" class="fd-button fd-button--transparent" disabled data-hf-needs-selection="#${sectionId}" data-hf-action="row-remove">${t('Delete')}</button>` : editing ? html`
-        <button class="fd-button fd-button--transparent" hx-post="${ctx.basePath}/${ctx.entitySetPath}/${nav}"
-          hx-target="#app" hx-push-url="false" hx-swap="innerHTML show:window:top">${t('Create')}</button>
+      ${editing ? html`
+        ${facet.content.composition ? html`<button class="fd-button fd-button--transparent" hx-post="${ctx.basePath}/${ctx.entitySetPath}/${nav}"
+          hx-target="#app" hx-push-url="false" hx-swap="innerHTML show:window:top">${t('Create')}</button>` : html``}
         <button class="fd-button fd-button--transparent" disabled data-hf-needs-selection="#${sectionId}" aria-label="${t('Delete')}"
           hx-post="${ctx.basePath}/${entitySetPath}/$delete" hx-include="#${sectionId}" hx-target="#app" hx-push-url="false" hx-swap="innerHTML show:window:top"
           hx-confirm="${t('ConfirmDeleteSelected')}" data-hf-confirm-count="#${sectionId} tbody .hf-checkbox:checked"
           data-hf-confirm-title="${t('Delete')}" data-hf-confirm-ok="${t('Delete')}" data-hf-confirm-cancel="${t('Cancel')}" data-hf-confirm-critical>${t('Delete')}</button>` : html``}
       <span class="hf-toolbar-separator"></span>
-      ${editing && !direct ? html`<button type="button" class="fd-button fd-button--transparent hf-icon-button" data-hf-action="paste" data-hf-paste-url="${ctx.basePath}/${entitySetPath}/$paste" aria-label="${t('Paste')}" title="${t('Paste')}"><i class="sap-icon--paste" aria-hidden="true"></i></button>` : html``}
+      ${editing && facet.content.composition ? html`<button type="button" class="fd-button fd-button--transparent hf-icon-button" data-hf-action="paste" data-hf-paste-url="${ctx.basePath}/${entitySetPath}/$paste" aria-label="${t('Paste')}" title="${t('Paste')}"><i class="sap-icon--paste" aria-hidden="true"></i></button>` : html``}
       <button type="button" class="fd-button fd-button--transparent hf-icon-button" data-hf-action="${paged ? 'export-section' : 'export-dom'}" data-hf-export="${tableUrl.replace(/\$table$/, '$export')}" data-hf-filename="${facet.label}" aria-label="${t('ExportCsv')}" title="${t('ExportCsv')}"><i class="sap-icon--excel-attachment" aria-hidden="true"></i></button>
       <button type="button" class="fd-button fd-button--transparent hf-icon-button" data-hf-action="settings" aria-label="${t('ViewSettings')}" title="${t('ViewSettings')}"><i class="sap-icon--action-settings" aria-hidden="true"></i></button>
     </div>
@@ -143,10 +138,7 @@ function tableBlock(facet, ctx) {
       ${tableHead(facet.content.columns, rows, { selectable: editing, sortable: false, editing, sortKeys: paged })}
       <tbody id="${sectionId}-body">${rowsHtml(miniLayout, rows, { basePath: ctx.basePath, entitySetPath: rowSetPath, keyNames, bundle, t: ctx.t, selectable: editing, edit })}</tbody>
     </table>
-    ${paged ? sectionGrowing(sectionId, tableUrl, { skip: rows.length, hasMore: child.hasMore, count: child.count, bundle, t: ctx.t, locale: ctx.locale }) : html``}
-    ${direct ? html`
-      <input type="hidden" name="${nav}:present" value="1">
-      <template data-hf-row-template>${rowsHtml(miniLayout, [{}], { basePath: ctx.basePath, entitySetPath, keyNames, bundle, t: ctx.t, selectable: true, edit: { ...edit, index: '__i__' } })}</template>` : html``}`
+    ${paged ? sectionGrowing(sectionId, tableUrl, { skip: rows.length, hasMore: child.hasMore, count: child.count, bundle, t: ctx.t, locale: ctx.locale }) : html``}`
 }
 
 /** The single label/value block of a dataPoint / contact / address facet. Its `id` is what the
@@ -222,7 +214,7 @@ function anchorBar(sections) {
  *  back to List Report); in draft (edit) mode neither applies -- Save/Discard live in the floating
  *  footer instead (§3.4: "floating footer ... Save ... Discard Draft"). Actions are now active buttons
  *  that POST to $action/:name (Phase 5d). */
-function headerActions(actions, bundle, t, { basePath, entitySetPath, editMode, canEdit, canDelete, draftExists, isDraftRoot, deleteChild } = {}) {
+function headerActions(actions, bundle, t, { basePath, entitySetPath, editMode, canEdit, canDelete, draftExists, isDraftRoot } = {}) {
   const opPath = `${basePath}/${entitySetPath}`
   const display = !editMode
   return html`
@@ -235,7 +227,7 @@ function headerActions(actions, bundle, t, { basePath, entitySetPath, editMode, 
       ${display && canEdit && !draftExists ? html`
         <button class="fd-button fd-button--emphasized" aria-label="${t(bundle, 'Edit')}"
           hx-post="${opPath}/$edit" hx-target="#app" hx-push-url="false" hx-swap="innerHTML show:window:top">${t(bundle, 'Edit')}</button>` : html``}
-      ${(display && canDelete) || deleteChild ? html`
+      ${display && canDelete ? html`
         <button class="fd-button" aria-label="${t(bundle, 'Delete')}" ${draftExists ? raw('disabled') : html``}
           hx-delete="${opPath}" hx-target="#app" hx-push-url="false" hx-swap="innerHTML show:window:top"
           ${confirmAttrs(t(bundle, 'ConfirmDeleteObject'), { bundle, t, title: 'Delete', ok: 'Delete', critical: true })}>${t(bundle, 'Delete')}</button>` : html``}
@@ -266,20 +258,15 @@ function footerBar(bundle, t, { basePath, entitySetPath, editMode, node } = {}) 
         <button class="fd-button fd-button--emphasized" hx-get="${parent}" hx-target="#app" hx-push-url="true" hx-swap="innerHTML show:window:top">${t(bundle, 'Apply')}</button>
       </footer>`
   }
-  const include = editMode === 'draft' ? '' : raw(`hx-include="#${ids.opPage()}"`)
-  const saveLabel = editMode === 'create' ? 'CreateObject' : 'Save'
-  const discard = editMode === 'draft'
-    ? html`<button class="fd-button fd-button--transparent" hx-post="${opPath}/$discard" hx-target="#app" hx-push-url="false"
-        hx-swap="innerHTML show:window:top" ${confirmAttrs(t(bundle, 'ConfirmDiscardDraft'), { bundle, t, title: 'DiscardDraft', ok: 'DiscardDraft' })}>${t(bundle, 'DiscardDraft')}</button>`
-    : html`<button class="fd-button fd-button--transparent" hx-post="${opPath}/$discard" hx-target="#app" hx-push-url="false"
-        hx-swap="innerHTML show:window:top">${t(bundle, 'Cancel')}</button>`
+  const discard = html`<button class="fd-button fd-button--transparent" hx-post="${opPath}/$discard" hx-target="#app" hx-push-url="false"
+    hx-swap="innerHTML show:window:top" ${confirmAttrs(t(bundle, 'ConfirmDiscardDraft'), { bundle, t, title: 'DiscardDraft', ok: 'DiscardDraft' })}>${t(bundle, 'DiscardDraft')}</button>`
   return html`
     <footer class="hf-footer" id="${ids.opFooter()}">
       <div id="${ids.opMessages()}" class="hf-footer__messages"></div>
       <div class="hf-spacer"></div>
-      ${editMode === 'draft' ? html`<span id="${ids.opDraftStatus()}" class="hf-draft-status" aria-live="polite" data-saving="${t(bundle, 'Saving')}"></span>` : html``}
+      <span id="${ids.opDraftStatus()}" class="hf-draft-status" aria-live="polite" data-saving="${t(bundle, 'Saving')}"></span>
       <button class="fd-button fd-button--emphasized" hx-post="${opPath}/$save" hx-target="#app" hx-push-url="false"
-        ${include} hx-swap="innerHTML show:window:top">${t(bundle, saveLabel)}</button>
+        hx-swap="innerHTML show:window:top">${t(bundle, 'Save')}</button>
       ${discard}
     </footer>`
 }
@@ -367,8 +354,7 @@ function objectPageFragment(layout, row, ctx) {
           ${headerActions(layout.headerActions || [], ctx.bundle, ctx.t, {
             basePath: ctx.basePath, entitySetPath: ctx.entitySetPath, editMode,
             canEdit: !layout.edit || canEdit(layout.edit, row), canDelete: !layout.edit || canDelete(layout.edit, row),
-            draftExists: row.HasDraftEntity === true, isDraftRoot: layout.edit?.mode === 'draft',
-            deleteChild: layout.edit?.mode === 'node' && editMode === 'draft' // a child row of the draft being edited
+            draftExists: row.HasDraftEntity === true, isDraftRoot: layout.edit?.mode === 'draft'
           })}
           ${ctx.fcl ? fclRender.columnButtons(ctx.fcl.column, { t: ctx.t, bundle: ctx.bundle, closeHref: ctx.fcl.closeHref, editing: !!editMode }) : html``}
         </div>

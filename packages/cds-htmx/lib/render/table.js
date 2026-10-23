@@ -182,32 +182,7 @@ function rowId(keyNames, row) {
   return ids.lrRow(keyNames.map(name => row[name]).join('-'))
 }
 
-/** A row of a composition table in a non-draft Object Page that is being edited (direct edit / create): plain
- *  inputs named `<nav>[<i>].<property>`, saved together with the object by its Save (the server replaces the
- *  composition with the posted rows). The key of an existing row travels as hidden inputs, a new row has none. */
-function directRowMarkup(layout, row, { keyNames, bundle, t, numeric, edit }) {
-  const { isReadOnly, isMandatory } = require('./field')
-  const prefix = `${edit.nav}~${edit.index}` // `<nav>~<row>.<property>`: brackets would be nested by the body parser
-  const cells = layout.table.columns.map((col, i) => {
-    const cls = `fd-table__cell hf-col-${i}${numeric[i] ? ' hf-cell--end' : ''}`
-    const field = col.field
-    if (col.kind === 'UI.DataField' && field?.cqlPath && !field.cqlPath.includes('.') && !isReadOnly(field, row, 'direct')) {
-      return html`<td class="${cls}"><input type="text" class="fd-input${numeric[i] ? ' hf-input--end' : ''}" name="${prefix}.${field.path}" value="${row[field.cqlPath] ?? ''}"${isMandatory(field, row) ? raw(' required') : html``} aria-label="${field.label}"></td>`
-    }
-    return dataCell(col, row, { bundle, t, numeric: numeric[i], index: i })
-  })
-  const keys = keyNames.filter(n => n !== 'IsActiveEntity' && row[n] != null)
-    .map(n => html`<input type="hidden" name="${prefix}.${n}" value="${row[n]}">`)
-  return html`
-    <tr class="fd-table__row" data-hf-row>
-      <td class="fd-table__cell fd-table__cell--checkbox">${checkbox('Select row')}${keys}</td>
-      ${cells}
-      <td class="fd-table__cell hf-col-nav"></td>
-    </tr>`
-}
-
 function rowMarkup(layout, row, { basePath, entitySetPath, keyNames, bundle, t, numeric, selectable, edit }) {
-  if (edit?.direct) return directRowMarkup(layout, row, { keyNames, bundle, t, numeric, edit })
   const href = rowHref(basePath, entitySetPath, keyNames, row)
   const rowKey = edit ? `${edit.nav}(${formatKeys(keyValues(keyNames, row))})` : undefined
   const hierarchy = layout.table.hierarchy
@@ -234,7 +209,7 @@ function rowsHtml(layout, rows, { basePath, entitySetPath, keyNames, bundle, t, 
     return html`<tr class="hf-table__nodata"><td class="fd-table__cell" colspan="${layout.table.columns.length + (selectable ? 2 : 1)}">${t(bundle, 'NoDataFound')}</td></tr>`
   }
   const numeric = layout.table.columns.map(col => isNumericColumn(col, rows))
-  return html`${rows.map((row, index) => rowMarkup(layout, row, { basePath, entitySetPath, keyNames, bundle, t, numeric, selectable, edit: edit?.direct ? { index, ...edit } : edit }))}`
+  return html`${rows.map(row => rowMarkup(layout, row, { basePath, entitySetPath, keyNames, bundle, t, numeric, selectable, edit }))}`
 }
 
 /** The growing trigger under the table (UI5 `growing`): "More" with the `[ loaded / total ]` description FE shows.

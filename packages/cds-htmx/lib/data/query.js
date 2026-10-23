@@ -182,7 +182,9 @@ function objectPageQuery(entitySet, keys, columns) {
 function objectPageChildQuery(model, parentEntityType, parentKeys, childEntityType, columns) {
   const assoc = backlinkElement(model, childEntityType, parentEntityType)
   const where = {}
-  if ('IsActiveEntity' in parentKeys) where.IsActiveEntity = parentKeys.IsActiveEntity
+  // the draft state follows the parent into a draft node; a child that is not draft-enabled (an association such as Authors.books of a
+  // draft root) has none
+  if ('IsActiveEntity' in parentKeys && entityDef(model, childEntityType)?.elements?.IsActiveEntity) where.IsActiveEntity = parentKeys.IsActiveEntity
   if (assoc) {
     for (const [k, v] of Object.entries(parentKeys)) {
       if (k === 'IsActiveEntity') continue

@@ -44,7 +44,7 @@ test.describe('dark', () => {
   })
 
   test('the column layout and its separator are dark too', async ({ page }) => {
-    await page.goto("/htmx/admin/Authors(ID='9d703c23-7cf7-4cad-9f2b-0e1e1a8c0002')")
+    await page.goto("/htmx/admin/Authors(ID='9d703c23-7cf7-4cad-9f2b-0e1e1a8c0002',IsActiveEntity=true)")
     await expect(page.locator('#op-page')).toBeVisible()
     await page.waitForTimeout(800)
     expect(brightness(await background(page, '#fcl-col-1'))).toBeLessThan(80)
