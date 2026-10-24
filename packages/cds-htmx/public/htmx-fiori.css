@@ -216,7 +216,7 @@ html:has(body.htmx-fiori), body.htmx-fiori {
 /* ---------- List Report: filter bar ---------- */
 
 .hf-page__header-content {
-  padding: 1rem 0;
+  padding: 1rem .75rem 1rem 0; /* the filter bar of FE is 12px narrower than its page */
 }
 .hf-page--collapsed .hf-page__header-content { display: none; }
 
@@ -228,8 +228,8 @@ html:has(body.htmx-fiori), body.htmx-fiori {
 }
 
 .hf-filter {
-  flex: 1 1 12rem;
-  max-width: 14.0625rem;
+  flex: 1 1 13.875rem;
+  min-width: 13.875rem;
   padding: .5rem 0 .1875rem;
   margin: 0;
 }
@@ -246,8 +246,8 @@ html:has(body.htmx-fiori), body.htmx-fiori {
 
 .hf-filter-bar__actions {
   display: flex;
+  flex: 0 0 auto;
   gap: .5rem;
-  margin-left: auto;
   padding: .5rem 0 .1875rem;
 }
 
@@ -288,7 +288,7 @@ html:has(body.htmx-fiori), body.htmx-fiori {
 .hf-table-toolbar {
   display: flex;
   align-items: center;
-  gap: .25rem;
+  gap: .5rem;
   height: 2.75rem;
   padding: 0 .5rem 0 1rem;
   background: var(--sapList_Background, #fff);
@@ -296,6 +296,8 @@ html:has(body.htmx-fiori), body.htmx-fiori {
   border-radius: var(--sapElement_BorderCornerRadius, .75rem) var(--sapElement_BorderCornerRadius, .75rem) 0 0;
 }
 .hf-table-toolbar__title {
+  position: relative;
+  top: 1px;
   margin: 0;
   font-family: var(--sapFontBoldFamily, '72-Bold', '72', Arial, sans-serif);
   font-weight: normal;
@@ -306,8 +308,8 @@ html:has(body.htmx-fiori), body.htmx-fiori {
 
 .hf-toolbar-separator {
   width: 1px;
-  height: 1.375rem;
-  margin: 0 .25rem;
+  height: 1.5rem;
+  margin: 0;
   background: var(--sapToolbar_SeparatorColor, #d9d9d9);
 }
 .hf-icon-button i { color: var(--sapButton_Lite_TextColor, #0064d9); }
@@ -370,15 +372,22 @@ html:has(body.htmx-fiori), body.htmx-fiori {
  * leaves the rest of the card empty) instead of stretching to the page. Section tables fill their section. */
 .htmx-fiori .hf-table td.hf-semantic-key { font-family: var(--sapFontBoldFamily, '72-Bold', '72', Arial, sans-serif); font-weight: 700; }
 .htmx-fiori .hf-section--table .hf-table { width: auto; min-width: 0; }
-.htmx-fiori .hf-section--table .hf-table thead .hf-th { min-width: 12rem; }
-.htmx-fiori .hf-section--table .hf-table thead .hf-th.hf-cell--end { min-width: 7rem; }
-.htmx-fiori .hf-page--lr .hf-table-card { background: transparent; }
+.htmx-fiori .hf-section--table .hf-table:not(.hf-table--sized) thead .hf-th { min-width: 12rem; }
+.htmx-fiori .hf-section--table .hf-table:not(.hf-table--sized) thead .hf-th.hf-cell--end { min-width: 7rem; }
+.htmx-fiori .hf-page--lr .hf-table-card { background: var(--sapList_Background, #fff); }
 .htmx-fiori .hf-page--lr .hf-table { width: auto; min-width: 0; }
-.htmx-fiori .hf-page--lr .hf-table thead .hf-th { min-width: 12rem; }
-.htmx-fiori .hf-page--lr .hf-table thead .hf-th.hf-cell--end { min-width: 7rem; }
+.htmx-fiori .hf-page--lr .hf-table:not(.hf-table--sized) thead .hf-th { min-width: 12rem; }
+.htmx-fiori .hf-page--lr .hf-table:not(.hf-table--sized) thead .hf-th.hf-cell--end { min-width: 7rem; }
+
+/* Once the page script has given the columns their Fiori elements widths, the table is exactly as wide as they add up to */
+.htmx-fiori .hf-table.hf-table--sized { table-layout: fixed; width: 100%; min-width: 0; }
+/* the column after the last one takes what the others leave, white like the table (FE's dummy cell) */
+.htmx-fiori .hf-table .hf-col-fill { width: auto; padding: 0; }
+.htmx-fiori .hf-table--sized .fd-table__cell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .htmx-fiori .hf-table .hf-col-nav {
   width: 2.75rem;
+  border-right: 1px solid var(--sapList_TableFixedBorderColor, #8c8c8c);
   text-align: center;
   padding: 0;
 }
@@ -386,6 +395,21 @@ html:has(body.htmx-fiori), body.htmx-fiori {
 
 .htmx-fiori .hf-table tbody .fd-table__row--activable { cursor: pointer; }
 .htmx-fiori .hf-table tbody .fd-table__row--hoverable:hover { background: var(--sapList_Hover_Background, #eaecee); }
+/* a ticked row is selected: the selection background and, under it, the selection border */
+.htmx-fiori .hf-table tbody .fd-table__row:has(.hf-checkbox:checked),
+.htmx-fiori .hf-table tbody .fd-table__row--hoverable:has(.hf-checkbox:checked):hover { background: var(--sapList_SelectionBackgroundColor, #ebf8ff); border-bottom-color: var(--sapList_SelectionBorderColor, #0064d9); }
+
+/* the table title counts the ticked rows too: "Books (Selected: 1, Rows: 1,005)", the numbers in the regular font */
+.hf-table-toolbar__title .hf-count { font-family: var(--sapFontBoldFamily, '72-Bold', '72', Arial, sans-serif); }
+.hf-table-toolbar__title .hf-count-selected { display: none; }
+.hf-table-toolbar.has-selection .hf-count { font-family: var(--sapFontFamily, '72', Arial, sans-serif); font-size: .875rem; color: var(--sapContent_LabelColor, #556b82); }
+.hf-table-toolbar.has-selection .hf-count-selected { display: inline; }
+/* the numbers come from attributes, so the count in the title stays "(1,005)" as text */
+.hf-count-selected::before { content: attr(data-hf-sel-a) attr(data-n) attr(data-hf-sel-b); }
+.hf-count-sel { display: none; }
+.hf-count-sel::before { content: attr(data-hf-sel-a) attr(data-n) attr(data-hf-sel-b) attr(data-c) ")"; }
+.hf-table-toolbar.has-selection .hf-count-sel { display: inline; font-family: var(--sapFontFamily, '72', Arial, sans-serif); font-size: .875rem; color: var(--sapContent_LabelColor, #556b82); }
+.hf-table-toolbar.has-selection .hf-section__title [id$="-count"] { display: none; }
 
 .hf-table__nodata .fd-table__cell { text-align: center !important; height: 3rem !important; }
 
@@ -398,7 +422,7 @@ html:has(body.htmx-fiori), body.htmx-fiori {
   gap: .25rem;
   font-size: .875rem;
 }
-.htmx-fiori .fd-object-status__icon { font-size: .875rem; width: auto; min-width: 0; height: auto; line-height: 1; }
+.htmx-fiori .fd-object-status__icon { font-size: 1rem; width: 1rem; min-width: 0; height: 1rem; line-height: 1; }
 
 .hf-table__growing { background: var(--sapList_Background, #fff); border-top: 1px solid var(--sapList_BorderColor, #e5e5e5); }
 .hf-table__growing-button {
@@ -429,7 +453,7 @@ html:has(body.htmx-fiori), body.htmx-fiori {
 
 .hf-op-title {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 1rem;
   padding: 1.6875rem 0 .8125rem;
 }
@@ -457,7 +481,7 @@ html:has(body.htmx-fiori), body.htmx-fiori {
   font-family: var(--sapObjectHeader_Title_FontFamily, '72Black', '72', Arial, sans-serif);
   font-weight: normal;
   font-size: var(--sapObjectHeader_Title_FontSize, 1.5rem);
-  line-height: 1.75rem;
+  line-height: 1.625rem;
   color: var(--sapObjectHeader_Title_TextColor, #131e29);
 }
 .hf-op-title__subtitle {
@@ -468,8 +492,8 @@ html:has(body.htmx-fiori), body.htmx-fiori {
 }
 .hf-op-title__draft {
   align-self: flex-start;
-  margin-top: .625rem;
-  margin-left: 1rem;
+  margin-top: .375rem;
+  margin-left: .0625rem;
   font-family: var(--sapButton_FontFamily, '72-SemiboldDuplex', '72', Arial, sans-serif);
   font-size: .875rem;
   color: var(--sapLinkColor, #0064d9);
@@ -495,7 +519,7 @@ html:has(body.htmx-fiori), body.htmx-fiori {
 .hf-header-facet .hf-section__card { padding: 0; }
 
 .hf-anchor-bar { height: 2.75rem; }
-.hf-anchor-bar__tabs { display: flex; height: 100%; gap: 1.75rem; }
+.hf-anchor-bar__tabs { display: flex; height: 100%; gap: 1.625rem; }
 .hf-anchor-bar__tab {
   position: relative;
   display: inline-flex;
@@ -522,6 +546,11 @@ html:has(body.htmx-fiori), body.htmx-fiori {
 }
 
 .hf-op-content { padding-top: 0; padding-bottom: 2rem; }
+/* the page's sections are 16px wider than its header (FE: 2rem next to the header's 3rem at the widest size) */
+@media (min-width: 1440px) {
+  .hf-page--op .hf-op-content { padding-inline: 2rem; }
+  .hf-page--op .hf-anchor-bar { margin-left: -1rem; }
+}
 .hf-page--edit .hf-op-content { padding-bottom: 4.5rem; }
 
 .hf-section { padding-top: 1rem; scroll-margin-top: 9rem; }
@@ -529,7 +558,7 @@ html:has(body.htmx-fiori), body.htmx-fiori {
 
 .hf-section__title {
   margin: 0;
-  padding: 0;
+  padding: 0 0 0 1rem;
   font-family: var(--sapFontBoldFamily, '72-Bold', '72', Arial, sans-serif);
   font-weight: normal;
   font-size: 1.25rem;
@@ -540,7 +569,7 @@ html:has(body.htmx-fiori), body.htmx-fiori {
 .hf-section__card {
   background: var(--sapGroup_ContentBackground, #fff);
   border-radius: var(--sapElement_BorderCornerRadius, .75rem);
-  padding: 2rem 1rem 2.25rem 2rem;
+  padding: .75rem 1.75rem 2rem;
 }
 
 .hf-section--table .hf-table-toolbar--section {
@@ -550,21 +579,23 @@ html:has(body.htmx-fiori), body.htmx-fiori {
   border-radius: 0;
   border-bottom: 1px solid var(--sapList_HeaderBorderColor, #a8b3bd);
 }
-.hf-section--table .hf-table-toolbar--section .hf-section__title { padding: 0; }
+.hf-section--table .hf-table-toolbar--section { padding: 0 .75rem 0 0; }
+.hf-section--table .hf-table-toolbar--section .hf-section__title { padding: 0 0 0 1rem; }
 .hf-section--table .hf-table thead .fd-table__cell:first-child { padding-left: 1rem; }
 .hf-section--table .hf-table tbody .fd-table__cell:first-child { padding-left: 1rem; }
 .hf-section--table .hf-table .fd-table__cell--checkbox:first-child { padding-left: .5rem; }
 
-.hf-form {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  column-gap: 1rem;
-}
-@media (max-width: 599px) { .hf-form { grid-template-columns: minmax(0, 1fr); } }
+/* FE's ColumnLayout: one form container flows over 1 to 4 columns by the width it has (M 2, L 3, XL 4), balanced like CSS columns */
+.hf-form { display: block; column-count: 1; column-gap: 1.5rem; }
+@container hf-opc (min-width: 536px) { .hf-form { column-count: 2; } }
+@container hf-opc (min-width: 960px) { .hf-form { column-count: 3; } }
+@container hf-opc (min-width: 1376px) { .hf-form { column-count: 4; } }
+.hf-op-content { container: hf-opc / inline-size; }
 
-.hf-form__column { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
+/* the server groups the fields into columns; the browser does that now */
+.hf-form__column { display: contents; }
 
-.hf-field { display: flex; flex-direction: column; gap: .25rem; margin: 0; padding: 0; }
+.hf-field { display: flex; flex-direction: column; gap: .25rem; margin: 0; padding: .75rem .25rem .25rem; break-inside: avoid; }
 .htmx-fiori .hf-field__label {
   display: block;
   margin: 0;
@@ -581,13 +612,13 @@ html:has(body.htmx-fiori), body.htmx-fiori {
   color: var(--sapTextColor, #131e29);
   overflow-wrap: anywhere;
 }
-.hf-field--edit { padding-right: 1rem; }
-.hf-field--edit .hf-field__label { margin-bottom: .1875rem; }
+.hf-field--edit .hf-field__label { margin-bottom: 0; }
+.fd-input.hf-input--end { text-align: end; }
 .hf-field--edit .fd-textarea { min-height: 5.75rem; }
 .hf-page--edit .hf-form__column { gap: .75rem; }
 
-.hf-rating { position: relative; display: inline-block; white-space: nowrap; line-height: 1; }
-.hf-rating i { font-size: 1.375rem; width: 1.375rem; height: 1.375rem; margin-right: .3125rem; }
+.hf-rating { position: relative; display: block; width: fit-content; margin: .5rem 0; white-space: nowrap; line-height: 1.5rem; height: 1.5625rem; }
+.hf-rating i { font-size: 1.5rem; width: 1.5rem; height: 1.5rem; margin-right: .1875rem; }
 .hf-rating__empty i { color: var(--sapContent_UnratedColor, #758ca4); }
 .hf-rating__fill { position: absolute; left: 0; top: 0; overflow: hidden; }
 .hf-rating__fill i { color: var(--sapContent_RatedColor, #d27700); }
@@ -633,7 +664,7 @@ html:has(body.htmx-fiori), body.htmx-fiori {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(13, 20, 30, .6); /* Horizon's --sapBlockLayer_Background is solid; FE dims with this */
+  background: rgba(0, 0, 0, .2); /* what the UI5 block layer measures as in light and dark, behind dialogs and message boxes alike */
 }
 .hf-message-box {
   position: static;
@@ -664,6 +695,13 @@ html:has(body.htmx-fiori), body.htmx-fiori {
 .hf-popover__list { margin: 0; padding: .25rem 0; list-style: none; background: var(--sapGroup_ContentBackground, #fff); border: 1px solid var(--sapGroup_ContentBorderColor, #d9d9d9); border-radius: var(--sapElement_BorderCornerRadius, .75rem); box-shadow: var(--sapContent_Shadow2, 0 0 .125rem rgba(34, 53, 72, .2), 0 .25rem .5rem rgba(34, 53, 72, .3)); }
 .hf-popover__item { display: block; width: 100%; padding: .5rem 1rem; text-align: left; background: none; border: 0; font: inherit; color: var(--sapTextColor, #1d2d3e); cursor: pointer; white-space: nowrap; }
 .hf-popover__item:hover { background: var(--sapList_Hover_Background, #eaecee); }
+
+/* the toolbar's export: the Excel button and, divided from it, the arrow of its menu (FE's split button) */
+.hf-split-button { display: inline-flex; align-items: center; }
+.hf-split-button > .hf-icon-button:first-child { min-width: 2.125rem; }
+.hf-split-button .hf-split-button__arrow { position: relative; min-width: 1.5rem; padding-inline: 0; }
+.hf-split-button .hf-split-button__arrow::before { content: ''; position: absolute; left: 0; top: .5rem; bottom: .5rem; width: 1px; background: var(--sapButton_Lite_TextColor, #0064d9); }
+.hf-split-button .fd-popover__body { left: auto; right: 0; }
 .hf-popover__item[aria-current="true"] { background: var(--sapList_SelectionBackgroundColor, #ebf8ff); cursor: default; }
 
 /* ---------- dev: SSE playground ---------- */
@@ -747,10 +785,10 @@ html:has(body.htmx-fiori), body.htmx-fiori {
 .hf-variant--save { border-top: 1px solid var(--sapGroup_ContentBorderColor, #d9d9d9); margin-top: .25rem; }
 
 
-.hf-section-search { width: 14rem; }
+.hf-section-search { width: 14.375rem; }
 .hf-table-toolbar--section .hf-section-search { margin-right: .5rem; }
 .hf-filter-bar .hf-filter[hidden] { display: none !important; }
-.hf-table-toolbar--section .hf-section-search { flex: 0 0 14rem; width: 14rem; }
+.hf-table-toolbar--section .hf-section-search { flex: 0 0 14.375rem; width: 14.375rem; }
 .hf-table-toolbar--section .hf-section__title { white-space: nowrap; }
 
 /* ---------- date pickers in the filter bar (SingleValue / SingleRange) ---------- */
@@ -762,8 +800,6 @@ html:has(body.htmx-fiori), body.htmx-fiori {
   color: inherit; font: inherit; outline: none;
 }
 .hf-date-range__dash { color: var(--sapContent_LabelColor, #556b82); }
-.hf-filter:has(.hf-date-range) { max-width: 20rem; flex-basis: 18rem; }
-.hf-filter:has(.hf-date-range--time) { max-width: 32rem; flex-basis: 30rem; }
 
 /* ---------- column menu (right click on a column header) ---------- */
 .hf-colmenu { position: fixed; z-index: 1000; min-width: 12rem; }
@@ -865,10 +901,10 @@ body.htmx-fiori:has(#fcl) { height: 100vh; height: 100dvh; overflow: hidden; dis
 
 /* column widths per layout type (percent of the layout; a column that is not on screen has none) */
 .hf-fcl[data-hf-layout="OneColumn"] > [data-hf-col="0"] { --hf-w: 100%; }
-.hf-fcl[data-hf-layout="TwoColumnsBeginExpanded"] > [data-hf-col="0"] { --hf-w: 67%; }
-.hf-fcl[data-hf-layout="TwoColumnsBeginExpanded"] > [data-hf-col="1"] { --hf-w: 33%; }
-.hf-fcl[data-hf-layout="TwoColumnsMidExpanded"] > [data-hf-col="0"] { --hf-w: 33%; }
-.hf-fcl[data-hf-layout="TwoColumnsMidExpanded"] > [data-hf-col="1"] { --hf-w: 67%; }
+.hf-fcl[data-hf-layout="TwoColumnsBeginExpanded"] > [data-hf-col="0"] { --hf-w: calc(67% - 10.72px); }
+.hf-fcl[data-hf-layout="TwoColumnsBeginExpanded"] > [data-hf-col="1"] { --hf-w: calc(33% + 10.72px); }
+.hf-fcl[data-hf-layout="TwoColumnsMidExpanded"] > [data-hf-col="0"] { --hf-w: calc(33% - 5.28px); }
+.hf-fcl[data-hf-layout="TwoColumnsMidExpanded"] > [data-hf-col="1"] { --hf-w: calc(67% + 5.28px); }
 .hf-fcl[data-hf-layout="ThreeColumnsMidExpanded"] > [data-hf-col="0"] { --hf-w: 25%; }
 .hf-fcl[data-hf-layout="ThreeColumnsMidExpanded"] > [data-hf-col="1"] { --hf-w: 50%; }
 .hf-fcl[data-hf-layout="ThreeColumnsMidExpanded"] > [data-hf-col="2"] { --hf-w: 25%; }
@@ -966,3 +1002,140 @@ body.htmx-fiori:has(#fcl) { height: 100vh; height: 100dvh; overflow: hidden; dis
 .hf-fcl__sep:hover .hf-fcl__arrow, .hf-fcl__sep:focus-within .hf-fcl__arrow, .hf-fcl--dragging .hf-fcl__sep.is-active .hf-fcl__arrow { opacity: 1; }
 .hf-fcl__arrow:hover { background: var(--sapButton_Hover_Background, #eaecee); }
 .hf-fcl__arrow[hidden] { display: none; }
+
+/* ---------- parity with the Fiori elements table cells ---------- */
+.hf-amount { display: flex; justify-content: flex-end; }
+.hf-amount__unit { min-width: 2.875rem; text-align: end; }
+.htmx-fiori .hf-table .hf-col-nav { vertical-align: middle; }
+.htmx-fiori .hf-table .hf-col-nav i { display: inline-block; font-size: 1rem; line-height: 1; vertical-align: middle; }
+
+/* the message box of a destructive question is a warning (FE): the icon before the title and a line under it */
+.hf-message-box--warning .fd-message-box__header { border-bottom: 1px solid var(--sapCriticalBorderColor, #e9730c); }
+.hf-message-box--warning .fd-message-box__header .fd-bar__element { display: flex; align-items: center; gap: .5rem; }
+.hf-message-box__icon { color: var(--sapCriticalElementColor, #e9730c); font-size: 1rem; }
+
+/* a table section is laid out condensed: 33px rows, and its sub-section sits 8px under its neighbour like FE's block container */
+.htmx-fiori .hf-section--table { padding-top: 1.5rem; }
+.htmx-fiori .hf-section--table .hf-table tbody .fd-table__cell { height: 2.0625rem; }
+/* the stars of a page being edited are the smaller ones (FE's editable indicator) */
+.hf-page--edit .hf-rating i { font-size: 1.375rem; width: 1.375rem; height: 1.375rem; }
+
+/* the draft marker's popover hangs centered under the marker with an arrow, like FE's (the current version is not highlighted) */
+.hf-op-title__draft.hf-popover .fd-popover__body { left: 50%; transform: translateX(-50%); min-width: 15.75rem; margin-top: .5rem; }
+.hf-op-title__draft.hf-popover .fd-popover__body::before {
+  content: ''; position: absolute; top: -.3125rem; left: 50%; width: .5rem; height: .5rem; margin-left: -.25rem; transform: rotate(45deg);
+  background: var(--sapGroup_ContentBackground, #fff); border-left: 1px solid var(--sapGroup_ContentBorderColor, #d9d9d9); border-top: 1px solid var(--sapGroup_ContentBorderColor, #d9d9d9); z-index: 1;
+}
+.hf-op-title__draft .hf-popover__item[aria-current="true"] { background: none; }
+.hf-op-title__draft .hf-popover__list { padding: 0; }
+.hf-op-title__draft .hf-popover__item { height: 2rem; padding: 0 1rem; }
+.hf-op-title__draft.hf-popover.is-open .hf-draft-label { background: var(--sapButton_Active_Background, #e5e5e5); }
+
+/* the saved views popover: "My Views", the list, and Save As (emphasized) with Manage in the footer; the popover is resizable in FE, here it has its size */
+.hf-vm .fd-popover__body { min-width: 25.75rem; margin-top: .5rem; background: var(--sapGroup_ContentBackground, #fff); border: 1px solid var(--sapGroup_ContentBorderColor, #d9d9d9); border-radius: var(--sapElement_BorderCornerRadius, .75rem); box-shadow: var(--sapContent_Shadow2, 0 0 .125rem rgba(34, 53, 72, .2), 0 .25rem .5rem rgba(34, 53, 72, .3)); overflow: hidden; }
+.hf-vm .hf-popover__list { border: 0; box-shadow: none; border-radius: 0; padding: 0 .1875rem; min-height: 11.25rem; }
+.hf-vm__head { padding: .75rem 1rem .5rem; font-family: var(--sapFontBoldFamily, '72-Bold', '72', Arial, sans-serif); }
+.hf-vm__foot { display: flex; justify-content: flex-end; gap: .5rem; height: 2.5rem; align-items: center; padding: 0 1rem; border-top: 1px solid var(--sapGroup_TitleBorderColor, #d9d9d9); }
+.hf-vm .hf-popover__item { height: 2rem; padding: 0 .8125rem; }
+.hf-vm .fd-popover__body { left: -2.375rem; min-width: 25rem; overflow: visible; }
+.hf-vm .hf-popover__list { min-height: 16.25rem; }
+.hf-vm .hf-popover__item[aria-current="true"] { background: none; }
+.hf-vm .fd-popover__body::before {
+  content: ''; position: absolute; top: -.3125rem; left: 10.125rem; width: .5rem; height: .5rem; transform: rotate(45deg);
+  background: var(--sapGroup_ContentBackground, #fff); border-left: 1px solid var(--sapGroup_ContentBorderColor, #d9d9d9); border-top: 1px solid var(--sapGroup_ContentBorderColor, #d9d9d9);
+}
+/* FE's text area is 91px high (a field with a text area is the tallest of the form, which is what balances the columns the way FE's do) */
+.htmx-fiori .hf-field--edit textarea.fd-textarea { height: 5.6875rem; min-height: 5.6875rem; }
+/* an editable field takes 60px in FE (125px with a text area): label, the input 2px lower, nothing under it */
+.htmx-fiori .hf-field--edit { padding-bottom: 0; }
+.htmx-fiori .hf-field--edit > .fd-input,
+.htmx-fiori .hf-field--edit > .hf-select,
+.htmx-fiori .hf-field--edit > .hf-input-group,
+.htmx-fiori .hf-field--edit > .fd-textarea { margin: 2px 0 0; }
+.hf-page--edit .hf-section__card { padding-bottom: 2.125rem; }
+
+/* ---------- the date filter: one input with a calendar button, and FE's list of date choices ---------- */
+.hf-filter { position: relative; }
+.hf-date-range--enhanced { padding: 0; gap: 0; }
+.hf-date-range--enhanced .hf-date-range__input, .hf-date-range--enhanced .hf-date-range__dash { display: none; }
+.hf-date-range__text { flex: 1 1 auto; min-width: 0; height: 100%; padding: 0 .625rem; border: none; background: transparent; color: inherit; font: inherit; outline: none; }
+.hf-date-range__icon { flex: 0 0 auto; width: 2rem; height: 100%; padding: 0; border: 0; border-left: 1px solid var(--sapField_BorderColor, #556b81); background: transparent; color: var(--sapContent_IconColor, #1d2d3e); cursor: pointer; border-radius: 0 .25rem .25rem 0; }
+.hf-date-range__icon i { color: inherit; }
+.hf-date-range__icon:hover { background: var(--sapField_Hover_Background, #eaecee); }
+
+.hf-datepop { position: absolute; z-index: 40; top: calc(100% - .125rem); left: 0; width: 20rem; max-height: 32.125rem; display: flex; flex-direction: column; overflow: hidden;
+  background: var(--sapGroup_ContentBackground, #fff); border-radius: var(--sapElement_BorderCornerRadius, .75rem); box-shadow: var(--sapContent_Shadow2, 0 0 .125rem rgba(34, 53, 72, .2), 0 .25rem .5rem rgba(34, 53, 72, .3)); font-size: .875rem; color: var(--sapTextColor, #131e29); }
+.hf-datepop__list { margin: 0; padding: 0; list-style: none; overflow: auto; }
+.hf-datepop__group { height: 2.5rem; padding: 1rem 1rem 0; font-family: var(--sapFontBoldFamily, '72-Bold', '72', Arial, sans-serif); border-bottom: 1px solid var(--sapList_BorderColor, #e5e5e5); display: flex; align-items: flex-end; padding-bottom: .125rem; }
+.hf-datepop__item { display: flex; align-items: center; justify-content: space-between; height: 3.0625rem; padding: 0 1rem; cursor: pointer; }
+.hf-datepop__item i { color: var(--sapContent_IconColor, #0064d9); }
+.hf-datepop__item:hover, .hf-datepop__item:focus-visible { background: var(--sapList_Hover_Background, #eaecee); outline: none; }
+.hf-datepop__bar { display: flex; align-items: center; gap: .75rem; height: 2.5rem; padding: 0 1rem; font-family: var(--sapFontBoldFamily, '72-Bold', '72', Arial, sans-serif); font-size: 1rem; border-bottom: 1px solid var(--sapGroup_TitleBorderColor, #d9d9d9); }
+.hf-datepop__back, .hf-datepop__month button { background: none; border: 0; padding: .25rem; color: var(--sapButton_TextColor, #0064d9); cursor: pointer; border-radius: .5rem; }
+.hf-datepop__cal { padding: .25rem .5rem; min-height: 27.6875rem; }
+.hf-datepop__month { display: flex; align-items: center; justify-content: space-between; height: 2.5rem; }
+.hf-datepop__name { font-family: var(--sapFontBoldFamily, '72-Bold', '72', Arial, sans-serif); color: var(--sapButton_TextColor, #0064d9); }
+.hf-datepop__grid { width: 100%; border-collapse: separate; border-spacing: 0 .125rem; text-align: center; }
+.hf-datepop__grid th { font-size: .75rem; font-weight: normal; color: var(--sapContent_LabelColor, #556b82); height: 1.75rem; }
+.hf-datepop__grid th.hf-datepop__week { width: 2rem; }
+.hf-datepop__day { width: 2.125rem; height: 2.125rem; background: none; border: 1px solid transparent; border-radius: .5rem; color: inherit; font: inherit; cursor: pointer; }
+.hf-datepop__grid td:nth-child(2) .hf-datepop__day, .hf-datepop__grid td:last-child .hf-datepop__day { background: var(--sapList_Hover_Background, #eaecee); }
+.hf-datepop__day.is-other { color: var(--sapContent_LabelColor, #556b82); }
+.hf-datepop__day:hover { background: var(--sapList_Hover_Background, #eaecee); border-color: var(--sapButton_BorderColor, #0064d9); }
+.hf-datepop__day.is-between { background: var(--sapList_SelectionBackgroundColor, #ebf8ff); border-radius: 0; }
+.hf-datepop__day.is-selected { background: var(--sapSelectedColor, #0064d9); color: var(--sapContent_ContrastTextColor, #fff); }
+.hf-datepop__day.is-today { border-color: var(--sapContent_FocusColor, #6a0eb4); border-width: 2px; }
+.hf-datepop__form { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; padding: 1rem; min-height: 6rem; }
+.hf-datepop__form .fd-input { width: 6rem; }
+.hf-datepop__form .fd-select { flex: 1 1 8rem; }
+.hf-datepop__hint { height: 1.75rem; padding: 0 1rem; display: flex; align-items: center; font-style: italic; background: var(--sapBackgroundColor, #f5f6f7); }
+.hf-datepop__buttons { display: flex; justify-content: flex-end; gap: .5rem; align-items: center; height: 2.5rem; padding: 0 1rem; border-top: 1px solid var(--sapGroup_TitleBorderColor, #d9d9d9); }
+.hf-datepop__foot { margin-top: auto; }
+.hf-datepop__choices { display: grid; grid-template-columns: repeat(4, 1fr); gap: .25rem; padding: .5rem 0; }
+.hf-datepop__choices button { height: 3rem; background: none; border: 1px solid transparent; border-radius: .5rem; color: inherit; font: inherit; cursor: pointer; }
+.hf-datepop__choices button:hover { background: var(--sapList_Hover_Background, #eaecee); }
+.hf-datepop__choices button.is-selected { background: var(--sapSelectedColor, #0064d9); color: var(--sapContent_ContrastTextColor, #fff); }
+.hf-datepop__name { background: none; border: 0; cursor: pointer; font: inherit; font-family: var(--sapFontBoldFamily, '72-Bold', '72', Arial, sans-serif); color: var(--sapButton_TextColor, #0064d9); padding: .25rem .5rem; border-radius: .5rem; }
+
+
+/* what FE's columns do with their width: each one is a container, and its page takes the padding of the column it is in */
+.hf-fcl__col { container: hf-col / inline-size; }
+@container hf-col (max-width: 599px) { .hf-page { --hf-pad: 1rem; } }
+@container hf-col (min-width: 600px) and (max-width: 1439px) { .hf-page { --hf-pad: 2rem; } }
+/* the content of a column starts after the separator, which has a band of its own */
+.hf-fcl__col + .hf-fcl__col > .hf-fcl__scroll { padding-inline-start: 1rem; }
+.hf-fcl__col + .hf-fcl__col { box-shadow: none; }
+.hf-fcl__sep { background: color-mix(in srgb, var(--sapBackgroundColor, #f5f6f7) 96%, #000); }
+.hf-filter { min-width: 13.125rem; flex-basis: 13.125rem; }
+
+/* a list with a semantic key (its bold object identifier) has taller rows in FE: 41px; one of plain text 33px */
+.htmx-fiori .hf-table--semantic tbody .fd-table__cell { height: 2.5625rem; }
+
+/* the column buttons of an Object Page in a column layout sit on their own, above the title, as in FE */
+.hf-fcl .hf-op-title { padding-top: calc(1.6875rem + 2.125rem); }
+.hf-fcl .hf-op-title > .hf-fcl__buttons { position: absolute; top: .875rem; inset-inline-end: var(--hf-pad); margin: 0; gap: .5rem; }
+
+/* inside a column layout the column decides the page's gutters (not the window) */
+.hf-fcl .hf-page__header-content { padding-right: 0; }
+.hf-fcl .hf-page--op .hf-anchor-bar { margin-left: 0; }
+.hf-fcl .hf-page--op .hf-op-content { padding-inline: var(--hf-pad); }
+.hf-fcl .hf-op-title__actions { margin-top: 0; }
+/* the row whose object is open: FE marks it with a bar at the end of the row, not a tint */
+.hf-fcl .fd-table__row.is-selected, .hf-fcl .fd-table__row.is-selected > td { background: transparent; }
+.hf-fcl .fd-table__row.is-selected > .hf-col-nav { box-shadow: inset -3px 0 0 var(--sapSelectedColor, #0064d9); }
+.hf-fcl .hf-op-title { padding-bottom: 1.125rem; }
+.hf-fcl .hf-page--lr .hf-page__header-content { padding-top: .5rem; }
+
+/* the amount and its currency in one field: FE gives the currency box 82px, the amount the rest */
+.htmx-fiori .hf-field--edit > .hf-amount-field { display: flex; gap: .625rem; margin: 2px 0 0; }
+.hf-amount-field > :first-child { flex: 1 1 auto; min-width: 0; }
+.hf-amount-field__unit { flex: 0 0 5.125rem; min-width: 0; }
+.hf-amount-field .fd-input, .hf-amount-field .hf-input-group { margin: 0; }
+.hf-amount-field__unit .fd-input { padding-left: 1.125rem; }
+
+/* the popover over a button that asks a small question (Discard Draft): FE's, with its arrow towards the button */
+.hf-confirm-popover { position: fixed; z-index: 1100; min-width: 10rem; padding: .5rem; display: flex; flex-direction: column; gap: .5rem;
+  background: var(--sapGroup_ContentBackground, #fff); border-radius: var(--sapElement_BorderCornerRadius, .75rem); box-shadow: var(--sapContent_Shadow2, 0 0 .125rem rgba(34, 53, 72, .2), 0 .25rem .5rem rgba(34, 53, 72, .3)); }
+.hf-confirm-popover::after { content: ''; position: absolute; bottom: -.3125rem; left: var(--hf-arrow, 50%); width: .5rem; height: .5rem; margin-left: -.25rem; transform: rotate(45deg); background: inherit; }
+.hf-confirm-popover__text { margin: 0; padding: .125rem .25rem 0; }
+.hf-confirm-popover__ok { width: 100%; background: var(--sapGroup_ContentBackground, #fff); border: 1px solid var(--sapButton_BorderColor, #0064d9); color: var(--sapButton_TextColor, #0064d9); }

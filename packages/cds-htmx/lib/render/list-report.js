@@ -5,6 +5,20 @@ const { table, rowsHtml, isSelectable, growingButton } = require('./table')
 const { formatCount } = require('../data/format')
 const { canCreate, canDelete } = require('../model/edit-capabilities')
 
+/** FE's export control: the Excel button exports at once, its arrow opens the menu of export choices. */
+function exportSplitButton(exportUrl, { bundle, t, action = 'export', attrs = html`` }) {
+  return html`
+    <div class="hf-split-button hf-popover">
+      <button type="button" class="fd-button fd-button--transparent hf-icon-button" data-hf-action="${action}" data-hf-export="${exportUrl}"${attrs}
+        aria-label="${t(bundle, 'ExportCsv')}" title="${t(bundle, 'ExportCsv')}"><i class="sap-icon--excel-attachment" aria-hidden="true"></i></button>
+      <button type="button" class="fd-button fd-button--transparent hf-icon-button hf-split-button__arrow" data-hf-popover-toggle aria-haspopup="true" aria-expanded="false"
+        aria-label="${t(bundle, 'OpenMenu')}" title="${t(bundle, 'OpenMenu')}"><i class="sap-icon--slim-arrow-down" aria-hidden="true"></i></button>
+      <div class="fd-popover__body"><ul class="hf-popover__list">
+        <li><button type="button" class="hf-popover__item" data-hf-action="${action}" data-hf-export="${exportUrl}"${attrs}>${t(bundle, 'Export')}</button></li>
+      </ul></div>
+    </div>`
+}
+
 /** The List Report toolbar (§3.4). Create is a POST that starts a draft (and gets the draft's own URL) for draft
  *  roots and a GET of an empty form for non-draft entities; Create/Delete only appear when the entity allows them.
  *  Original notes: title "{TypeNamePlural} ({count})", spacer, Create (-> `POST`,
@@ -15,20 +29,23 @@ function toolbar({ typeNamePlural, count, basePath, entitySetPath, bundle, t, ed
   const del = !edit || canDelete(edit)
   return html`
     <div id="${ids.lrToolbar()}" class="hf-table-toolbar">
-      <h2 class="hf-table-toolbar__title">${typeNamePlural || entitySetPath}${tree ? html`` : html` (<span id="${ids.lrCount()}">${formatCount(count, locale)}</span>)`}</h2>
+      <h2 class="hf-table-toolbar__title"${typeNamePlural ? html`` : raw(' hidden')}>${typeNamePlural || entitySetPath}${tree ? html`` : html` <span class="hf-count">(<span class="hf-count-selected" data-hf-sel-a="${t(bundle, 'Selected')}: " data-hf-sel-b=", ${t(bundle, 'Rows')}: " data-hf-selected-count></span><span id="${ids.lrCount()}">${formatCount(count, locale)}</span>)</span>`}</h2>
       <div class="hf-spacer"></div>
       ${create ? html`<button class="fd-button fd-button--transparent" aria-label="${t(bundle, 'Create')}"
         hx-post="${basePath}/${entitySetPath}" hx-push-url="false"
         hx-target="#app" hx-swap="innerHTML show:window:top">${t(bundle, 'Create')}</button>` : html``}
       ${del ? html`<button class="fd-button fd-button--transparent" disabled data-hf-needs-selection="#${ids.lrTableBody()}" aria-label="${t(bundle, 'Delete')}"
         hx-post="${basePath}/${entitySetPath}/$delete" hx-include="#${ids.lrTableBody()}" hx-target="#app" hx-swap="innerHTML show:window:top"
-        hx-confirm="${t(bundle, 'ConfirmDeleteSelected')}" data-hf-confirm-count="#${ids.lrTableBody()} .hf-checkbox:checked"
+        hx-confirm="${t(bundle, 'ConfirmDeleteSelected')}" data-hf-confirm-one="${t(bundle, 'ConfirmDeleteOne')}" data-hf-confirm-count="#${ids.lrTableBody()} .hf-checkbox:checked"
         data-hf-confirm-title="${t(bundle, 'Delete')}" data-hf-confirm-ok="${t(bundle, 'Delete')}" data-hf-confirm-cancel="${t(bundle, 'Cancel')}" data-hf-confirm-critical>${t(bundle, 'Delete')}</button>` : html``}
       <span class="hf-toolbar-separator"></span>
-      <button type="button" class="fd-button fd-button--transparent hf-icon-button" data-hf-action="export" data-hf-export="${basePath}/${entitySetPath}/$export"
-        aria-label="${t(bundle, 'ExportCsv')}" title="${t(bundle, 'ExportCsv')}"><i class="sap-icon--excel-attachment" aria-hidden="true"></i></button>
+      <button type="button" class="fd-button fd-button--transparent hf-icon-button" disabled data-hf-action="copy" data-hf-needs-selection="#${ids.lrTableBody()}"
+        aria-label="${t(bundle, 'Copy')}" title="${t(bundle, 'Copy')}"><i class="sap-icon--copy" aria-hidden="true"></i></button>
+      <span class="hf-toolbar-separator"></span>
       <button type="button" class="fd-button fd-button--transparent hf-icon-button" data-hf-action="settings"
         aria-label="${t(bundle, 'ViewSettings')}" title="${t(bundle, 'ViewSettings')}"><i class="sap-icon--action-settings" aria-hidden="true"></i></button>
+      <span class="hf-toolbar-separator"></span>
+      ${exportSplitButton(`${basePath}/${entitySetPath}/$export`, { bundle, t })}
     </div>
   `
 }
@@ -84,7 +101,7 @@ function tablePartial(layout, rows, ctx) {
 
 /** The row below the children of a node that has more of them: it loads the next page and is replaced by it. */
 function moreChildrenRow(layout, { level, href, bundle, t }) {
-  const colspan = layout.table.columns.length + (isSelectable(layout) ? 1 : 0) + 1
+  const colspan = layout.table.columns.length + (isSelectable(layout) ? 1 : 0) + 2
   return html`<tr class="fd-table__row hf-tree-more" data-hf-level="${level}" data-hf-state="leaf">
     <td class="fd-table__cell" colspan="${colspan}">
       <button type="button" class="hf-table__growing-button" hx-get="${href}" hx-target="closest tr" hx-swap="outerHTML"><span class="hf-table__growing-title">${t(bundle, 'More')}</span></button>
@@ -96,4 +113,4 @@ function rowsOnly(layout, rows, ctx) {
   return html`${raw(rowsHtml(layout, rows, { ...ctx, selectable: isSelectable(layout) }).value)}`
 }
 
-module.exports = { listReportFragment, tablePartial, toolbar, rowsOnly, moreChildrenRow }
+module.exports = { listReportFragment, tablePartial, toolbar, rowsOnly, moreChildrenRow, exportSplitButton }

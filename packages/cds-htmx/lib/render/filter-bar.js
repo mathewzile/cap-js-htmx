@@ -20,6 +20,7 @@ function datePicker(field, query, id, name) {
       <input id="${id}" name="${name}.ge" type="date" class="hf-date-range__input" value="${query?.[`${name}.ge`] ?? ''}" aria-label="${field.label} (from)">
       <span class="hf-date-range__dash" aria-hidden="true">–</span>
       <input name="${name}.le" type="date" class="hf-date-range__input" value="${query?.[`${name}.le`] ?? ''}" aria-label="${field.label} (to)">
+      <input type="hidden" name="${name}" value="${query?.[name] ?? ''}" data-hf-date-operator>
     </div>`
 }
 
@@ -79,7 +80,7 @@ function editingStatusField(query, { bundle, t }) {
   const current = query?.['f.EditingStatus'] ?? 'ALL'
   const options = [['ALL', 'All'], ['OWN_DRAFT', 'OwnDraft'], ['UNCHANGED', 'Unchanged']]
   return html`
-    <div class="fd-form-item hf-filter">
+    <div class="fd-form-item hf-filter" data-hf-filter="EditingStatus" data-hf-label="${t(bundle, 'EditingStatus')}">
       <label class="fd-form-label hf-filter__label" for="f-EditingStatus">${t(bundle, 'EditingStatus')}</label>
       <span class="hf-select">
         <select id="f-EditingStatus" name="f.EditingStatus" class="fd-select">

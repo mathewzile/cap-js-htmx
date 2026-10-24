@@ -125,7 +125,7 @@ test.describe('composition children in a draft', () => {
     await expect(rows).toHaveCount(2)
 
     await page.getByRole('button', { name: 'Discard Draft' }).click()
-    await confirmOk(page).click()
+    await page.locator('.hf-confirm-popover__ok').click()
     await page.reload()
     await expect(section(page).locator('tbody tr')).toHaveCount(2) // the saved chapters were never touched
   })
@@ -138,7 +138,7 @@ test.describe('table tools', () => {
     await expect(headers).toHaveCount(5)
 
     await page.locator('[data-hf-action=settings]').click()
-    await page.locator('.hf-dialog__row', { hasText: 'Stock' }).locator('input').uncheck()
+    await page.locator('.hf-dialog__row').filter({ has: page.getByText('Stock', { exact: true }) }).locator('input').uncheck()
     await page.getByRole('button', { name: 'OK' }).click()
     await expect(headers).toHaveCount(4)
     await page.reload()
@@ -152,7 +152,7 @@ test.describe('table tools', () => {
     await expect(page.locator('#lr-table-body tr').first()).toContainText('Wuthering Heights')
     await expect(headers).toHaveCount(4)
 
-    const [download] = await Promise.all([page.waitForEvent('download'), page.locator('[data-hf-action=export]').click()])
+    const [download] = await Promise.all([page.waitForEvent('download'), page.locator('.hf-icon-button[data-hf-action=export]').click()])
     const file = testInfo.outputPath('books.csv')
     await download.saveAs(file)
     const csv = fs.readFileSync(file, 'utf8')
@@ -166,12 +166,13 @@ test.describe('table tools', () => {
     await expect(headers).toHaveCount(5)
 
     await page.getByRole('button', { name: /Adapt Filters/ }).click()
-    await page.locator('.hf-dialog__row', { hasText: 'Genre' }).locator('input').uncheck()
+    await page.locator('.hf-adapt__row', { hasText: 'Genre' }).locator('.hf-adapt__eye').click()
     await page.getByRole('button', { name: 'OK' }).click()
     await expect(page.locator('[data-hf-filter=genre_ID]')).toBeHidden()
 
     await page.locator('[data-hf-filter=author_ID] .hf-vh-open').click()
     await page.locator('.hf-vh-row', { hasText: 'Poe' }).click()
+    await page.locator('[data-hf-vh-ok]').click() // a filter field takes several values: OK puts the ticked ones in
     await expect(page.locator('[name="f.author_ID"]')).toHaveValue(/0003$/)
     await expect(page.locator('.hf-overlay')).toHaveCount(0) // the value help is gone once its closing animation is over
     await page.getByRole('button', { name: 'Go' }).click()
@@ -200,7 +201,7 @@ test.describe('table tools', () => {
     await section.locator('[data-hf-table-search]').fill('Lowood')
     await expect(section.locator('tbody tr:not([hidden])')).toHaveCount(1)
     await section.locator('[data-hf-table-search]').fill('')
-    const [download] = await Promise.all([page.waitForEvent('download'), section.locator('[data-hf-action=export-section]').click()])
+    const [download] = await Promise.all([page.waitForEvent('download'), section.locator('.hf-icon-button[data-hf-action=export-section]').click()])
     const file = testInfo.outputPath('chapters.csv')
     await download.saveAs(file)
     expect(fs.readFileSync(file, 'utf8')).toContain('Title,Pages\r\nI. Gateshead,14\r\nII. Lowood School,20')

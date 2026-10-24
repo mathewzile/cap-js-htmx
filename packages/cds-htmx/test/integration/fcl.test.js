@@ -131,7 +131,7 @@ describe('manifest routing', () => {
   test('a row without a route does not open a page', () => {
     const ctx = { basePath: '/htmx/admin', entitySetPath: 'Books', keyNames: ['ID'], bundle: {}, t: k => k, numeric: [], selectable: false }
     const closed = rowMarkup({ navigable: false, table: { columns: [] } }, { ID: 'a' }, ctx).value
-    assert.doesNotMatch(closed, /hx-get|activable|slim-arrow-right/)
+    assert.doesNotMatch(closed, /hx-get|activable|navigation-right-arrow/)
     const open = rowMarkup({ navigable: true, table: { columns: [] } }, { ID: 'a' }, ctx).value
     assert.match(open, /hx-get="\/htmx\/admin\/Books\(ID=&#39;a&#39;\)"/)
   })

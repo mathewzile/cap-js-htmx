@@ -55,6 +55,7 @@ test.describe('dialogs animate like FE\'s', () => {
     await expect(page.locator('.hf-vh-row').first()).toBeVisible()
     await page.waitForTimeout(350)
     await page.locator('.hf-vh-row').first().click()
+    await page.locator('[data-hf-vh-ok]').click() // the filter's value help selects several, OK takes the ticked ones
     await expect(overlay(page)).toHaveCount(0)
     await expect(page.locator('[name="f.author_ID"]')).not.toHaveValue('')
   })

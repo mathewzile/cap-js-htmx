@@ -51,7 +51,7 @@ test.describe('non-draft entity (catalog Authors) offers Delete only', () => {
     await page.locator('tr', { hasText: 'E2E Bulk B' }).locator('.hf-checkbox').check()
     await expect(remove).toBeEnabled()
     await remove.click()
-    await expect(confirmDialog(page)).toContainText('2')
+    await expect(confirmDialog(page)).toContainText('selected objects')
     await confirmDialog(page).locator('[data-hf-ok]').click()
     await expect(page.locator('body')).not.toContainText('E2E Bulk')
   })
@@ -76,15 +76,15 @@ test.describe('draft flow and history (Books)', () => {
     expect(pathOf(page)).toBe(DRAFT) // no /$field/title
     await expect(input).toHaveValue('Jane Eyre XX')
 
-    await page.locator('[data-hf-popover-toggle]').click()
+    await page.locator('.hf-op-title__draft [data-hf-popover-toggle]').click()
     await expect(page.locator('.hf-popover.is-open .hf-popover__item')).toHaveCount(2)
     await page.getByRole('button', { name: 'Saved Version' }).click()
     await expect(page).toHaveURL(new RegExp('IsActiveEntity=true'))
     await expect(title(page)).toHaveText('Jane Eyre')
     await expect(page.getByRole('button', { name: 'Edit', exact: true })).toHaveCount(0) // a draft exists
-    await expect(page.locator('[data-hf-popover-toggle]')).toContainText('Saved Version')
+    await expect(page.locator('.hf-op-title__draft [data-hf-popover-toggle]')).toContainText('Saved Version')
 
-    await page.locator('[data-hf-popover-toggle]').click()
+    await page.locator('.hf-op-title__draft [data-hf-popover-toggle]').click()
     await page.getByRole('button', { name: 'Draft', exact: true }).click()
     await expect(page).toHaveURL(/IsActiveEntity=false/)
 
@@ -96,8 +96,8 @@ test.describe('draft flow and history (Books)', () => {
     await expect(title(page)).toHaveText('Jane Eyre XX')
 
     await page.getByRole('button', { name: 'Discard Draft' }).click()
-    await expect(confirmDialog(page)).toBeVisible()
-    await confirmDialog(page).locator('[data-hf-ok]').click()
+    await expect(page.locator('.hf-confirm-popover')).toBeVisible()
+    await page.locator('.hf-confirm-popover__ok').click()
     await expect(page).toHaveURL(/IsActiveEntity=true/)
     await page.goBack() // discarding replaced the draft's entry too: no dead draft URL is left in the history
     await expect(page).toHaveURL(/\/htmx\/catalog\/Books$/)

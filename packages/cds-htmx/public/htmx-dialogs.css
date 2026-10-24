@@ -11,7 +11,7 @@
   height: min(52.875rem, calc(100vh - 3.375rem));
   background: var(--sapGroup_ContentBackground, #fff);
   border-radius: var(--sapElement_BorderCornerRadius, .75rem);
-  box-shadow: var(--sapContent_Shadow3, 0 0 .125rem rgba(34, 53, 72, .2), 0 .625rem 1.875rem rgba(34, 53, 72, .25));
+  box-shadow: 0 0 0 1px rgba(34, 53, 72, .48), 0 1.25rem 5rem rgba(34, 53, 72, .25); /* what UI5 draws around its dialogs */
   overflow: hidden;
   font-family: var(--sapFontFamily, '72', Arial, sans-serif);
   font-size: .875rem;
@@ -24,11 +24,11 @@
   align-items: center;
   justify-content: space-between;
   flex: 0 0 auto;
-  height: 2.4375rem;
+  height: 2.5rem;
   padding: 0 1rem;
   border-bottom: 1px solid var(--sapGroup_TitleBorderColor, #d9d9d9);
 }
-.hf-dialog__header h2 { margin: 0; font-family: var(--sapFontBoldFamily, '72-Bold', '72', Arial, sans-serif); font-size: .875rem; font-weight: 700; line-height: 1rem; }
+.hf-dialog__header h2 { margin: 0; font-family: var(--sapFontBoldFamily, '72-Bold', '72', Arial, sans-serif); font-size: 1rem; font-weight: 700; line-height: 1rem; }
 .hf-dialog__link {
   background: none; border: 0; padding: 0; font: inherit; color: var(--sapLinkColor, #0064d9); cursor: pointer;
 }
@@ -165,3 +165,51 @@
 .hf-suggest tr.hf-suggest-row:hover, .hf-suggest tr.hf-suggest-row.is-active { background: var(--sapList_Hover_Background, #eaecee); }
 .hf-suggest__empty { text-align: center !important; }
 .hf-suggest__more { display: block; width: 100%; padding: 0 1rem; height: 2.5rem; text-align: right; background: none; border: 0; border-top: 1px solid var(--sapList_BorderColor, #e5e5e5); font: inherit; font-family: var(--sapFontBoldFamily, '72-Bold', '72', Arial, sans-serif); font-weight: 700; color: var(--sapLinkColor, #0064d9); cursor: pointer; }
+
+/* ---------- Adapt Filters: the fields themselves, with a toggle for being in the filter bar ---------- */
+.hf-adapt__head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex: 0 0 auto; height: 2.75rem; padding: 0 1rem; border-bottom: 1px solid var(--sapList_BorderColor, #e5e5e5); }
+.hf-adapt__head h3 { margin: 0; font-family: var(--sapFontBoldFamily, '72-Bold', '72', Arial, sans-serif); font-size: 1rem; font-weight: 700; white-space: nowrap; }
+.hf-adapt__head .fd-input { width: 14.5rem; }
+.hf-adapt__list { flex: 0 1 auto; margin: 0; padding: 0; list-style: none; overflow: auto; }
+.hf-adapt__row { display: flex; align-items: center; gap: .5rem; height: 2.125rem; padding: 0 .5rem 0 1rem; border-bottom: 1px solid var(--sapList_BorderColor, #e5e5e5); }
+.hf-adapt__row[hidden] { display: none; }
+.hf-adapt__label { flex: 0 0 9.375rem; text-align: end; color: var(--sapContent_LabelColor, #556b82); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hf-adapt__field { flex: 1 1 auto; min-width: 0; }
+.hf-adapt__field > *, .hf-adapt__field .fd-input, .hf-adapt__field .fd-select { width: 100%; }
+.hf-adapt__eye { border: 1px solid transparent; border-radius: .5rem; }
+.hf-adapt__eye[aria-pressed="true"] { border-color: var(--sapButton_Selected_BorderColor, #0064d9); background: var(--sapButton_Selected_Background, #ebf8ff); }
+.hf-adapt__add { display: flex; align-items: center; gap: .5rem; margin-top: auto; flex: 0 0 auto; height: 2.75rem; padding: 0 1rem; border-top: 1px solid var(--sapList_BorderColor, #e5e5e5); }
+.hf-adapt__add .fd-select { width: 14rem; font-style: italic; }
+.hf-adapt { background: var(--sapBackgroundColor, #f5f6f7); }
+.hf-adapt__head, .hf-adapt__row, .hf-adapt__add { background: var(--sapGroup_ContentBackground, #fff); }
+.hf-adapt__add { margin-top: 0; border-top: 0; }
+
+/* ---------- value help, as FE draws it: 32px insets, Go and Show Filters at the right, cells like a table's, the selection below ---------- */
+.hf-dialog--value-help .hf-dialog__header, .hf-dialog--value-help .hf-dialog__footer { padding-inline: 2rem; }
+.hf-dialog--value-help .hf-dialog__tabs { padding-inline: 2rem; }
+.hf-dialog--value-help .hf-dialog__body { padding: 1rem 2rem 0; }
+.hf-vh__search .hf-vh__go { margin-left: auto; background: var(--sapGroup_ContentBackground, #fff); border: 1px solid var(--sapButton_BorderColor, #0064d9); border-radius: .5rem; color: var(--sapButton_TextColor, #0064d9); }
+.hf-vh__count { gap: .5rem; }
+.hf-vh__table { table-layout: fixed; min-width: 0; }
+.hf-vh__table th, .hf-vh__table td { padding: 0 .5rem; max-width: none; }
+.hf-vh__table th:first-child, .hf-vh__table td:first-child { padding-left: 1rem; }
+.hf-vh__table th.hf-vh__check, .hf-vh__table td.hf-vh__check { width: 2rem; padding: 0 0 0 .5rem; }
+.hf-vh__table th.hf-vh__check + th, .hf-vh__table td.hf-vh__check + td { padding-left: .5rem; }
+.hf-vh-row .hf-checkbox, .hf-vh__table th .hf-checkbox { pointer-events: none; }
+.hf-vh__table th .hf-checkbox { pointer-events: auto; }
+
+.hf-vh__selection { flex: 0 0 auto; padding-bottom: 1rem; }
+.hf-vh__selection-title { margin: 0; height: 2.25rem; display: flex; align-items: center; font-family: var(--sapFontBoldFamily, '72-Bold', '72', Arial, sans-serif); font-size: 1rem; font-weight: 700; }
+.hf-vh__tokens { display: flex; align-items: center; gap: .5rem; }
+.hf-vh__token-list { flex: 1 1 auto; display: flex; flex-wrap: wrap; align-items: center; gap: .25rem; min-height: 2rem; padding: .1875rem .5rem; background: var(--sapField_Background, #fff); border-bottom: 1px solid var(--sapField_BorderColor, #556b81); box-shadow: inset 0 0 0 1px var(--sapField_BorderColor, #556b81); border-radius: .25rem; }
+.hf-vh__token { display: inline-flex; align-items: center; gap: .25rem; height: 1.5rem; padding: 0 .25rem 0 .5rem; background: var(--sapButton_Background, #fff); border: 1px solid var(--sapButton_BorderColor, #0064d9); border-radius: .5rem; }
+.hf-vh__token-remove { background: none; border: 0; padding: 0; cursor: pointer; color: var(--sapButton_TextColor, #0064d9); }
+.hf-dialog--value-help .hf-dialog__body { overflow: hidden; }
+.hf-dialog--value-help .hf-dialog__tabs { height: 2.75rem; }
+.hf-vh__search .hf-dialog__link { margin-right: .5rem; }
+
+/* View Settings, measured against FE: the tabs 30px apart, the rows indented 24px with 16px between box and text, unselected ones grey */
+.hf-dialog__tabs { gap: 1.5rem; padding: 0 1rem; }
+.hf-dialog__row { padding-left: 1.5rem; gap: 1rem; }
+.hf-dialog__row:not(.is-selected):not(.hf-dialog__row--head) .hf-dialog__row-text { color: var(--sapContent_LabelColor, #556b82); }
+.hf-switch-label { font-size: .875rem; }

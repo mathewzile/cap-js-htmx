@@ -49,3 +49,31 @@ test('date comparisons and betweens stay what they are for other fields', () => 
   const [between] = parseFilters({ 'f.dateOfBirth': '1810-01-01...1820-12-31' }, layout)
   assert.deepEqual(between.xpr, [R('dateOfBirth'), '>=', V('1810-01-01'), 'and', R('dateOfBirth'), '<=', V('1820-12-31')])
 })
+
+test('dateRange() knows the weeks, months, quarters and years of FE\'s date list', () => {
+  assert.deepEqual(dateRange('Last week', NOW), ['2026-10-12', '2026-10-18'])
+  assert.deepEqual(dateRange('Next week', NOW), ['2026-10-26', '2026-11-01'])
+  assert.deepEqual(dateRange('Last month', NOW), ['2026-09-01', '2026-09-30'])
+  assert.deepEqual(dateRange('Next month', NOW), ['2026-11-01', '2026-11-30'])
+  assert.deepEqual(dateRange('This quarter', NOW), ['2026-10-01', '2026-12-31'])
+  assert.deepEqual(dateRange('Last quarter', NOW), ['2026-07-01', '2026-09-30'])
+  assert.deepEqual(dateRange('Next quarter', NOW), ['2027-01-01', '2027-03-31'])
+  assert.deepEqual(dateRange('Second quarter', NOW), ['2026-04-01', '2026-06-30'])
+  assert.deepEqual(dateRange('Last year', NOW), ['2025-01-01', '2025-12-31'])
+  assert.deepEqual(dateRange('Next year', NOW), ['2027-01-01', '2027-12-31'])
+  assert.deepEqual(dateRange('Year to Date', NOW), ['2026-01-01', '2026-10-21'])
+  assert.deepEqual(dateRange('Date to Year', NOW), ['2026-10-21', '2026-12-31'])
+  assert.deepEqual(dateRange('Month 2026-02', NOW), ['2026-02-01', '2026-02-28'])
+  assert.deepEqual(dateRange('Today -2/+5 days', NOW), ['2026-10-19', '2026-10-26'])
+})
+
+test('dateRange() counts whole weeks, months, quarters and years for Last / Next X', () => {
+  assert.deepEqual(dateRange('Last 2 weeks', NOW), ['2026-10-05', '2026-10-18'])
+  assert.deepEqual(dateRange('Next 2 weeks', NOW), ['2026-10-26', '2026-11-08'])
+  assert.deepEqual(dateRange('Last 3 months', NOW), ['2026-07-01', '2026-09-30'])
+  assert.deepEqual(dateRange('Next 1 years', NOW), ['2027-01-01', '2027-12-31'])
+})
+
+test('"Not Specified" filters the dates that are empty', () => {
+  assert.deepEqual(parseFilters({ 'f.dateOfBirth': 'Not Specified' }, layout), [R('dateOfBirth'), 'is', 'null'])
+})

@@ -53,6 +53,7 @@ function selectColumns(model, entityType, layout) {
     if (col.field?.cqlPath) cols.add(col.field.cqlPath)
     for (const p of pathsOf(col)) cols.add(cqlPath(p))
   }
+  for (const col of layout.table.extraColumns ?? []) cols.add(col.field.cqlPath) // the columns View Settings can add
   for (const field of layout.filterBar.fields) {
     cols.add(field.cqlPath)
     for (const p of pathsOf(field)) cols.add(cqlPath(p))

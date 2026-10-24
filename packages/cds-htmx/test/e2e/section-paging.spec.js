@@ -51,7 +51,7 @@ test.describe('Object Page table sections page like the List Report', () => {
   test('export is every row, not the page', async ({ page }, testInfo) => {
     await page.goto(AUTHOR)
     const total = await count(page)
-    const [download] = await Promise.all([page.waitForEvent('download'), section(page).locator('[data-hf-action=export-section]').click()])
+    const [download] = await Promise.all([page.waitForEvent('download'), section(page).locator('.hf-icon-button[data-hf-action=export-section]').click()])
     const file = testInfo.outputPath('books.csv')
     await download.saveAs(file)
     const lines = require('node:fs').readFileSync(file, 'utf8').trim().split(/\r?\n/)

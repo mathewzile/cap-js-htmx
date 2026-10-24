@@ -3,6 +3,8 @@ const { evaluate } = require('../annotations/expressions')
 const { criticalityClass, criticalityIcon, formatAmount, formatNumber, formatBoolean, formatCount, columnValue } = require('../data/format')
 const { formatKeys } = require('../keys')
 const ids = require('./ids')
+const { widthSpec } = require('./column-width')
+const { resolveElement } = require('../annotations/edm')
 const { canDelete } = require('../model/edit-capabilities')
 
 /** A `UI.DataField`-shaped column's display text for one row. Columns whose `Value` isn't a plain
@@ -18,6 +20,49 @@ function cellText(col, row) {
   if (field.unit) return `${formatNumber(value, field)} ${evaluate(field.unit, row) ?? ''}`.trim()
   if (typeof value === 'boolean') return formatBoolean(value)
   return String(value)
+}
+
+/** The columns of the table: the LineItem's, then the properties View Settings can add (hidden until someone does). */
+const tableColumns = layout => [...layout.table.columns, ...(layout.table.extraColumns ?? [])]
+
+const NUMERIC_TYPES = new Set(['cds.Integer', 'cds.Int16', 'cds.Int32', 'cds.Int64', 'cds.Integer64', 'cds.UInt8', 'cds.Decimal', 'cds.DecimalFloat', 'cds.Double'])
+
+/** The type of the CSN element a column shows (decides the formatting), found once per table render. */
+function columnType(entityType, col) {
+  const path = col.field?.path
+  if (!entityType || !path) return undefined
+  const element = resolveElement(require('@sap/cds').model, entityType, path)
+  return element ? { type: element.type, scale: element.scale } : undefined
+}
+
+/** A value the way the user's locale shows it (FE formats with the OData type): grouped numbers with the scale the property has,
+ *  dates as "Jul 30, 1818". A currency or unit is a part of its own, because the table aligns it in a column of its own. */
+function cellParts(col, row, { type, locale } = {}) {
+  const field = col.field
+  if (!field?.cqlPath) return { text: '' }
+  const value = columnValue(row, field.cqlPath)
+  if (value == null) return { text: '' }
+  if (field.currency) {
+    const currency = evaluate(field.currency, row)
+    const digits = currency ? new Intl.NumberFormat('en', { style: 'currency', currency }).resolvedOptions().maximumFractionDigits : 2
+    return { text: formatLocaleNumber(value, locale, digits, digits), unit: currency }
+  }
+  if (field.unit) return { text: formatLocaleNumber(value, locale, field.scale, field.scale ?? 20), unit: evaluate(field.unit, row) ?? '' }
+  if (typeof value === 'boolean') return { text: formatBoolean(value) }
+  if (NUMERIC_TYPES.has(type?.type) && value !== '' && !Number.isNaN(Number(value))) {
+    const scale = field.scale ?? type.scale
+    return { text: formatLocaleNumber(value, locale, scale ?? 0, scale ?? 20) }
+  }
+  if (type?.type === 'cds.Date' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    try { return { text: new Intl.DateTimeFormat(locale || 'en', { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(`${value}T00:00:00Z`)) } } catch { /* the ISO text it is */ }
+  }
+  return { text: String(value) }
+}
+
+function formatLocaleNumber(value, locale, minimum, maximum) {
+  const n = Number(value)
+  if (Number.isNaN(n)) return String(value)
+  try { return new Intl.NumberFormat(locale || 'en', { minimumFractionDigits: minimum, maximumFractionDigits: maximum }).format(n) } catch { return n.toFixed(minimum) }
 }
 
 /** FE right-aligns numeric columns (header and cells); the type is taken from the fetched values. */
@@ -94,21 +139,24 @@ function isSelectable(layout) {
   return layout.edit ? canDelete(layout.edit) : true
 }
 
-function headerCell(col, { basePath, entitySetPath, orderBy, numeric, sortable, index, editing, sortKeys }) {
+function headerCell(col, { basePath, entitySetPath, orderBy, numeric, sortable, index, editing, sortKeys, entityType }) {
+  const spec = widthSpec(col, entityType)
+  const width = spec ? html` data-hf-width="${JSON.stringify(spec)}"` : html``
+  const hide = col.extra ? raw(' hidden data-hf-extra') : html``
   const cls = `fd-table__cell hf-th hf-col-${index}${numeric ? ' hf-cell--end' : ''}`
   if (!sortable || !col.field?.cqlPath || col.kind !== 'UI.DataField') {
     // the columns a paste can fill (editable cells of a section table in a draft)
     const pasteTarget = editing && col.kind === 'UI.DataField' && col.field?.cqlPath && !col.field.cqlPath.includes('.') && !require('./field').isReadOnly(col.field, {}, 'draft')
     // a paged section sorts on the server: its headers say by which property (the column menu asks the section's `$table`)
     const sortKey = sortKeys && col.kind === 'UI.DataField' && col.field?.cqlPath
-    return html`<th class="${cls}" role="columnheader"${sortKey ? html` data-hf-sort="${col.field.cqlPath}" data-hf-label="${col.label ?? col.field.label ?? ''}"` : html``}${pasteTarget ? html` data-hf-paste-path="${col.field.path}"` : html``}><span class="hf-th__text">${col.label ?? col.field?.label ?? ''}</span>${editing && col.field && require('./field').isMandatory(col.field, {}) ? html`<span class="hf-field__required" aria-hidden="true">*</span>` : html``}</th>`
+    return html`<th class="${cls}" role="columnheader"${width}${hide}${sortKey ? html` data-hf-sort="${col.field.cqlPath}" data-hf-label="${col.label ?? col.field.label ?? ''}"` : html``}${pasteTarget ? html` data-hf-paste-path="${col.field.path}"` : html``}><span class="hf-th__text">${col.label ?? col.field?.label ?? ''}</span>${editing && col.field && require('./field').isMandatory(col.field, {}) ? html`<span class="hf-field__required" aria-hidden="true">*</span>` : html``}</th>`
   }
   const path = col.field.cqlPath
   const label = col.label ?? col.field.label ?? ''
   const isCurrent = orderBy?.path === path
   const nextDesc = isCurrent ? !orderBy.desc : false
   const sortParam = `${path}${nextDesc ? ' desc' : ''}`
-  return html`<th class="${cls}" role="columnheader" data-hf-sort="${path}" data-hf-label="${label}" ${isCurrent ? raw(`aria-sort="${orderBy.desc ? 'descending' : 'ascending'}"`) : html``}>
+  return html`<th class="${cls}" role="columnheader"${width}${hide} data-hf-sort="${path}" data-hf-label="${label}" ${isCurrent ? raw(`aria-sort="${orderBy.desc ? 'descending' : 'ascending'}"`) : html``}>
     <a class="hf-th__text hf-th__sort" href="#"
        hx-get="${basePath}/${entitySetPath}/$table?$orderby=${encodeURIComponent(sortParam)}"
        hx-target="#${ids.lrTableBody()}" hx-swap="innerHTML">${label}${isCurrent ? html` <i class="sap-icon--${orderBy.desc ? 'sort-descending' : 'sort-ascending'}" aria-hidden="true"></i>` : html``}</a>
@@ -141,7 +189,7 @@ function treeNode({ level, state }, { bundle, t }) {
     : html`<button type="button" class="hf-tree-toggle" aria-expanded="${expanded}" aria-label="${t(bundle, expanded ? 'CollapseNode' : 'ExpandNode')}"><i class="${expanded ? 'sap-icon--navigation-down-arrow' : 'sap-icon--navigation-right-arrow'}" aria-hidden="true"></i></button>`}</span>`
 }
 
-function dataCell(col, row, { bundle, t, isSemanticKey, numeric, index, edit, rowKey, tree } = {}) {
+function dataCell(col, row, { bundle, t, isSemanticKey, numeric, index, edit, rowKey, tree, type, locale } = {}) {
   const cls = `fd-table__cell hf-col-${index}${numeric ? ' hf-cell--end' : ''}${isSemanticKey ? ' hf-semantic-key' : ''}`
   if (col.hidden && evaluate(col.hidden, row) === true) return html`<td class="${cls}"></td>`
   if (col.kind === 'UI.DataFieldForAction' || col.kind === 'UI.DataFieldForAnnotation') {
@@ -151,10 +199,12 @@ function dataCell(col, row, { bundle, t, isSemanticKey, numeric, index, edit, ro
     const { isReadOnly } = require('./field')
     if (!isReadOnly(col.field, row, 'draft')) return editCell(col, row, { rowPath: edit.rowPath(row), rowKey, cls, numeric })
   }
-  const text = cellText(col, row)
+  const { text, unit } = cellParts(col, row, { type, locale })
   const badge = isSemanticKey ? draftStatusBadge(row, bundle, t) : html``
   const crit = col.criticality ? criticalityClass(evaluate(col.criticality, row)) : ''
-  return html`<td class="${cls}">${tree && index === 0 ? treeNode(tree, { bundle, t }) : html``}${objectStatus(crit, text)}${raw(badge.value)}</td>`
+  // an amount and its currency or unit sit side by side, the unit in a slot of its own so the amounts of all rows line up
+  const content = unit && !crit ? html`<span class="hf-amount"><span class="hf-amount__value">${text}</span><span class="hf-amount__unit">${unit}</span></span>` : objectStatus(crit, unit ? `${text} ${unit}` : text)
+  return html`<td class="${cls}"${col.extra ? raw(' hidden') : html``}>${tree && index === 0 ? treeNode(tree, { bundle, t }) : html``}${content}${raw(badge.value)}</td>`
 }
 
 /** A draft-root row's "Draft" (own draft shown in place of the active row, FE's "All" default view)
@@ -182,7 +232,7 @@ function rowId(keyNames, row) {
   return ids.lrRow(keyNames.map(name => row[name]).join('-'))
 }
 
-function rowMarkup(layout, row, { basePath, entitySetPath, keyNames, bundle, t, numeric, selectable, edit }) {
+function rowMarkup(layout, row, { basePath, entitySetPath, keyNames, bundle, t, numeric, selectable, edit, types = tableColumns(layout).map(col => columnType(layout.entityType, col)), locale }) {
   const href = rowHref(basePath, entitySetPath, keyNames, row)
   const rowKey = edit ? `${edit.nav}(${formatKeys(keyValues(keyNames, row))})` : undefined
   const hierarchy = layout.table.hierarchy
@@ -193,10 +243,11 @@ function rowMarkup(layout, row, { basePath, entitySetPath, keyNames, bundle, t, 
     <tr id="${rowId(keyNames, row)}" class="fd-table__row${navigable ? ' fd-table__row--activable fd-table__row--hoverable' : ''}"${tree ? html` data-hf-level="${tree.level}" data-hf-state="${tree.state}" data-hf-node="${row[hierarchy.nodeProperty]}"${row._loaded ? raw(' data-hf-loaded') : html``}` : html``}
         ${navigable ? html`hx-get="${href}" hx-trigger="click" hx-target="#app" hx-push-url="true" hx-swap="innerHTML show:window:top"` : html``}>
       ${selectable ? html`<td class="fd-table__cell fd-table__cell--checkbox">${checkbox('Select row', { name: 'keys', value: formatKeys(keyValues(keyNames, row)) })}</td>` : html``}
-      ${layout.table.columns.map((col, i) => dataCell(col, row, { bundle, t, isSemanticKey: !!layout.semanticKey?.includes(col.field?.path), numeric: numeric[i], index: i, edit, rowKey, tree }))}
+      ${tableColumns(layout).map((col, i) => dataCell(col, row, { bundle, t, isSemanticKey: !!layout.semanticKey?.includes(col.field?.path), numeric: numeric[i], index: i, edit, rowKey, tree, type: types[i], locale }))}
       <td class="fd-table__cell hf-col-nav">
-        ${navigable ? html`<i class="sap-icon--slim-arrow-right" aria-hidden="true"></i>` : html``}
+        ${navigable ? html`<i class="sap-icon--navigation-right-arrow" aria-hidden="true"></i>` : html``}
       </td>
+      <td class="fd-table__cell hf-col-fill"></td>
     </tr>`
 }
 
@@ -204,12 +255,13 @@ function rowMarkup(layout, row, { basePath, entitySetPath, keyNames, bundle, t, 
  *  as the `$table` partial-swap payload for sort/search/growing (§routes: `GET /:Set/$table`),
  *  where the requesting element targets `#lr-table-body` directly with `innerHTML` (replace, for
  *  sort/search/Go) or `beforeend` (append, for growing "More"). */
-function rowsHtml(layout, rows, { basePath, entitySetPath, keyNames, bundle, t, selectable = true, edit }) {
+function rowsHtml(layout, rows, { basePath, entitySetPath, keyNames, bundle, t, selectable = true, edit, locale }) {
   if (!rows.length) {
-    return html`<tr class="hf-table__nodata"><td class="fd-table__cell" colspan="${layout.table.columns.length + (selectable ? 2 : 1)}">${t(bundle, 'NoDataFound')}</td></tr>`
+    return html`<tr class="hf-table__nodata"><td class="fd-table__cell" colspan="${tableColumns(layout).length + (selectable ? 3 : 2)}">${t(bundle, 'NoDataFound')}</td></tr>`
   }
-  const numeric = layout.table.columns.map(col => isNumericColumn(col, rows))
-  return html`${rows.map(row => rowMarkup(layout, row, { basePath, entitySetPath, keyNames, bundle, t, numeric, selectable, edit }))}`
+  const numeric = tableColumns(layout).map(col => isNumericColumn(col, rows))
+  const types = tableColumns(layout).map(col => columnType(layout.entityType, col))
+  return html`${rows.map(row => rowMarkup(layout, row, { basePath, entitySetPath, keyNames, bundle, t, numeric, selectable, edit, types, locale }))}`
 }
 
 /** The growing trigger under the table (UI5 `growing`): "More" with the `[ loaded / total ]` description FE shows.
@@ -244,13 +296,14 @@ function sectionGrowing(sectionId, tableUrl, { skip, hasMore, count, bundle, t, 
 }
 
 /** Header row shared by the List Report table and Object Page table sections. */
-function tableHead(columns, rows, { basePath, entitySetPath, orderBy, selectable = true, sortable = true, editing = false, sortKeys = false } = {}) {
+function tableHead(columns, rows, { basePath, entitySetPath, orderBy, selectable = true, sortable = true, editing = false, sortKeys = false, entityType } = {}) {
   return html`
     <thead>
       <tr class="fd-table__row" role="row">
         ${selectable ? html`<th class="fd-table__cell fd-table__cell--checkbox" role="columnheader">${checkbox('Select all')}</th>` : html``}
-        ${columns.map((col, index) => headerCell(col, { basePath, entitySetPath, orderBy, sortable, index, numeric: isNumericColumn(col, rows), editing, sortKeys }))}
+        ${columns.map((col, index) => headerCell(col, { basePath, entitySetPath, orderBy, sortable, index, numeric: isNumericColumn(col, rows), editing, sortKeys, entityType }))}
         <th class="fd-table__cell hf-col-nav" role="columnheader"></th>
+        <th class="fd-table__cell hf-col-fill" aria-hidden="true"></th>
       </tr>
     </thead>`
 }
@@ -268,12 +321,12 @@ function table(layout, rows, ctx) {
   const selectable = isSelectable(layout)
   return html`
     ${columnVisibilityStyle(`#${ids.lrTable()}`, layout.table.columns, rows, { selectable })}
-    <table id="${ids.lrTable()}" class="fd-table hf-table" role="${layout.table.hierarchy ? 'treegrid' : 'table'}"${treeAttributes(layout, basePath, entitySetPath)}>
-      ${tableHead(layout.table.columns, rows, { basePath, entitySetPath, orderBy, selectable })}
+    <table id="${ids.lrTable()}" class="fd-table hf-table${layout.semanticKey?.length ? ' hf-table--semantic' : ''}" role="${layout.table.hierarchy ? 'treegrid' : 'table'}"${treeAttributes(layout, basePath, entitySetPath)}>
+      ${tableHead(tableColumns(layout), rows, { basePath, entitySetPath, orderBy, selectable, entityType: layout.entityType })}
       <tbody id="${ids.lrTableBody()}">${raw(rowsHtml(layout, rows, { ...ctx, selectable }).value)}</tbody>
     </table>
     ${growingButton(basePath, entitySetPath, ctx)}
   `
 }
 
-module.exports = { table, treeAttributes, growingButton, sectionGrowing, tableHead, isSelectable, rowsHtml, rowMarkup, rowId, isNumericColumn, cellText, rowHref, keyValues, objectStatus, columnBreakpoints, columnVisibilityStyle }
+module.exports = { tableColumns, table, treeAttributes, growingButton, sectionGrowing, tableHead, isSelectable, rowsHtml, rowMarkup, rowId, isNumericColumn, cellText, rowHref, keyValues, objectStatus, columnBreakpoints, columnVisibilityStyle }

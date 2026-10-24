@@ -95,7 +95,8 @@ test.describe('List Report', () => {
   test('columns keep their width and the table does not stretch to the page', async ({ page }) => {
     await page.setViewportSize({ width: 1800, height: 900 })
     await page.goto('/htmx/catalog/Books')
-    const table = await page.locator('#lr-table').boundingBox()
+    // the table runs full width like FE's; its columns end at the navigation column
+    const table = await page.locator('#lr-table thead .hf-col-nav').boundingBox().then(async nav => ({ width: nav.x + nav.width - (await page.locator('#lr-table').boundingBox()).x }))
     const card = await page.locator('.hf-table-toolbar').boundingBox()
     expect(table.width).toBeLessThan(card.width - 100)
   })
@@ -137,8 +138,8 @@ test.describe('gaps', () => {
     await page.goto('/htmx/catalog/Books')
     await expect(page.locator('[data-hf-filter=price]')).toHaveCount(0)
     await page.getByRole('button', { name: /Adapt Filters/ }).click()
-    await page.locator('.hf-dialog select').selectOption({ label: 'Price' })
-    await expect(page.locator('.hf-dialog__row', { hasText: 'Price' })).toBeVisible()
+    await page.locator('.hf-adapt__add select').selectOption({ label: 'Price' })
+    await expect(page.locator('.hf-adapt__row', { hasText: 'Price' })).toBeVisible()
     await page.getByRole('button', { name: 'OK' }).click()
     const field = page.locator('[data-hf-filter=price] input')
     await expect(field).toBeVisible()
@@ -202,7 +203,10 @@ test.describe('table details', () => {
     expect(Number(other)).toBeLessThan(600)
     await page.goto(ACTIVE)
     const section = page.locator('.hf-section--table').first()
-    const table = await section.locator('table.hf-table').boundingBox()
+    // the table runs full width like FE's; its columns end at the navigation column
+    await section.locator('table.hf-table--sized').waitFor()
+    const navBox = await section.locator('table.hf-table thead .hf-col-nav').boundingBox()
+    const table = { width: navBox.x + navBox.width - (await section.locator('table.hf-table').boundingBox()).x }
     const sectionBox = await section.boundingBox()
     expect(table.width).toBeLessThan(sectionBox.width - 100)
   })

@@ -88,7 +88,10 @@ function hfConfirmDialog({ title, text, ok, cancel, critical }) {
     overlay.querySelector('#hf-confirm-text').textContent = text
     const okButton = overlay.querySelector('[data-hf-ok]')
     okButton.textContent = ok
-    if (critical) okButton.classList.add('fd-button--negative')
+    if (critical) { // FE asks about what cannot be taken back in a warning message box: the icon and a colored line under the title
+      overlay.firstElementChild.classList.add('hf-message-box--warning')
+      overlay.querySelector('#hf-confirm-title').before(Object.assign(document.createElement('i'), { className: 'sap-icon--message-warning hf-message-box__icon', ariaHidden: 'true' }))
+    }
     overlay.querySelector('[data-hf-cancel]').textContent = cancel
     const previous = document.activeElement
     const close = result => {
@@ -115,12 +118,20 @@ document.addEventListener('htmx:confirm', async e => {
   const text = e.detail?.ctx?.confirm
   if (!text) return
   e.preventDefault() // we answer, not window.confirm
-  const count = elt.dataset.hfConfirmCount != null
-    ? document.querySelectorAll(elt.dataset.hfConfirmCount).length
-    : 0
+  if (elt.dataset.hfConfirmPopover != null) {
+    if (hfDraftUntouched()) return e.detail.issueRequest()
+    const yes = await hfConfirmPopover(elt, { text, ok: elt.dataset.hfConfirmOk || elt.textContent.trim() })
+    return yes ? e.detail.issueRequest() : e.detail.dropRequest()
+  }
+  const ticked = elt.dataset.hfConfirmCount != null ? [...document.querySelectorAll(elt.dataset.hfConfirmCount)] : []
+  const count = ticked.length
+  // FE names the object when one is selected ("Delete object Jane Eyre?"), else asks about "the selected objects"
+  const first = count === 1 && elt.dataset.hfConfirmOne
+    ? ticked[0].closest('tr')?.querySelector('td:not(.fd-table__cell--checkbox)')?.textContent.replace(/\s+/g, ' ').trim()
+    : ''
   const confirmed = await hfConfirmDialog({
     title: elt.dataset.hfConfirmTitle || elt.textContent.trim(),
-    text: text.replace('{count}', count),
+    text: first ? elt.dataset.hfConfirmOne.replace('{0}', first) : text.replace('{count}', count),
     ok: elt.dataset.hfConfirmOk || elt.textContent.trim(),
     cancel: elt.dataset.hfConfirmCancel || 'Cancel',
     critical: elt.dataset.hfConfirmCritical != null
@@ -156,6 +167,17 @@ function hfSyncSelection() {
   for (const button of document.querySelectorAll('[data-hf-needs-selection]')) {
     const scope = document.querySelector(button.dataset.hfNeedsSelection) || document
     button.disabled = !scope.querySelector('tbody .hf-checkbox:checked')
+  }
+  // the table title counts what is ticked
+  for (const toolbar of document.querySelectorAll('.hf-table-toolbar')) {
+    const scope = toolbar.closest('.hf-table-card, .hf-section--table')
+    const ticked = scope ? scope.querySelectorAll('tbody .hf-checkbox:checked').length : 0
+    toolbar.classList.toggle('has-selection', ticked > 0)
+    const out = toolbar.querySelector('[data-hf-selected-count]')
+    if (out) {
+      out.dataset.n = ticked
+      out.dataset.c = toolbar.querySelector('[id$="-count"]')?.textContent.replace(/[()s]/g, '') ?? ''
+    }
   }
 }
 document.addEventListener('change', e => {
@@ -254,6 +276,11 @@ document.addEventListener('hf:messages', e => {
   const gone = new Set([...clear, ...set.map(m => m.path)].filter(Boolean))
   hfMessages.list = hfMessages.list.filter(m => !gone.has(m.path)).concat(set)
   hfRenderMessages()
+  if (hfSaveAt && Date.now() - hfSaveAt < 20000 && set.some(m => m.severity === 'error')) {
+    hfSaveAt = 0 // FE opens the message popover after a Save that failed; the swap of the response closes popovers, so it is opened when that is done
+    hfOpenMessages = true
+    setTimeout(hfOpenMessagePopover, 500)
+  }
 })
 document.addEventListener('htmx:after:swap', hfLoadMessages)
 document.addEventListener('DOMContentLoaded', hfLoadMessages)
@@ -687,3 +714,94 @@ document.addEventListener('htmx:after:request', e => {
   e.preventDefault()
   hfRequestFailed()
 })
+
+// ---------- a field the server redraws shows the server's value ----------
+// A morph updates the `value` attribute of an input, but an input somebody typed in keeps showing what was typed. When the value
+// of a field changes elsewhere (the currency in the Price field and the Currency field are one property) the redrawn field has to
+// show it, so what is not being typed in right now goes back to the attribute. "Being typed in" is text entered since the last change,
+// not just having the focus: a Tab into the redrawn field is no reason to keep its old value.
+document.addEventListener('input', e => { if (e.target?.dataset) e.target.dataset.hfTyping = '1' }, true)
+document.addEventListener('change', e => { if (e.target?.dataset) delete e.target.dataset.hfTyping }, true)
+document.addEventListener('htmx:after:settle', e => {
+  const field = e.target
+  if (!field?.matches?.('[data-hf-field]')) return
+  for (const control of field.querySelectorAll('input, textarea, select')) {
+    if (control.dataset.hfTyping || control.type === 'hidden') continue
+    if (control.tagName === 'SELECT') {
+      const wanted = [...control.options].find(option => option.defaultSelected)
+      if (wanted && control.value !== wanted.value) control.value = wanted.value
+    } else if (control.type === 'checkbox' || control.type === 'radio') {
+      if (control.checked !== control.defaultChecked) control.checked = control.defaultChecked
+    } else if (control.value !== control.defaultValue) {
+      control.value = control.defaultValue
+    }
+  }
+})
+
+// ---------- Discard Draft: FE asks only when something was changed ----------
+// A draft that was just made by Edit and not touched since is dropped at once (with the "Draft discarded" toast). Anything else, a draft
+// somebody comes back to included, is asked about in a small popover over the button. "Untouched" is kept per draft in this browser
+// session, and when in doubt the popover is shown.
+// the draft is told by its own key, the first draft key in the route: the route itself changes while the columns of a page load
+const hfDraftKey = () => /\(([^()]*IsActiveEntity=false[^()]*)\)/.exec(decodeURIComponent(location.pathname + location.hash))?.[1]
+const hfFreshKey = () => 'hf:fresh:' + hfDraftKey()
+let hfEditAt = 0
+let hfSaveAt = 0
+const hfForget = () => { try { if (hfDraftKey()) sessionStorage.removeItem(hfFreshKey()) } catch { /* private mode */ } }
+document.addEventListener('click', e => {
+  if (e.target.closest?.('[hx-post$="/$edit"]')) hfEditAt = Date.now()
+  if (e.target.closest?.('[hx-post$="/$save"]')) hfSaveAt = Date.now()
+  // everything but discarding that changes the draft: creating, deleting or pasting rows, actions
+  const act = e.target.closest?.('[id$="op-page"] button')
+  if (act && !act.matches('[data-hf-confirm-popover]') && (act.hasAttribute('hx-post') || act.hasAttribute('hx-delete') || act.dataset.hfAction === 'paste')) hfForget()
+}, true)
+document.addEventListener('change', e => { if (e.target.closest?.('[data-hf-field]')) hfForget() }, true)
+document.addEventListener('htmx:after:settle', () => {
+  if (hfEditAt && Date.now() - hfEditAt < 15000 && hfDraftKey()) {
+    hfEditAt = 0
+    try { sessionStorage.setItem(hfFreshKey(), '1') } catch { /* private mode */ }
+  }
+})
+const hfDraftUntouched = () => { try { return !!hfDraftKey() && sessionStorage.getItem(hfFreshKey()) === '1' } catch { return false } }
+
+/** FE's confirmation of a small question: a popover over the button with the question and one button. Resolves true when it is pressed. */
+function hfConfirmPopover(anchor, { text, ok }) {
+  return new Promise(resolve => {
+    document.querySelectorAll('.hf-confirm-popover').forEach(p => p.remove())
+    const pop = document.createElement('div')
+    pop.className = 'hf-confirm-popover'
+    pop.setAttribute('role', 'alertdialog')
+    pop.innerHTML = '<p class="hf-confirm-popover__text"></p><button type="button" class="fd-button hf-confirm-popover__ok"></button>'
+    pop.querySelector('p').textContent = text
+    const button = pop.querySelector('button')
+    button.textContent = ok
+    document.body.appendChild(pop)
+    const r = anchor.getBoundingClientRect()
+    pop.style.bottom = `${window.innerHeight - r.top + 12}px`
+    pop.style.right = `${Math.max(8, window.innerWidth - r.right - 6)}px`
+    pop.style.setProperty('--hf-arrow', `${r.left + r.width / 2 - pop.getBoundingClientRect().left}px`)
+    const done = result => {
+      pop.remove()
+      document.removeEventListener('mousedown', outside, true)
+      document.removeEventListener('keydown', onKey, true)
+      if (!result) anchor.focus?.()
+      resolve(result)
+    }
+    const outside = e => { if (!pop.contains(e.target)) done(false) }
+    const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); done(false) } }
+    document.addEventListener('mousedown', outside, true)
+    document.addEventListener('keydown', onKey, true)
+    button.addEventListener('click', () => done(true))
+    button.focus()
+  })
+}
+
+let hfOpenMessages = false
+function hfOpenMessagePopover() {
+  if (!hfOpenMessages) return
+  hfOpenMessages = false
+  const popover = document.querySelector('.hf-footer__messages .hf-popover')
+  popover?.classList.add('is-open')
+  popover?.querySelector('[data-hf-popover-toggle]')?.setAttribute('aria-expanded', 'true')
+}
+document.addEventListener('htmx:after:settle', hfOpenMessagePopover)

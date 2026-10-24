@@ -80,9 +80,9 @@ function parseFilters(query, layout) {
 
 /** The "Define Conditions" dialog and typing write FE's condition syntax into the field: `a;b` (any of),
  *  `*a*` contains, `a*` starts with, `*a` ends with, `!a` not equal. A plain value stays a plain equality. */
-const { dateRange } = require('./date-operators')
+const { dateRange, isNotSpecified } = require('./date-operators')
 const isDate = field => field?.edmType === 'Edm.Date'
-const isCondition = (v, field) => (isDate(field) && !!dateRange(v)) || /[;*<>]|\.\.\./.test(v) || v.startsWith('!')
+const isCondition = (v, field) => (isDate(field) && (!!dateRange(v) || isNotSpecified(v))) || /[;*<>]|\.\.\./.test(v) || v.startsWith('!')
 const COMPARE = /^(<=|>=|<|>)(.+)$/
 const COMPARE_OP = { '<': '<', '<=': '<=', '>': '>', '>=': '>=' }
 
@@ -92,6 +92,7 @@ function conditionsToWhere(field, tokens) {
   const excluded = []
   for (const token of tokens) {
     if (token.startsWith('!')) { excluded.push(token.slice(1)); continue }
+    if (isDate(field) && isNotSpecified(token)) { included.push([column, 'is', 'null']); continue }
     const days = isDate(field) ? dateRange(token) : undefined
     if (days) { included.push([{ xpr: [column, '>=', val(days[0]), 'and', column, '<=', val(days[1])] }]); continue }
     const compare = COMPARE.exec(token)

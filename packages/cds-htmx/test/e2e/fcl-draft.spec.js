@@ -61,7 +61,7 @@ test.describe('drafts in the column layout: one root, the first page', () => {
     await expect(page.locator('#c2-op-draft-status')).toContainText('Draft saved')
 
     await col(page, 1).getByRole('button', { name: 'Discard Draft' }).click()
-    await page.locator('.hf-message-box [data-hf-ok]').click()
+    await page.locator('.hf-confirm-popover__ok').click()
     await expect(col(page, 1).locator('.hf-page--edit')).toHaveCount(0)
     await expect(col(page, 2).locator('.hf-page--edit')).toHaveCount(0) // saved version again
     await expect(col(page, 2).locator('input[name=pages]')).toHaveCount(0)

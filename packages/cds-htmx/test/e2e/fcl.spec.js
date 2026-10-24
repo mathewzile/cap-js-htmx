@@ -70,7 +70,6 @@ test.describe('flexible column layout (admin Authors: List Report | Author | Boo
     expect(await layout(page)).toBe('TwoColumnsMidExpanded')
     await expect(column(page, 0).locator('#lr-table-body tr').first()).toBeVisible()
     await page.getByRole('button', { name: 'Discard Draft' }).click()
-    await page.locator('.hf-message-box [data-hf-ok]').click()
     await expect(page.locator('#op-page').getByRole('button', { name: 'Edit' })).toBeVisible()
     expect(await layout(page)).toBe('TwoColumnsMidExpanded')
   })

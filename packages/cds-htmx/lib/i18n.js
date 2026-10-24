@@ -8,6 +8,9 @@ const path = require('node:path')
  *  from the `.properties` bundles, as a deep-walk pass applied once per cached layout build. */
 
 const PLUGIN_I18N_DIR = path.join(__dirname, '..', '_i18n')
+// the texts CAP itself provides for what it adds to a model (`{i18n>CreatedAt}` of managed: "Created On" ...): the lowest layer
+let CDS_I18N_DIR
+try { CDS_I18N_DIR = path.join(path.dirname(require.resolve('@sap/cds/package.json')), '_i18n') } catch { /* no CAP texts */ }
 const PLACEHOLDER = /^\{i18n>([^}]+)\}$/
 
 const bundleCache = new Map() // `${dirs}:${locale}` -> flat {key: text}
@@ -49,7 +52,7 @@ function loadDir(dir, locale) {
  *  "Create", "Draft saved.", ...) with the CDS model's bundle (`<appRoot>/_i18n/i18n*.properties`,
  *  the one `{i18n>Book}`-style annotation placeholders resolve against), caching per (dirs, locale). */
 function bundleFor(appRoot, locale) {
-  const dirs = appRoot ? [PLUGIN_I18N_DIR, path.join(appRoot, '_i18n')] : [PLUGIN_I18N_DIR]
+  const dirs = [...(CDS_I18N_DIR ? [CDS_I18N_DIR] : []), PLUGIN_I18N_DIR, ...(appRoot ? [path.join(appRoot, '_i18n')] : [])]
   const key = `${dirs.join('|')}:${locale || ''}`
   let bundle = bundleCache.get(key)
   if (!bundle) {

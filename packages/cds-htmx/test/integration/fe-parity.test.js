@@ -150,10 +150,10 @@ describe('FE parity: capabilities, direct editing, history, confirmations (round
     test('a draft marker with a switch popover appears only where there is something to switch to', async () => {
       const { GET, POST, expect } = api
       const display = await GET(`/htmx/catalog/Books(${BOOK})`, { headers: HX })
-      expect(display.data).not.to.include('data-hf-popover-toggle')
+      expect(display.data).not.to.match(/hf-op-title__draft/)
       const edited = await POST(`/htmx/catalog/Books(${BOOK})/$edit`, {}, { headers: HX })
       draftRaw = edited.headers['hx-replace-url'].match(/Books\((.*)\)/)[1]
-      expect(edited.data).to.include('data-hf-popover-toggle')
+      expect(edited.data).to.match(/hf-popover hf-op-title__draft/)
       expect(edited.data).to.match(/hx-get="\/htmx\/catalog\/Books\(ID=(?:'|&#39;).*?(?:'|&#39;),IsActiveEntity=true\)"/) // Saved Version (the quotes of a key are escaped in the attribute)
       const savedVersion = await GET(`/htmx/catalog/Books(${BOOK})`, { headers: HX })
       expect(savedVersion.data).to.include('Saved Version')
@@ -213,7 +213,7 @@ describe('FE parity: capabilities, direct editing, history, confirmations (round
     test('discard asks for confirmation', async () => {
       const { GET, expect } = api
       const res = await GET(`/htmx/catalog/Books(${BOOK_DRAFT})`, { headers: HX })
-      expect(res.data).to.match(/hx-post="[^"]*\$discard"[\s\S]*?hx-confirm="Discard all changes to this object\?"/)
+      expect(res.data).to.match(/hx-post="[^"]*\$discard"[\s\S]*?hx-confirm="Discard all changes\?"/)
     })
 
     test('after the draft is discarded its URL shows the saved version (history) instead of failing', async () => {
@@ -243,11 +243,21 @@ describe('FE parity: capabilities, direct editing, history, confirmations (round
       assert.equal(res.status, 200)
       assert.match(res.data, /class="hf-overlay" data-hf-dialog/)
       assert.match(res.data, /Select: [^<]+/)
-      assert.match(res.data, /<th role="columnheader">ID<\/th>/)
-      assert.match(res.data, /<th role="columnheader">Name<\/th>/)
+      assert.match(res.data, /<th role="columnheader"[^>]*>ID<\/th>/)
+      assert.match(res.data, /<th role="columnheader"[^>]*>Name<\/th>/)
       assert.equal((res.data.match(/class="[^"]*hf-vh-row/g) || []).length, 4)
       assert.match(res.data, /Items \(4\)/)
       assert.match(res.data, /data-hf-dialog-close/)
+    })
+
+    test('the value help of a filter field selects several: tabs, a checkbox per row, OK; a form field picks one row', async () => {
+      const filter = (await open('/htmx/catalog/Books/$vh/author_ID?target=f.author_ID')).data
+      assert.match(filter, /data-hf-multi/)
+      assert.match(filter, /data-hf-vh-conditions/)
+      assert.match(filter, /data-hf-vh-ok/)
+      assert.equal((filter.match(/class="hf-checkbox"/g) || []).length, 5) // one per row and the one that selects all
+      const field = (await open('/htmx/catalog/Books/$vh/author_ID')).data
+      assert.doesNotMatch(field, /data-hf-multi|data-hf-vh-ok/)
     })
 
     test('type-ahead mode returns the popup with the key in brackets and "Show All Items"', async () => {

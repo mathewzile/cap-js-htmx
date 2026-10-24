@@ -10,13 +10,19 @@ function propertyTarget(entityType, path) {
  *  Validation/Communication/HTML5 terms), used by both `list-report.js` (columns) and
  *  `object-page.js` (form fields). Built only from the store, never raw CSN -- `path` is an
  *  OData-syntax path (`stock`, `author/name`); CSN access only ever happens through `edm.js`. */
-function buildField(store, entityType, path, { label } = {}) {
+const NUMERIC_TYPES = new Set(['cds.Integer', 'cds.Int16', 'cds.Int32', 'cds.Int64', 'cds.Integer64', 'cds.UInt8', 'cds.Decimal', 'cds.DecimalFloat', 'cds.Double'])
+
+function buildField(store, entityType, path, { label, withUnit = true } = {}) {
   const target = propertyTarget(entityType, path)
   const bag = store.raw(target)
+  // an amount is edited together with its currency (or unit): FE puts the property that holds it in the same field
+  const unitPath = withUnit ? (bag['@Measures.ISOCurrency'] ?? bag['@Measures.Unit'])?.$Path : undefined
 
+  const element = require('../annotations/edm').resolveElement(require('@sap/cds').model, entityType, path)
   return {
     path,
     cqlPath: cqlPath(path),
+    numeric: NUMERIC_TYPES.has(element?.type), // numbers are shown and edited right-aligned
     label: label ?? bag['@Common.Label'] ?? humanize(path),
     quickInfo: bag['@Common.QuickInfo'],
     text: bag['@Common.Text'],
@@ -31,6 +37,7 @@ function buildField(store, entityType, path, { label } = {}) {
     isUrl: !!bag['@Core.IsURL'],
     valueList: bag['@Common.ValueList'],
     fixedValues: !!bag['@Common.ValueListWithFixedValues'],
+    unitField: unitPath && !unitPath.includes('/') ? buildField(store, entityType, unitPath, { withUnit: false }) : undefined,
     unit: bag['@Measures.Unit'],
     currency: bag['@Measures.ISOCurrency'],
     scale: bag['@Measures.Scale'],

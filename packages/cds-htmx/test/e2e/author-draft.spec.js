@@ -70,7 +70,6 @@ test.describe('Author draft with Awards in the column layout', () => {
     await expect.poll(() => decodeURIComponent(new URL(page.url()).hash)).toMatch(/IsActiveEntity=false\)\/awards\(ID='[^']+',IsActiveEntity=false\)$/)
 
     await col(page, 1).getByRole('button', { name: 'Discard Draft' }).click()
-    await page.locator('.hf-message-box [data-hf-ok]').click()
     await expect(col(page, 1).locator('.hf-page--edit')).toHaveCount(0)
     await expect(col(page, 2).locator('input[name=year]')).toHaveCount(0)
     await expect(col(page, 2).locator('#c2-op-page')).toBeVisible()

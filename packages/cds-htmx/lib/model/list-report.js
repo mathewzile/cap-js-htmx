@@ -92,6 +92,22 @@ function buildAvailableFilters(store, entityType, selected, restrictions) {
     .map(el => filterTraits(store, entityType, buildField(store, entityType, el.name), restrictions))
 }
 
+/** The properties of the entity that the table has no column for: View Settings lists them (FE lists every property of the entity) and
+ *  a user can add one as a column. They are rendered hidden, after the columns of the LineItem, labelled the way FE labels them: the
+ *  property's own label, else its name. */
+function buildExtraColumns(store, entityType, columns) {
+  const entity = require('../annotations/edm').entityDef(require('@sap/cds').model, entityType)
+  const shown = new Set(columns.map(col => col.field?.path).filter(Boolean))
+  return Object.values(entity?.elements || {})
+    .filter(el => !el.isAssociation && el.type !== 'cds.Association' && el.type !== 'cds.Composition' && !el.virtual)
+    .filter(el => !TECHNICAL.has(el.name) && !shown.has(el.name))
+    .map(el => {
+      const field = buildField(store, entityType, el.name)
+      const label = store.raw(`${entityType}/${el.name}`)['@Common.Label'] ?? el.name
+      return { kind: 'UI.DataField', label, field: { ...field, label }, extra: true }
+    })
+}
+
 /** Builds the `LRLayout` for one entity type (§3.2), from the `AnnotationStore` plus an optional
  *  FE manifest `ListReport` routing-target's `options.settings` (`pageSettings`, §3.2b) -- never
  *  from raw CSN. Falls back to `fe-defaults.js` wherever the manifest is silent or absent. */
@@ -106,6 +122,7 @@ function buildListReport(store, entityType, { pageSettings } = {}) {
   const hierarchy = tableSettings.type === 'TreeTable' ? buildHierarchy(store, entityType, tableSettings.hierarchyQualifier, tableSettings.initialExpansionLevel) : undefined
   const filterRestrictions = bag['@Capabilities.FilterRestrictions'] ?? store.raw(containerTarget(entityType))['@Capabilities.FilterRestrictions']
 
+  const columns = lineItem.map(record => buildColumn(store, entityType, record))
   return {
     entityType,
     header: {
@@ -120,7 +137,8 @@ function buildListReport(store, entityType, { pageSettings } = {}) {
       editingStatus: !!store.raw(containerTarget(entityType))['@Common.DraftRoot']
     },
     table: {
-      columns: lineItem.map(record => buildColumn(store, entityType, record)),
+      columns,
+      extraColumns: hierarchy ? [] : buildExtraColumns(store, entityType, columns),
       type: hierarchy ? 'TreeTable' : tableSettings.type !== 'TreeTable' && tableSettings.type || feDefaults.listReport.table.type,
       hierarchy,
       selectionMode: tableSettings.selectionMode || feDefaults.listReport.table.selectionMode,

@@ -38,8 +38,8 @@ test.describe('date filters (manage-authors)', () => {
     const range = page.locator('[data-hf-filter=dateOfBirth] .hf-date-range')
     await expect(range).toBeVisible()
     await expect(page.locator('#lr-table-body > tr[id^=lr-row--]')).toHaveCount(4)
-    await range.locator('input').first().fill('1810-01-01')
-    await range.locator('input').last().fill('1820-12-31')
+    await range.locator('.hf-date-range__text').fill('1810-01-01 – 1820-12-31') // the day inputs of the form are behind the one the user types in
+    await range.locator('.hf-date-range__text').press('Tab')
     await page.getByRole('button', { name: 'Go', exact: true }).click()
     await expect(page.locator('#lr-table-body > tr[id^=lr-row--]')).toHaveCount(2)
     await expect(page).toHaveURL(/f\.dateOfBirth\.ge=1810-01-01&f\.dateOfBirth\.le=1820-12-31/)

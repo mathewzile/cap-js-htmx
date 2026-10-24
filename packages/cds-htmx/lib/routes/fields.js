@@ -246,7 +246,11 @@ module.exports = {
     const collectionType = collectionPath.includes('.') ? collectionPath : `${this.service.name}.${collectionPath}`
     const bundle = cache.bundleFor(this.appOpts(req))
     const labelOf = label => i18n.resolveText(label, bundle) // labels are still {i18n>Key} placeholders here
-    const columns = props.map(prop => ({ prop, label: labelOf(fieldsLib.buildField(store, collectionType, prop)?.label ?? prop) }))
+    const columns = props.map(prop => {
+      const label = labelOf(fieldsLib.buildField(store, collectionType, prop)?.label ?? prop)
+      return { prop, label, spec: require('../render/column-width').widthSpec({ kind: 'UI.DataField', label, field: { path: prop } }, collectionType) }
+    })
+    const multi = /^f\./.test(target) // a filter field takes several values
     const suggest = req.query.mode === 'suggest'
     let q = SELECT.from(collectionPath).columns(props)
     if (search && searchSupported) q = q.search(search)
@@ -272,7 +276,7 @@ module.exports = {
     if (suggest) return res.type('html').send(String(valueHelpRender.valueHelpSuggest(columns, rows, { valueProp, t })))
     // Searching only replaces the results, opening sends the whole dialog (into #dialogs)
     if (req.query.mode === 'results') {
-      return res.type('html').send(String(valueHelpRender.valueHelpResults(columns, rows, { valueProp, t })))
+      return res.type('html').send(String(valueHelpRender.valueHelpResults(columns, rows, { valueProp, t, multi })))
     }
     const entitySetPath = keyRaw ? `${set}(${keyRaw})` : set
     res.type('html').send(String(valueHelpRender.valueHelpDialog({ ...field, label: labelOf(field.label) }, columns, rows, { basePath: this.basePath(req), entitySetPath, valueProp, search, searchSupported, t, target, filters: columnFilters })))

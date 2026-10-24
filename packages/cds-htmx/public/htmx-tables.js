@@ -75,7 +75,7 @@
 
   /** One row of a checkbox list (FE's selected rows are tinted and outlined). */
   function checkRow(text, checked, attrs = {}) {
-    const box = el('input', { type: 'checkbox', checked, ...attrs })
+    const box = el('input', { type: 'checkbox', class: 'hf-checkbox', checked, ...attrs })
     const row = el('li', { class: `hf-dialog__row${checked ? ' is-selected' : ''}` }, el('label', { class: 'hf-dialog__row-label' }, box, el('span', { class: 'hf-dialog__row-text', text })))
     box.addEventListener('change', () => row.classList.toggle('is-selected', box.checked))
     return { row, box }
@@ -84,7 +84,13 @@
   // ---------------------------------------------------------------- column visibility (view settings)
   const colIndex = cell => { const m = /(?:^|\s)hf-col-(\d+)(?:\s|$)/.exec(cell.className); return m ? Number(m[1]) : null }
   const tableOf = container => container.querySelector('table.hf-table')
-  const hiddenCols = container => store.get('view:' + container.dataset.hfView)?.hidden ?? []
+  // The table has a hidden column for every other property of the entity (data-hf-extra); the view says which of them are shown (`extra`)
+  const viewState = container => store.get('view:' + container.dataset.hfView) ?? {}
+  const extraCols = container => [...tableOf(container).querySelectorAll('thead th[data-hf-extra]')].map(colIndex)
+  const hiddenCols = container => {
+    const shown = new Set(viewState(container).extra ?? [])
+    return [...new Set([...(viewState(container).hidden ?? []), ...extraCols(container).filter(i => !shown.has(i))])]
+  }
 
   const groupOf = container => store.get('view:' + container.dataset.hfView)?.group ?? null
 
@@ -125,12 +131,15 @@
     const table = tableOf(container)
     const hidden = new Set(hiddenCols(container))
     const headers = [...table.querySelectorAll('thead th.hf-th')].filter(th => colIndex(th) != null)
-    const items = headers.map(th => checkRow(th.querySelector('.hf-th__text')?.textContent.trim() || '', !hidden.has(colIndex(th)), { 'data-col': colIndex(th) }))
+    const labelOf = th => th.querySelector('.hf-th__text')?.textContent.trim() || ''
+    const extras = new Set(extraCols(container))
+    const ordered = [...headers.filter(th => !hidden.has(colIndex(th))), ...headers.filter(th => hidden.has(colIndex(th))).sort((a, b) => labelOf(a).localeCompare(labelOf(b)))]
+    const items = ordered.map(th => checkRow(labelOf(th), !hidden.has(colIndex(th)), { 'data-col': colIndex(th) }))
 
     // Columns tab: search, "Hide (All) Unselected", the master row "Columns (shown/all)" and one row per column
     const search = el('input', { type: 'search', class: 'fd-input', placeholder: T('Search'), 'aria-label': T('Search') })
     const hideUnselected = el('input', { type: 'checkbox', class: 'hf-switch', role: 'switch' })
-    const master = el('input', { type: 'checkbox' })
+    const master = el('input', { type: 'checkbox', class: 'hf-checkbox' })
     const masterLabel = el('span', { class: 'hf-dialog__row-text' })
     const list = el('ul', { class: 'hf-dialog__list' }, el('li', { class: 'hf-dialog__row hf-dialog__row--head' }, el('label', { class: 'hf-dialog__row-label' }, master, masterLabel)), items.map(i => i.row))
     const refresh = () => {
@@ -185,7 +194,7 @@
       title: T('ViewSettings'),
       tabs,
       reset: { label: T('Reset'), action() {
-        for (const { row, box } of items) { box.checked = true; row.classList.add('is-selected') }
+        for (const { row, box } of items) { box.checked = !extras.has(Number(box.dataset.col)); row.classList.toggle('is-selected', box.checked) } // the table's own columns, not the other properties
         refresh()
         if (sortSelect) sortSelect.value = ''
         if (groupSelect) groupSelect.value = ''
@@ -195,7 +204,10 @@
           const off = items.filter(i => !i.box.checked).map(i => Number(i.box.dataset.col))
           const groupIndex = groupSelect && groupSelect.value !== '' ? Number(groupSelect.value) : null
           const state = {}
-          if (off.length) state.hidden = off
+          const hiddenOwn = off.filter(i => !extras.has(i))
+          const shownExtra = items.filter(i => i.box.checked && extras.has(Number(i.box.dataset.col))).map(i => Number(i.box.dataset.col))
+          if (hiddenOwn.length) state.hidden = hiddenOwn
+          if (shownExtra.length) state.extra = shownExtra
           if (groupIndex != null) state.group = groupIndex
           if (Object.keys(state).length) store.set('view:' + container.dataset.hfView, state); else store.remove('view:' + container.dataset.hfView)
           applyView(container)
@@ -209,7 +221,7 @@
         { label: T('Cancel') }
       ]
     })
-    if (hidden.size || group != null) dialog.markChanged() // something differs from the defaults, so "Reset" is useful
+    if (viewState(container).hidden?.length || viewState(container).extra?.length || group != null) dialog.markChanged() // something differs from the defaults, so "Reset" is useful
   }
 
   /** The List Report's own `$table` request (same URL the column headers use), with the filter form's values. */
@@ -390,47 +402,81 @@
 
   function openAdaptFilters(lr) {
     const set = lr.dataset.hfSet
+    const form = lr.querySelector('form.hf-filter-bar')
     const hidden = new Set(store.get(filtersKey(set)) ?? [])
-    const items = filterItems(lr).map(item => checkRow(item.dataset.hfLabel, !hidden.has(item.dataset.hfFilter), { 'data-path': item.dataset.hfFilter, 'data-extra': item.classList.contains('hf-filter--extra') ? '1' : '' }))
-    const list = el('ul', { class: 'hf-dialog__list' }, items.map(i => i.row))
+
+    // One row per filter, as FE shows them: its label, the field itself, a toggle for whether it is in the bar and a button that clears it.
+    // The field is a copy; what was typed in it goes to the real one on OK / Filter.
+    const adaptRow = (path, label, extra, source) => {
+      const box = el('input', { type: 'checkbox', class: 'hf-adapt__box', hidden: true, checked: extra || !hidden.has(path), 'data-path': path, 'data-extra': extra ? '1' : '' })
+      const wrapper = source?.querySelector('.hf-input-group, .hf-select, .hf-date-range') ?? source?.querySelector('input, select')
+      const control = wrapper ? wrapper.cloneNode(true) : el('input', { type: 'text', class: 'fd-input' })
+      const inner = control.matches('input, select') ? [control] : [...control.querySelectorAll('input, select')]
+      const originals = wrapper ? (wrapper.matches('input, select') ? [wrapper] : [...wrapper.querySelectorAll('input, select')]) : []
+      inner.forEach((node, i) => {
+        node.removeAttribute('id'); node.removeAttribute('name'); node.disabled = false
+        node.dataset.hfName = originals[i]?.name ?? ''
+        if (originals[i]) node.value = originals[i].value
+      })
+      control.querySelectorAll('button').forEach(button => { button.disabled = true })
+      const eye = el('button', { type: 'button', class: 'fd-button fd-button--transparent hf-adapt__eye', 'aria-pressed': String(box.checked), 'aria-label': T('Show'), title: T('Show') }, el('i', { class: 'sap-icon--show', 'aria-hidden': 'true' }))
+      eye.addEventListener('click', () => { box.checked = !box.checked; eye.setAttribute('aria-pressed', String(box.checked)) })
+      const clear = el('button', { type: 'button', class: 'fd-button fd-button--transparent hf-adapt__clear', 'aria-label': T('Clear'), title: T('Clear') }, el('i', { class: 'sap-icon--decline', 'aria-hidden': 'true' }))
+      clear.addEventListener('click', () => inner.forEach(node => { node.value = node.tagName === 'SELECT' ? node.options[0]?.value ?? '' : '' }))
+      const row = el('li', { class: 'hf-adapt__row', 'data-label': label.toLowerCase() }, el('span', { class: 'hf-adapt__label', text: label + ':' }), el('div', { class: 'hf-adapt__field' }, control), eye, clear, box)
+      return { row, box, inner }
+    }
+    const items = filterItems(lr).map(item => adaptRow(item.dataset.hfFilter, item.dataset.hfLabel, item.classList.contains('hf-filter--extra'), item))
+    const list = el('ul', { class: 'hf-adapt__list' }, items.map(i => i.row))
+
+    const search = el('input', { type: 'search', class: 'fd-input', placeholder: T('SearchForFilters'), 'aria-label': T('SearchForFilters') })
+    search.addEventListener('input', () => items.forEach(i => { i.row.hidden = !!search.value && !i.row.dataset.label.includes(search.value.toLowerCase()) }))
 
     // "Add Filter": any other property of the entity
     const present = () => new Set(items.map(i => i.box.dataset.path))
     const addSelect = el('select', { class: 'fd-select', 'aria-label': T('AddFilter') })
     const fillAdd = () => {
-      addSelect.replaceChildren(el('option', { value: '', text: T('AddFilter') }),
+      addSelect.replaceChildren(el('option', { value: '', text: T('SelectOrType') }),
         ...availableFilters(lr).filter(f => !present().has(f.path)).map(f => el('option', { value: f.path, text: f.label })))
     }
     fillAdd()
     addSelect.addEventListener('change', () => {
       const f = availableFilters(lr).find(x => x.path === addSelect.value)
       if (!f) return
-      const added = checkRow(f.label, true, { 'data-path': f.path, 'data-extra': '1' })
+      const added = adaptRow(f.path, f.label, true)
       items.push(added)
       list.append(added.row)
       fillAdd()
     })
 
+    const apply = () => {
+      const off = items.filter(i => !i.box.checked && !i.box.dataset.extra).map(i => i.box.dataset.path)
+      if (off.length) store.set(filtersKey(set), off); else store.remove(filtersKey(set))
+      const extras = items.filter(i => i.box.dataset.extra && i.box.checked).map(i => i.box.dataset.path)
+      if (extras.length) store.set(extrasKey(set), extras); else store.remove(extrasKey(set))
+      applyFilters()
+      for (const i of items) {
+        for (const node of i.inner) {
+          const target = node.dataset.hfName && form.querySelector(`[name="${CSS.escape(node.dataset.hfName)}"]`)
+          if (target) target.value = node.value
+        }
+      }
+    }
     const dialog = openDialog({
       title: T('AdaptFilters'),
-      body: el('div', { class: 'hf-dialog__panel' },
-        el('h3', { class: 'hf-dialog__subheader', text: T('FilterValuesAndVisibility') }),
+      body: el('div', { class: 'hf-dialog__panel hf-adapt' },
+        el('div', { class: 'hf-adapt__head' }, el('h3', { text: T('FilterValuesAndVisibility') }), search),
         list,
-        el('div', { class: 'hf-dialog__bar hf-dialog__bar--add' }, addSelect)),
+        el('div', { class: 'hf-adapt__add' }, el('label', { text: T('AddFilter') + ':' }), addSelect)),
       reset: { label: T('Reset'), action() {
         for (const i of [...items]) {
-          if (i.box.dataset.extra) { i.row.remove(); items.splice(items.indexOf(i), 1) } else { i.box.checked = true; i.row.classList.add('is-selected') }
+          if (i.box.dataset.extra) { i.row.remove(); items.splice(items.indexOf(i), 1) } else { i.box.checked = true; i.row.querySelector('.hf-adapt__eye').setAttribute('aria-pressed', 'true') }
         }
         fillAdd()
       } },
       buttons: [
-        { label: T('OK'), action() {
-          const off = items.filter(i => !i.box.checked && !i.box.dataset.extra).map(i => i.box.dataset.path)
-          if (off.length) store.set(filtersKey(set), off); else store.remove(filtersKey(set))
-          const extras = items.filter(i => i.box.dataset.extra && i.box.checked).map(i => i.box.dataset.path)
-          if (extras.length) store.set(extrasKey(set), extras); else store.remove(extrasKey(set))
-          applyFilters()
-        } },
+        { label: T('OK'), action: apply },
+        { label: T('Filter'), action() { apply(); form.requestSubmit() } },
         { label: T('Cancel') }
       ]
     })
@@ -449,6 +495,7 @@
       hiddenFilters: store.get(filtersKey(lr.dataset.hfSet)) ?? [],
       extraFilters: store.get(extrasKey(lr.dataset.hfSet)) ?? [],
       hiddenCols: hiddenCols(lr.querySelector('[data-hf-view]')),
+      extraCols: viewState(lr.querySelector('[data-hf-view]')).extra ?? [],
       group: groupOf(lr.querySelector('[data-hf-view]'))
     }
   }
@@ -458,7 +505,7 @@
     const container = lr.querySelector('[data-hf-view]')
     store.set(filtersKey(lr.dataset.hfSet), state?.hiddenFilters ?? [])
     store.set(extrasKey(lr.dataset.hfSet), state?.extraFilters ?? [])
-    store.set('view:' + container.dataset.hfView, { hidden: state?.hiddenCols ?? [], ...(state?.group != null ? { group: state.group } : {}) })
+    store.set('view:' + container.dataset.hfView, { hidden: state?.hiddenCols ?? [], ...(state?.extraCols?.length ? { extra: state.extraCols } : {}), ...(state?.group != null ? { group: state.group } : {}) })
     syncExtraFilters(lr) // the added filter fields have to exist before their values are set
     for (const control of form.querySelectorAll('input[name], select[name]')) {
       if (control.type === 'submit') continue
@@ -497,8 +544,35 @@
       return li
     }
     list.append(item(menu.dataset.hfDefault, null, false), ...saved.map(v => item(v.name, v.state, true)))
-    const saveAs = el('li', { class: 'hf-variant hf-variant--save' }, el('button', { type: 'button', class: 'hf-popover__item', text: T('SaveAs') + '…' }))
-    saveAs.querySelector('button').addEventListener('click', () => {
+    const body = menu.querySelector('.fd-popover__body')
+    body.querySelectorAll('.hf-vm__head, .hf-vm__foot').forEach(node => node.remove())
+    body.prepend(el('div', { class: 'hf-vm__head', text: T('MyViews') }))
+    const saveAs = el('button', { type: 'button', class: 'fd-button fd-button--emphasized', text: T('SaveAs') })
+    const manage = el('button', { type: 'button', class: 'fd-button fd-button--transparent', text: T('Manage') })
+    body.append(el('div', { class: 'hf-vm__foot' }, saveAs, manage))
+    manage.addEventListener('click', () => {
+      hfClosePopovers()
+      const kept = new Set(saved.map(v => v.name))
+      const rows = saved.map(v => {
+        const row = el('li', { class: 'hf-dialog__row' }, el('span', { class: 'hf-dialog__row-text', text: v.name }))
+        const remove = el('button', { type: 'button', class: 'fd-button fd-button--transparent hf-icon-button', 'aria-label': T('Delete'), title: T('Delete') }, el('i', { class: 'sap-icon--delete', 'aria-hidden': 'true' }))
+        remove.addEventListener('click', () => { kept.delete(v.name); row.remove() })
+        row.append(remove)
+        return row
+      })
+      openDialog({
+        title: T('ManageViews'), body: el('ul', { class: 'hf-dialog__list' }, el('li', { class: 'hf-dialog__row hf-dialog__row--head' }, el('span', { class: 'hf-dialog__row-text', text: menu.dataset.hfDefault })), ...rows),
+        buttons: [
+          { label: T('OK'), action() {
+            store.set(viewsKey(set), saved.filter(v => kept.has(v.name)))
+            if (menu.dataset.hfActive && !kept.has(menu.dataset.hfActive)) menu.dataset.hfActive = ''
+            renderVariants(menu)
+          } },
+          { label: T('Cancel') }
+        ]
+      })
+    })
+    saveAs.addEventListener('click', () => {
       hfClosePopovers()
       const input = el('input', { type: 'text', class: 'fd-input', 'aria-label': T('VariantName'), placeholder: T('VariantName') })
       openDialog({
@@ -515,7 +589,6 @@
         ]
       })
     })
-    list.append(saveAs)
   }
 
   // ---------------------------------------------------------------- Define Conditions (free-text filter fields)
@@ -841,12 +914,78 @@
     switch (button.dataset.hfAction) {
       case 'conditions': openConditions(button); break
       case 'settings': if (container) openViewSettings(container); break
+      case 'copy': if (container) copySelectedRows(container); break
       case 'export': exportList(button); break
       case 'export-dom': exportSection(button); break
       case 'export-section': exportSectionServer(button, container); break
       case 'adapt-filters': openAdaptFilters(button.closest('.hf-page--lr')); break
     }
   })
+
+  // The value help of a filter field selects several values: a click on a row ticks it, the selection is listed under the table and OK
+  // puts it into the filter as `a;b` (the condition syntax "any of").
+  const multiState = new WeakMap()
+  const multiDialog = node => node.closest?.('[data-hf-multi]')
+  const multiSelection = dialog => {
+    if (!multiState.has(dialog)) {
+      const input = document.querySelector(`form.hf-filter-bar [name="${CSS.escape(dialog.dataset.hfTarget)}"]`)
+      const selection = new Map()
+      for (const value of (input?.value ?? '').split(';').filter(Boolean)) selection.set(value, value)
+      multiState.set(dialog, selection)
+    }
+    return multiState.get(dialog)
+  }
+  const rowLabel = row => row.lastElementChild.textContent.trim() || row.dataset.value
+  const syncMulti = dialog => {
+    const selection = multiSelection(dialog)
+    const rows = [...dialog.querySelectorAll('.hf-vh-row')]
+    for (const row of rows) {
+      if (selection.has(row.dataset.value)) selection.set(row.dataset.value, rowLabel(row))
+      const box = row.querySelector('.hf-checkbox')
+      if (box) box.checked = selection.has(row.dataset.value)
+    }
+    const all = dialog.querySelector('[data-hf-vh-all]')
+    if (all) all.checked = rows.length > 0 && rows.every(row => selection.has(row.dataset.value))
+    const box = dialog.querySelector('.hf-vh__selection')
+    box.querySelector('.hf-vh__selection-title').textContent = selection.size ? `${box.dataset.some} (${selection.size})` : box.dataset.none
+    box.querySelector('[data-hf-vh-clear]').hidden = !selection.size
+    box.querySelector('.hf-vh__token-list').replaceChildren(...[...selection].map(([value, label]) => {
+      const remove = el('button', { type: 'button', class: 'hf-vh__token-remove', 'aria-label': T('Delete'), 'data-value': value }, el('i', { class: 'sap-icon--decline', 'aria-hidden': 'true' }))
+      return el('span', { class: 'hf-vh__token' }, el('span', { text: label }), remove)
+    }))
+    dialog.querySelector('[data-hf-vh-copy]').disabled = !selection.size
+  }
+  document.addEventListener('click', e => {
+    const dialog = multiDialog(e.target)
+    if (!dialog) return
+    const selection = multiSelection(dialog)
+    const row = e.target.closest('.hf-vh-row')
+    if (row) {
+      e.stopImmediatePropagation()
+      if (selection.has(row.dataset.value)) selection.delete(row.dataset.value); else selection.set(row.dataset.value, rowLabel(row))
+      syncMulti(dialog)
+    } else if (e.target.closest('[data-hf-vh-all]')) {
+      const all = e.target.closest('[data-hf-vh-all]').checked
+      for (const r of dialog.querySelectorAll('.hf-vh-row')) { if (all) selection.set(r.dataset.value, rowLabel(r)); else selection.delete(r.dataset.value) }
+      syncMulti(dialog)
+    } else if (e.target.closest('[data-hf-vh-clear]')) {
+      selection.clear(); syncMulti(dialog)
+    } else if (e.target.closest('.hf-vh__token-remove')) {
+      selection.delete(e.target.closest('.hf-vh__token-remove').dataset.value); syncMulti(dialog)
+    } else if (e.target.closest('[data-hf-vh-copy]')) {
+      navigator.clipboard?.writeText([...selection.values()].join('\n')).catch(() => {})
+    } else if (e.target.closest('[data-hf-vh-ok]')) {
+      const input = document.querySelector(`form.hf-filter-bar [name="${CSS.escape(dialog.dataset.hfTarget)}"]`)
+      document.querySelectorAll('.hf-overlay[data-hf-dialog]').forEach(hfDismiss)
+      if (input) { input.value = [...selection.keys()].join(';'); input.focus() }
+    } else if (e.target.closest('[data-hf-vh-conditions]')) {
+      const button = document.querySelector(`[data-hf-filter="${CSS.escape(dialog.dataset.hfTarget.replace(/^f\./, ''))}"] button`)
+      document.querySelectorAll('.hf-overlay[data-hf-dialog]').forEach(hfDismiss)
+      if (button) openConditions(button)
+    } else return
+    e.stopImmediatePropagation()
+  }, true)
+  document.addEventListener('htmx:after:swap', () => { const dialog = document.querySelector('.hf-dialog[data-hf-multi]'); if (dialog) syncMulti(dialog) })
 
   // The value help dialog fills filter fields too (their inputs are named f.<path>)
   document.addEventListener('click', e => {
@@ -859,7 +998,322 @@
     if (input) { input.value = row.dataset.value; input.focus() }
   }, true)
 
+  /** "Copy to Clipboard": the ticked rows as tab separated text, the headers first (what FE copies from a table). */
+  const copySelectedRows = container => {
+    const table = container.querySelector('table')
+    if (!table) return
+    const cells = row => [...row.children].filter(cell => !cell.classList.contains('fd-table__cell--checkbox') && !cell.classList.contains('hf-col-nav'))
+    const text = cell => cell.textContent.replace(/\s+/g, ' ').trim()
+    const rows = [...table.querySelectorAll('tbody tr')].filter(row => row.querySelector('.hf-checkbox:checked'))
+    const lines = [table.querySelector('thead tr'), ...rows].map(row => cells(row).map(text).join('\t'))
+    navigator.clipboard?.writeText(lines.join('\n')).catch(() => {})
+  }
+
+  // ---- date filter: FE's dynamic date range ----
+  // One input with a calendar button; its popup lists what FE lists (single dates, ranges, weeks, months, quarters, years), and the
+  // choices with a day in them open a calendar. The native date inputs of the field stay in the form (hidden) and hold the days of a
+  // range (`f.<path>.ge` / `.le`); an operator (Today, This Week, Last 3 Months ...) goes to the field's operator input (`f.<path>`) as the
+  // text the server understands (lib/data/date-operators.js).
+  const DT = (key, fallback) => texts[key] ?? fallback
+  const DATE_GROUPS = () => [
+    [DT('DateSingleDates', 'Single Dates'), [['date', DT('DateDate', 'Date')], ['today', DT('DateToday', 'Today')], ['yesterday', DT('DateYesterday', 'Yesterday')], ['tomorrow', DT('DateTomorrow', 'Tomorrow')]]],
+    [DT('DateRanges', 'Date Ranges'), [['range', DT('DateFromTo', 'From / To')], ['from', DT('DateFrom', 'From')], ['to', DT('DateTo', 'To')], ['year to date', DT('DateYearToDate', 'Year to Date')], ['date to year', DT('DateDateToYear', 'Date to Year')],
+      ['lastx', DT('DateLastX', 'Last X Days / Weeks / Months / Quarters / Years')], ['nextx', DT('DateNextX', 'Next X Days / Weeks / Months / Quarters / Years')], ['todayxy', DT('DateTodayXY', 'Today -X / +Y Days')]]],
+    [DT('DateWeeks', 'Weeks'), [['this week', DT('DateThisWeek', 'This Week')], ['last week', DT('DateLastWeek', 'Last Week')], ['next week', DT('DateNextWeek', 'Next Week')]]],
+    [DT('DateMonths', 'Months'), [['month', DT('DateMonth', 'Month')], ['this month', DT('DateThisMonth', 'This Month')], ['last month', DT('DateLastMonth', 'Last Month')], ['next month', DT('DateNextMonth', 'Next Month')]]],
+    [DT('DateQuarters', 'Quarters'), [['this quarter', DT('DateThisQuarter', 'This Quarter')], ['last quarter', DT('DateLastQuarter', 'Last Quarter')], ['next quarter', DT('DateNextQuarter', 'Next Quarter')],
+      ['first quarter', DT('DateFirstQuarter', 'First Quarter')], ['second quarter', DT('DateSecondQuarter', 'Second Quarter')], ['third quarter', DT('DateThirdQuarter', 'Third Quarter')], ['fourth quarter', DT('DateFourthQuarter', 'Fourth Quarter')]]],
+    [DT('DateYears', 'Years'), [['this year', DT('DateThisYear', 'This Year')], ['last year', DT('DateLastYear', 'Last Year')], ['next year', DT('DateNextYear', 'Next Year')]]],
+    [DT('DateNoRange', 'No Date / Range'), [['not specified', DT('DateNotSpecified', 'Not Specified')]]]
+  ]
+  const CALENDAR_OPTIONS = new Set(['date', 'range', 'from', 'to'])
+  const PANEL_OPTIONS = new Set(['lastx', 'nextx', 'todayxy', 'month'])
+  const dateLang = document.documentElement.lang || navigator.language
+  const isoOf = ms => new Date(ms).toISOString().slice(0, 10)
+  const showDay = iso => iso ? new Intl.DateTimeFormat(dateLang, { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(`${iso}T00:00:00Z`)) : ''
+  const parseDay = text => {
+    const t = text.trim()
+    if (/^\d{4}-\d\d-\d\d$/.test(t)) return t
+    const ms = Date.parse(`${t} UTC`)
+    return Number.isNaN(ms) ? null : isoOf(ms)
+  }
+  const optionLabel = id => DATE_GROUPS().flatMap(([, options]) => options).find(([key]) => key === id)?.[1]
+  const titleCase = text => text.replace(/\b\w/g, c => c.toUpperCase())
+
+  function enhanceDatePicker(box) {
+    if (box.dataset.hfEnhanced || box.querySelector('[type=datetime-local]')) return
+    const ge = box.querySelector('input[name$=".ge"]')
+    const le = box.querySelector('input[name$=".le"]')
+    const operator = box.querySelector('[data-hf-date-operator]')
+    if (!ge || !le || !operator) return
+    box.dataset.hfEnhanced = '1'
+    box.classList.add('hf-date-range--enhanced')
+    const text = el('input', { type: 'text', class: 'hf-date-range__text', autocomplete: 'off', 'aria-label': ge.getAttribute('aria-label').replace(/ \(from\)$/, '') })
+    const icon = el('button', { type: 'button', class: 'hf-date-range__icon', 'aria-haspopup': 'dialog', 'aria-label': DT('DateOpenPicker', 'Open Picker') }, el('i', { class: 'sap-icon--appointment-2', 'aria-hidden': 'true' }))
+    box.append(text, icon)
+
+    const show = () => {
+      text.value = operator.value
+        ? (optionLabel(operator.value.toLowerCase()) ?? titleCase(operator.value))
+        : ge.value && le.value ? (ge.value === le.value ? showDay(ge.value) : `${showDay(ge.value)} – ${showDay(le.value)}`)
+          : ge.value ? `${DT('DateFrom', 'From')} ${showDay(ge.value)}` : le.value ? `${DT('DateTo', 'To')} ${showDay(le.value)}` : ''
+      operator.disabled = !operator.value // an empty operator is not sent
+    }
+    const commit = ({ op = '', from = '', to = '' }) => {
+      operator.value = op; ge.value = from; le.value = to
+      show()
+      ge.dispatchEvent(new Event('change', { bubbles: true }))
+    }
+    // typing: an operator by its name, a day, or two days
+    text.addEventListener('change', () => {
+      const typed = text.value.trim()
+      if (!typed) return commit({})
+      const known = DATE_GROUPS().flatMap(([, options]) => options).find(([id, label]) => !CALENDAR_OPTIONS.has(id) && !PANEL_OPTIONS.has(id) && [id, label.toLowerCase()].includes(typed.toLowerCase()))
+      if (known) return commit({ op: known[0] })
+      const parts = typed.split(/\s[–-]\s|\.\.\./)
+      const days = parts.map(parseDay)
+      if (days.length === 2 && days.every(Boolean)) return commit({ from: days[0], to: days[1] })
+      if (days.length === 1 && days[0]) return commit({ from: days[0], to: days[0] })
+      show()
+    })
+    show()
+
+    let pop = null
+    const close = () => { pop?.remove(); pop = null; document.removeEventListener('mousedown', outside, true); document.removeEventListener('keydown', onKey, true) }
+    const outside = e => { if (pop && !pop.contains(e.target) && !box.contains(e.target)) close() }
+    const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); close(); text.focus() } }
+    const open = () => {
+      if (pop) return close()
+      pop = el('div', { class: 'hf-datepop', role: 'dialog' })
+      box.closest('.hf-filter').append(pop)
+      document.addEventListener('mousedown', outside, true)
+      document.addEventListener('keydown', onKey, true)
+      list()
+    }
+    icon.addEventListener('click', open)
+    text.addEventListener('keydown', e => { if (e.key === 'F4' || (e.altKey && e.key === 'ArrowDown')) { e.preventDefault(); open() } })
+
+    const header = (title, back) => {
+      const bar = el('div', { class: 'hf-datepop__bar' })
+      if (back) bar.append(el('button', { type: 'button', class: 'hf-datepop__back', 'aria-label': DT('DateBack', 'Back') }, el('i', { class: 'sap-icon--navigation-left-arrow', 'aria-hidden': 'true' })))
+      bar.append(el('span', { text: title }))
+      bar.querySelector('button')?.addEventListener('click', list)
+      return bar
+    }
+    const footer = (hint, onApply, enabled) => {
+      const apply = el('button', { type: 'button', class: 'fd-button fd-button--emphasized', text: DT('DateApply', 'Apply'), disabled: !enabled })
+      const cancel = el('button', { type: 'button', class: 'fd-button fd-button--transparent', text: T('Cancel') })
+      apply.addEventListener('click', () => { onApply(); close() })
+      cancel.addEventListener('click', close)
+      return el('div', { class: 'hf-datepop__foot' }, hint ? el('div', { class: 'hf-datepop__hint', text: hint }) : null, el('div', { class: 'hf-datepop__buttons' }, apply, cancel))
+    }
+    const panel = (...nodes) => pop.replaceChildren(...nodes)
+
+    function list() {
+      const ul = el('ul', { class: 'hf-datepop__list', role: 'listbox' })
+      for (const [group, options] of DATE_GROUPS()) {
+        ul.append(el('li', { class: 'hf-datepop__group', text: group }))
+        for (const [id, label] of options) {
+          const item = el('li', { class: 'hf-datepop__item', role: 'option', tabindex: '0', 'data-id': id }, el('span', { text: label }))
+          if (CALENDAR_OPTIONS.has(id)) item.append(el('i', { class: 'sap-icon--appointment-2', 'aria-hidden': 'true' }))
+          const choose = () => CALENDAR_OPTIONS.has(id) ? calendar(id, label) : PANEL_OPTIONS.has(id) ? parameters(id, label) : (commit({ op: id }), close())
+          item.addEventListener('click', choose)
+          item.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose() } })
+          ul.append(item)
+        }
+      }
+      panel(ul)
+      ul.querySelector('.hf-datepop__item')?.focus()
+    }
+
+    function parameters(id, title) {
+      const numbers = [el('input', { type: 'number', class: 'fd-input', min: '0', value: '1', 'aria-label': 'X' })]
+      const body = el('div', { class: 'hf-datepop__form' })
+      let unit
+      if (id === 'todayxy') {
+        numbers.push(el('input', { type: 'number', class: 'fd-input', min: '0', value: '1', 'aria-label': 'Y' }))
+        body.append(el('label', { text: '−X' }), numbers[0], el('label', { text: '+Y' }), numbers[1])
+      } else if (id === 'month') {
+        unit = el('select', { class: 'fd-select', 'aria-label': title }, ...Array.from({ length: 12 }, (_, i) => el('option', { value: String(i + 1).padStart(2, '0'), text: new Intl.DateTimeFormat(dateLang, { month: 'long', timeZone: 'UTC' }).format(Date.UTC(2000, i, 1)) })))
+        unit.value = String(new Date().getMonth() + 1).padStart(2, '0')
+        body.append(unit)
+      } else {
+        unit = el('select', { class: 'fd-select', 'aria-label': DT('DateUnit', 'Unit') }, ...[['day', 'Days'], ['week', 'Weeks'], ['month', 'Months'], ['quarter', 'Quarters'], ['year', 'Years']].map(([value, key]) => el('option', { value, text: DT(`Date${key}`, key) })))
+        body.append(numbers[0], unit)
+      }
+      panel(header(title, true), body, footer('', () => {
+        const [x, y] = numbers.map(n => Math.max(0, parseInt(n.value, 10) || 0))
+        if (id === 'todayxy') return commit({ op: `today -${x}/+${y} days` })
+        if (id === 'month') return commit({ op: `month ${new Date().getFullYear()}-${unit.value}` })
+        commit({ op: `${id === 'lastx' ? 'last' : 'next'} ${x} ${unit.value}s` })
+      }, true))
+    }
+
+    function calendar(id, title) {
+      const selected = id === 'range' ? [ge.value || null, le.value || null] : [id === 'to' ? le.value || null : ge.value || null, null]
+      const start = selected[0] ? new Date(`${selected[0]}T00:00:00Z`) : new Date()
+      let year = start.getUTCFullYear()
+      let month = start.getUTCMonth()
+      const [from0] = selected
+      const pick = { from: from0, to: id === 'range' ? selected[1] : null }
+      const info = new Intl.Locale(dateLang).weekInfo ?? new Intl.Locale(dateLang).getWeekInfo?.()
+      const firstDay = (info?.firstDay ?? 7) % 7
+      const body = el('div', { class: 'hf-datepop__cal' })
+      const complete = () => id === 'range' ? !!(pick.from && pick.to) : !!pick.from
+      const isoWeek = ms => { const d = new Date(ms); const day = (d.getUTCDay() + 6) % 7; const thursday = ms + (3 - day) * 86400000; const y = new Date(thursday).getUTCFullYear(); return Math.floor((thursday - Date.UTC(y, 0, 1)) / 86400000 / 7) + 1 }
+      let mode = 'days'
+      const monthNames = Array.from({ length: 12 }, (_, i) => new Intl.DateTimeFormat(dateLang, { month: 'long', timeZone: 'UTC' }).format(Date.UTC(2000, i, 1)))
+      const drawChoice = () => { // the month or the year to go to
+        const head = el('div', { class: 'hf-datepop__month' }, el('button', { type: 'button', 'data-page': '-1', 'aria-label': DT('DatePrevious', 'Previous') }, el('i', { class: 'sap-icon--navigation-left-arrow', 'aria-hidden': 'true' })),
+          el('span', { class: 'hf-datepop__name', text: mode === 'months' ? String(year) : `${Math.floor(year / 20) * 20} – ${Math.floor(year / 20) * 20 + 19}` }),
+          el('button', { type: 'button', 'data-page': '1', 'aria-label': DT('DateNext', 'Next') }, el('i', { class: 'sap-icon--navigation-right-arrow', 'aria-hidden': 'true' })))
+        const base = Math.floor(year / 20) * 20
+        const cells = mode === 'months' ? monthNames.map((name, i) => [i, name, i === month]) : Array.from({ length: 20 }, (_, i) => [base + i, String(base + i), base + i === year])
+        const grid = el('div', { class: 'hf-datepop__choices' }, ...cells.map(([value, label, current]) => el('button', { type: 'button', 'data-value': String(value), class: current ? 'is-selected' : '', text: label })))
+        const onClick = e => {
+          const page = e.target.closest('[data-page]')?.dataset.page
+          if (page) { year += Number(page) * (mode === 'months' ? 1 : 20); return drawChoice() }
+          const value = e.target.closest('[data-value]')?.dataset.value
+          if (value == null) return
+          if (mode === 'months') month = Number(value); else year = Number(value)
+          mode = 'days'; draw()
+        }
+        head.addEventListener('click', onClick); grid.addEventListener('click', onClick)
+        body.replaceChildren(head, grid)
+      }
+      const draw = () => {
+        if (mode !== 'days') return drawChoice()
+        const head = el('div', { class: 'hf-datepop__month' },
+          el('button', { type: 'button', 'aria-label': DT('DatePrevious', 'Previous'), 'data-step': '-1' }, el('i', { class: 'sap-icon--navigation-left-arrow', 'aria-hidden': 'true' })),
+          el('button', { type: 'button', class: 'hf-datepop__name', 'data-mode': 'months', text: monthNames[month] }),
+          el('button', { type: 'button', class: 'hf-datepop__name', 'data-mode': 'years', text: String(year) }),
+          el('button', { type: 'button', 'aria-label': DT('DateNext', 'Next'), 'data-step': '1' }, el('i', { class: 'sap-icon--navigation-right-arrow', 'aria-hidden': 'true' })))
+        head.addEventListener('click', e => { const next = e.target.closest('[data-mode]')?.dataset.mode; if (next) { mode = next; return draw() } const step = e.target.closest('[data-step]')?.dataset.step; if (step) { const d = new Date(Date.UTC(year, month + Number(step), 1)); year = d.getUTCFullYear(); month = d.getUTCMonth(); draw() } })
+        const grid = el('table', { class: 'hf-datepop__grid', role: 'grid' })
+        const weekdays = Array.from({ length: 7 }, (_, i) => new Intl.DateTimeFormat(dateLang, { weekday: 'short', timeZone: 'UTC' }).format(Date.UTC(2023, 0, 1 + ((firstDay + i) % 7))))
+        grid.append(el('thead', {}, el('tr', {}, el('th', { text: '' }), ...weekdays.map(day => el('th', { text: day })))))
+        const tbody = el('tbody')
+        const first = Date.UTC(year, month, 1)
+        let cursor = first - ((new Date(first).getUTCDay() - firstDay + 7) % 7) * 86400000
+        const today = isoOf(Date.now())
+        for (let week = 0; week < 6; week++) {
+          const row = el('tr', {}, el('th', { class: 'hf-datepop__week', text: String(isoWeek(cursor + 3 * 86400000)) }))
+          for (let day = 0; day < 7; day++, cursor += 86400000) {
+            const iso = isoOf(cursor)
+            const inRange = pick.from && pick.to && iso > pick.from && iso < pick.to
+            const edge = iso === pick.from || iso === pick.to
+            row.append(el('td', {}, el('button', { type: 'button', 'data-day': iso, class: `hf-datepop__day${new Date(cursor).getUTCMonth() !== month ? ' is-other' : ''}${edge ? ' is-selected' : ''}${inRange ? ' is-between' : ''}${iso === today ? ' is-today' : ''}`, text: String(new Date(cursor).getUTCDate()) })))
+          }
+          tbody.append(row)
+        }
+        grid.append(tbody)
+        grid.addEventListener('click', e => {
+          const iso = e.target.closest('[data-day]')?.dataset.day
+          if (!iso) return
+          if (id !== 'range') { pick.from = iso; pick.to = null }
+          else if (!pick.from || pick.to) { pick.from = iso; pick.to = null }
+          else if (iso < pick.from) { pick.to = pick.from; pick.from = iso }
+          else pick.to = iso
+          draw()
+        })
+        body.replaceChildren(head, grid)
+        const apply = pop.querySelector('.hf-datepop__foot .fd-button--emphasized')
+        if (apply) apply.disabled = !complete()
+      }
+      panel(header(title, true), body, footer(id === 'range' ? DT('DateChooseDates', 'Choose Dates') : '', () => {
+        if (id === 'range') commit({ from: pick.from, to: pick.to })
+        else if (id === 'date') commit({ from: pick.from, to: pick.from })
+        else if (id === 'from') commit({ from: pick.from })
+        else commit({ to: pick.from })
+      }, complete()))
+      draw()
+    }
+  }
+  const enhanceDatePickers = () => document.querySelectorAll('.hf-date-range[data-hf-picker=range]').forEach(enhanceDatePicker)
+
+  // ---- column widths ----
+  // Fiori elements gives every column the width `sap.m.table.Util.calcColumnWidth` works out from the property type and the
+  // header, by measuring sample text in a canvas. The server says what to measure (`data-hf-width`, lib/render/column-width.js);
+  // this is the same calculation, so a column is as wide here as in the Fiori elements app.
+  const columnWidth = (() => {
+    const canvas = document.createElement('canvas').getContext('2d')
+    const BASE = 16
+    const measure = (text, font) => { canvas.font = font; return canvas.measureText(text || '').width / BASE + 0.05 }
+    const NUMERIC = { Byte: 3, SByte: 3, Int16: 5, Int32: 9, Int64: 12, Single: 6, Float: 12, Double: 13, Decimal: 15 }
+    const lang = document.documentElement.lang || navigator.language
+    const sampleDate = new Date(2023, 9, 26, 22, 47, 58, 999)
+    const format = (options, value = sampleDate) => new Intl.DateTimeFormat(lang, options).format(value)
+
+    const typeWidth = (type, font, { maxWidth, defaultWidth }) => {
+      const cap = width => Math.min(width, maxWidth)
+      if (type.t === 'Boolean') return cap(Math.max(measure(T('Yes'), font), measure(T('No'), font)))
+      if (type.t === 'String') {
+        const max = type.m || 0
+        if (!max || max * 0.25 > maxWidth) return maxWidth
+        const sample = measure('A'.repeat(max), font)
+        if (max < maxWidth || maxWidth < 10) return cap(sample)
+        const width = Math.log(sample - maxWidth * 0.16) / Math.log(maxWidth / 3) * (maxWidth / 2) * Math.pow(maxWidth / 19, 1 / sample)
+        return cap(Math.min(width, sample))
+      }
+      if (type.t === 'Date') return cap(measure(`${format({ dateStyle: 'medium' })}-`, font))
+      if (type.t === 'DateTimeOffset') return cap(measure(`${format({ dateStyle: 'medium', timeStyle: 'medium' })}-`, font))
+      if (type.t === 'TimeOfDay') return cap(measure(format({ timeStyle: 'medium' }), font))
+      if (NUMERIC[type.t]) {
+        const scale = type.s || 0
+        const precision = Math.min(type.p || 20, NUMERIC[type.t])
+        const sample = new Intl.NumberFormat(lang, { minimumFractionDigits: scale, maximumFractionDigits: scale }).format(2 * Math.pow(10, precision - scale - 1))
+        return cap(measure(sample, font))
+      }
+      return defaultWidth
+    }
+
+    const headerWidth = (header, contentWidth, maxWidth, minWidth, font) => {
+      if (contentWidth > maxWidth) return maxWidth
+      if (minWidth > header.length) return minWidth
+      if (!contentWidth) return measure(header, font)
+      const original = Math.min(measure(header, font), maxWidth * 0.7)
+      contentWidth = Math.max(contentWidth, minWidth)
+      const ratio = Math.max(1, 1 - (Math.log(Math.max(contentWidth - 1.7, 0.2)) / Math.log(maxWidth * 0.5)) + 1)
+      const max = ratio * contentWidth
+      const diff = Math.max(0, original - max)
+      return diff < 0.15 ? original : max + diff * (1 - 1 / contentWidth) / Math.E
+    }
+
+    /** The width in rem of the column a `data-hf-width` spec describes, `bodyFont`/`headFont` being the fonts its cells and header use. */
+    return (spec, bodyFont, headFont) => {
+      const minWidth = 2, maxWidth = 19, padding = 1.0625
+      const gap = spec.crit ? 1 : 0 // the cell's icon; the amount and its currency are two measured types, no extra gap (FE's unit gap is for a separate unit column)
+      const content = gap + spec.types.reduce((inner, type) => inner + typeWidth(type, bodyFont, { maxWidth, defaultWidth: 8 }) + (inner && 0.5), 0)
+      const header = spec.l ? headerWidth(spec.l, content, maxWidth, minWidth, headFont) : 0
+      return Math.ceil(Math.min(Math.max(minWidth, content, header), maxWidth) * 100) / 100 + padding
+    }
+  })()
+
+  const applyColumnWidths = () => {
+    document.querySelectorAll('table.hf-table, table.hf-vh__table').forEach(table => {
+      const heads = [...table.querySelectorAll('thead th')]
+      if (!heads.some(th => th.dataset.hfWidth)) return
+      const body = table.querySelector('tbody td')
+      const bodyFont = getComputedStyle(body || heads[0]).font
+      let total = 0 // what the sized columns add up to, for a table that is not full width
+      for (const th of heads) {
+        let rem
+        try { rem = th.dataset.hfWidth ? columnWidth(JSON.parse(th.dataset.hfWidth), bodyFont, getComputedStyle(th).font) : undefined } catch { rem = undefined }
+        if (rem) { // FE's column border sits outside the calculated width, and so does the padding a first column has beyond the cell padding
+          const extra = th.previousElementSibling ? 0 : Math.max(0, parseFloat(getComputedStyle(th).paddingLeft) - 8)
+          th.style.width = `calc(${rem}rem + ${1 + extra}px)`
+          total += rem * 16 + 1 + extra
+        } else total += th.getBoundingClientRect().width
+      }
+      if (table.classList.contains('hf-vh__table')) table.style.width = `${Math.ceil(total)}px`
+      table.classList.add('hf-table--sized')
+    })
+  }
+  document.fonts?.ready.then(applyColumnWidths)
+
   const applyAll = () => {
+    applyColumnWidths()
+    enhanceDatePickers()
     applyViews()
     applyFilters()
     document.querySelectorAll('#hf-variants').forEach(renderVariants)

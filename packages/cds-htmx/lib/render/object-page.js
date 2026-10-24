@@ -3,6 +3,7 @@ const ids = require('./ids')
 const { evaluate, paths: pathsOf } = require('../annotations/expressions')
 const { formField, fieldLabel } = require('./field')
 const { rowsHtml, tableHead, columnVisibilityStyle, rowHref, treeAttributes, sectionGrowing } = require('./table')
+const { exportSplitButton } = require('./list-report')
 const { formatCount } = require('../data/format')
 const { criticalityClass } = require('../data/format')
 const { toast } = require('./toast')
@@ -117,7 +118,7 @@ function tableBlock(facet, ctx) {
   const { editing, selectable } = mode
   // A tree table (display mode): its rows and the children of an expanded node are the hierarchy entity's own set
   const tree = !mode.draft && child?.tree
-  const miniLayout = { navigable: facet.content.navigable, table: { columns: facet.content.columns, hierarchy: tree ? facet.content.hierarchy : undefined } }
+  const miniLayout = { entityType: facet.content.targetEntityType, navigable: facet.content.navigable, table: { columns: facet.content.columns, hierarchy: tree ? facet.content.hierarchy : undefined } }
   const rowSetPath = tree ? tree.set : entitySetPath
   const keyNames = child?.keyNames || []
   const bundle = ctx.bundle
@@ -130,7 +131,7 @@ function tableBlock(facet, ctx) {
   const edit = editing ? { nav, rowPath: row => rowHref(ctx.basePath, entitySetPath, keyNames, row) } : undefined
   return html`
     <div class="hf-table-toolbar hf-table-toolbar--section">
-      <h2 class="hf-section__title">${facet.label}${tree ? html`` : html`<span id="${sectionId}-count"> (${paged ? formatCount(child.count, ctx.locale) : rows.length})</span>`}</h2>
+      <h2 class="hf-section__title">${facet.label}${tree ? html`` : html`<span id="${sectionId}-count"> (${paged ? formatCount(child.count, ctx.locale) : rows.length})</span><span class="hf-count-sel" data-hf-sel-a=" (${t('Selected')}: " data-hf-sel-b=", ${t('Rows')}: " data-hf-selected-count></span>`}</h2>
       <div class="hf-spacer"></div>
       <div class="hf-input-group hf-section-search">
         <input type="search" class="fd-input" data-hf-table-search placeholder="${t('Search')}" aria-label="${t('Search')}">
@@ -141,17 +142,20 @@ function tableBlock(facet, ctx) {
           hx-target="#app" hx-push-url="false" hx-swap="innerHTML show:window:top">${t('Create')}</button>` : html``}
         ${selectable ? html`<button class="fd-button fd-button--transparent" disabled data-hf-needs-selection="#${sectionId}" aria-label="${t('Delete')}"
           hx-post="${ctx.basePath}/${entitySetPath}/$delete" hx-include="#${sectionId}" hx-target="#app" hx-push-url="false" hx-swap="innerHTML show:window:top"
-          hx-confirm="${t('ConfirmDeleteSelected')}" data-hf-confirm-count="#${sectionId} tbody .hf-checkbox:checked"
+          hx-confirm="${t('ConfirmDeleteSelected')}" data-hf-confirm-one="${t('ConfirmDeleteOne')}" data-hf-confirm-count="#${sectionId} tbody .hf-checkbox:checked"
           data-hf-confirm-title="${t('Delete')}" data-hf-confirm-ok="${t('Delete')}" data-hf-confirm-cancel="${t('Cancel')}" data-hf-confirm-critical>${t('Delete')}</button>` : html``}` : html``}
       <span class="hf-toolbar-separator"></span>
+      <button type="button" class="fd-button fd-button--transparent hf-icon-button" disabled data-hf-action="copy" data-hf-needs-selection="#${sectionId}" aria-label="${t('Copy')}" title="${t('Copy')}"><i class="sap-icon--copy" aria-hidden="true"></i></button>
       ${editing && mode.creatable ? html`<button type="button" class="fd-button fd-button--transparent hf-icon-button" data-hf-action="paste" data-hf-paste-url="${ctx.basePath}/${entitySetPath}/$paste" aria-label="${t('Paste')}" title="${t('Paste')}"><i class="sap-icon--paste" aria-hidden="true"></i></button>` : html``}
-      <button type="button" class="fd-button fd-button--transparent hf-icon-button" data-hf-action="${paged ? 'export-section' : 'export-dom'}" data-hf-export="${tableUrl.replace(/\$table$/, '$export')}" data-hf-filename="${facet.label}" aria-label="${t('ExportCsv')}" title="${t('ExportCsv')}"><i class="sap-icon--excel-attachment" aria-hidden="true"></i></button>
+      <span class="hf-toolbar-separator"></span>
       <button type="button" class="fd-button fd-button--transparent hf-icon-button" data-hf-action="settings" aria-label="${t('ViewSettings')}" title="${t('ViewSettings')}"><i class="sap-icon--action-settings" aria-hidden="true"></i></button>
+      <span class="hf-toolbar-separator"></span>
+      ${exportSplitButton(tableUrl.replace(/\$table$/, '$export'), { bundle, t: (b, key) => t(key), action: paged ? 'export-section' : 'export-dom', attrs: html` data-hf-filename="${facet.label}"` })}
     </div>
     ${columnVisibilityStyle(`#${sectionId}`, facet.content.columns, rows, { selectable })}
     <table class="fd-table hf-table" role="${tree ? 'treegrid' : 'table'}"${treeAttributes(miniLayout, ctx.basePath, rowSetPath)}${paged ? html` data-hf-table-url="${tableUrl}"` : html``}>
-      ${tableHead(facet.content.columns, rows, { selectable, sortable: false, editing, sortKeys: paged })}
-      <tbody id="${sectionId}-body">${rowsHtml(miniLayout, rows, { basePath: ctx.basePath, entitySetPath: rowSetPath, keyNames, bundle, t: ctx.t, selectable, edit })}</tbody>
+      ${tableHead(facet.content.columns, rows, { selectable, sortable: false, editing, sortKeys: paged, entityType: facet.content.targetEntityType })}
+      <tbody id="${sectionId}-body">${rowsHtml(miniLayout, rows, { basePath: ctx.basePath, entitySetPath: rowSetPath, keyNames, bundle, t: ctx.t, selectable, edit, locale: ctx.locale })}</tbody>
     </table>
     ${paged ? sectionGrowing(sectionId, tableUrl, { skip: rows.length, hasMore: child.hasMore, count: child.count, bundle, t: ctx.t, locale: ctx.locale }) : html``}`
 }
@@ -274,7 +278,7 @@ function footerBar(bundle, t, { basePath, entitySetPath, editMode, node } = {}) 
       </footer>`
   }
   const discard = html`<button class="fd-button fd-button--transparent" hx-post="${opPath}/$discard" hx-target="#app" hx-push-url="false"
-    hx-swap="innerHTML show:window:top" ${confirmAttrs(t(bundle, 'ConfirmDiscardDraft'), { bundle, t, title: 'DiscardDraft', ok: 'DiscardDraft' })}>${t(bundle, 'DiscardDraft')}</button>`
+    hx-swap="innerHTML show:window:top" ${confirmAttrs(t(bundle, 'ConfirmDiscardChanges'), { bundle, t, title: 'DiscardDraft', ok: 'Discard' })} data-hf-confirm-popover>${t(bundle, 'DiscardDraft')}</button>`
   return html`
     <footer class="hf-footer" id="${ids.opFooter()}">
       <div id="${ids.opMessages()}" class="hf-footer__messages"></div>
@@ -493,9 +497,9 @@ function sectionRowsHtml(facet, rows, keyNames, ctx) {
   const nav = facet.content.nav
   const entitySetPath = `${ctx.entitySetPath}/${nav}`
   const { editing, selectable } = sectionMode(facet, ctx)
-  const miniLayout = { navigable: facet.content.navigable, table: { columns: facet.content.columns } }
+  const miniLayout = { entityType: facet.content.targetEntityType, navigable: facet.content.navigable, table: { columns: facet.content.columns } }
   const edit = editing ? { nav, rowPath: row => rowHref(ctx.basePath, entitySetPath, keyNames, row) } : undefined
-  return rowsHtml(miniLayout, rows, { basePath: ctx.basePath, entitySetPath, keyNames, bundle: ctx.bundle, t: ctx.t, selectable, edit })
+  return rowsHtml(miniLayout, rows, { basePath: ctx.basePath, entitySetPath, keyNames, bundle: ctx.bundle, t: ctx.t, selectable, edit, locale: ctx.locale })
 }
 
 module.exports = { sectionRowsHtml, sectionGrowing, objectPageFragment, breadcrumbs, facetBlock, facetContent, footerBar, sideEffectParts, visibilityParts, titleIfChanged }

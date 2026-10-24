@@ -212,10 +212,10 @@ async function pushListRow(tx, client, { srv, servicePath, entityType, view, key
   if (!row) return
   await markDraftOwners(tx, entityType, layout, [row], client.user?.id)
   const keyNames = keyElements(entityDef(cds.model, entityType)).map(k => k.name)
-  const numeric = layout.table.columns.map(col => isNumericColumn(col, [row]))
+  const numeric = [...layout.table.columns, ...(layout.table.extraColumns ?? [])].map(col => isNumericColumn(col, [row]))
   publish(client, [{
     target: '#' + rowId(keyNames, row), swap: 'outerMorph',
-    html: rowMarkup(layout, row, { basePath: view.basePath, entitySetPath: view.set, keyNames, bundle: cache.bundleFor({ appRoot: appRoot(), locale: client.locale, app: view.app }), t: i18n.t, numeric, selectable: true })
+    html: rowMarkup(layout, row, { basePath: view.basePath, entitySetPath: view.set, keyNames, bundle: cache.bundleFor({ appRoot: appRoot(), locale: client.locale, app: view.app }), t: i18n.t, numeric, selectable: true, locale: client.locale })
   }])
 }
 

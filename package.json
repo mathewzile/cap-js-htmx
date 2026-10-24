@@ -26,6 +26,7 @@
     "watch": "cds watch",
     "test": "node --env-file=packages/cds-htmx/test/test.env --test \"packages/cds-htmx/test/**/*.test.js\"",
     "test:e2e": "playwright test -c packages/cds-htmx/test/e2e/playwright.config.js",
+    "test:visual": "playwright test -c packages/cds-htmx/test/e2e/visual.config.js",
     "lint": "eslint packages/cds-htmx/lib packages/cds-htmx-shell",
     "watch-manage-books": "cds watch --open managebooks/index.html?sap-ui-xx-viewCache=false --livereload false",
     "watch-browse-genres": "cds watch --open browsegenres/index.html?sap-ui-xx-viewCache=false --livereload false",

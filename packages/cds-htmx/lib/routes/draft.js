@@ -154,6 +154,7 @@ module.exports = {
     const { IsActiveEntity: _ignored, ...plainKeys } = keys
     const draftRow = await tx.run(SELECT.one.from(entity.name).columns('HasActiveEntity').where({ ...plainKeys, IsActiveEntity: false }))
     await draftLib.discard(tx, entity.name, keys)
+    req.successMessage = this.text(req, 'DraftDiscarded')
     if (draftRow?.HasActiveEntity) {
       const activeKeys = { ...plainKeys, IsActiveEntity: true }
       const activeRaw = keysLib.formatKeys(activeKeys)

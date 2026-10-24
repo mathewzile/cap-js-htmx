@@ -44,13 +44,13 @@ function isMandatory(field, row) {
 /** The `<input>`/`<textarea>` for one editable field (§3.4 field renderer table). Patches go
  *  straight to the server on change (`PATCH $field/:path`, §routes) -- the side-effects engine
  *  (Phase 6) is what eventually reacts to them; for now the control just round-trips its own value. */
-function fieldEditControl(field, row, { basePath, entitySetPath, valueListOptions, id, editMode }) {
+function fieldEditControl(field, row, { basePath, entitySetPath, valueListOptions, id, editMode, source }) {
   const value = row[field.cqlPath]
   // Draft: every change is PATCHed to the draft right away (the response carries the other places
   // that show the same value). Direct/create: plain inputs, the footer's Save sends them all.
   // Never push a URL for a field change: this is not navigation.
   const common = editMode === 'draft' || editMode == null
-    ? html`id="${id}" name="${field.path}" hx-patch="${basePath}/${entitySetPath}/$field/${field.path}" hx-trigger="change" hx-include="this" hx-push-url="false" hx-swap="none" hx-headers:inherited:append='{"X-Hf-Source":"${id.replace(/--input$/, '')}"}'`
+    ? html`id="${id}" name="${field.path}" hx-patch="${basePath}/${entitySetPath}/$field/${field.path}" hx-trigger="change" hx-include="this" hx-push-url="false" hx-swap="none" hx-headers:inherited:append='{"X-Hf-Source":"${source ?? id.replace(/--input$/, '')}"}'`
     : html`id="${id}" name="${field.path}"`
 
   if (field.valueList && !field.fixedValues) {
@@ -78,7 +78,18 @@ function fieldEditControl(field, row, { basePath, entitySetPath, valueListOption
   if (field.multiline) {
     return html`<textarea class="fd-textarea" ${common}>${value ?? ''}</textarea>`
   }
-  return html`<input type="text" class="fd-input" ${common} value="${value ?? ''}">`
+  return html`<input type="text" class="fd-input${field.numeric || typeof value === 'number' ? ' hf-input--end' : ''}" ${common} value="${value ?? ''}">` // numbers are right-aligned
+}
+
+/** The amount and, beside it, the input of the currency (or unit) it is in, as FE edits them. Both patch the draft on their own; a change
+ *  of either refreshes the other places that show it, and the wrapper `id` is the source of both so this field is not redrawn under the
+ *  cursor (the currency's own field is). */
+function amountWithUnit(field, row, { basePath, entitySetPath, valueLists, inputId, id, editMode }) {
+  const unit = field.unitField
+  return html`<div class="hf-amount-field">
+    ${fieldEditControl(field, row, { basePath, entitySetPath, valueListOptions: valueLists?.[field.path], id: inputId, editMode, source: id })}
+    <div class="hf-amount-field__unit" data-hf-unit="${unit.path}">${fieldEditControl(unit, row, { basePath, entitySetPath, valueListOptions: valueLists?.[unit.path], id: `${inputId}--unit`, editMode, source: id })}</div>
+  </div>`
 }
 
 /** One label/value pair in an Object Page form section (§3.4: "label above value (Horizon),
@@ -106,7 +117,8 @@ function formField(col, row, { facetId, isDraft, editMode, basePath, entitySetPa
     return html`
       <div class="fd-form-item hf-field hf-field--edit" id="${id}" data-hf-field="${field.path}">
         ${fieldLabel(field.label, { mandatory, forId: inputId })}
-        ${fieldEditControl(field, row, { basePath, entitySetPath, valueListOptions: valueLists?.[field.path], id: inputId, editMode: editMode ?? 'draft' })}
+        ${field.unitField && !isReadOnly(field.unitField, row, editMode) ? amountWithUnit(field, row, { basePath, entitySetPath, valueLists, inputId, id, editMode: editMode ?? 'draft' })
+          : fieldEditControl(field, row, { basePath, entitySetPath, valueListOptions: valueLists?.[field.path], id: inputId, editMode: editMode ?? 'draft' })}
         <span class="hf-field__message" role="alert"></span>
       </div>`
   }

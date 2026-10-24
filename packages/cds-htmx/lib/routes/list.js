@@ -75,7 +75,8 @@ module.exports = {
       const batch = await tx.run(queryLib.listReportQuery(cds.model, entity.name, entity.name, lrLayout, { filters, search, query: req.query, skip, limit }))
       return { rows: batch.slice(0, limit), hasMore: batch.length > limit }
     }, EXPORT_LIMIT)
-    const columns = this.csvColumns(req, lrLayout.table.columns)
+    const withExtras = typeof req.query.cols === 'string' // the page names the columns it shows, which may include properties added in View Settings; without that, the table's own columns
+    const columns = this.csvColumns(req, withExtras ? [...lrLayout.table.columns, ...(lrLayout.table.extraColumns ?? [])] : lrLayout.table.columns)
     const resolve = text => i18n.resolveText(text, cache.bundleFor(opts))
     res.set(csvLib.csvHeaders(req.params.Set, resolve(lrLayout.header.typeNamePlural || req.params.Set)))
     res.send(csvLib.toCsv(columns.map(({ col }) => resolve(col.label ?? col.field?.label ?? '')), rows.map(row => columns.map(({ col }) => cellText(col, row)))))

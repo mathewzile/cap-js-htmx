@@ -22,3 +22,16 @@ The goal is a List Report and Object Page that behave and look like the standard
 - **Charts** are micro charts and a simple column or bar chart as inline SVG, not the full `sap.viz` set.
 - **The "locked by" name** of another user's draft is not shown.
 - **Responsive behavior** is partial. See Open items.
+
+## Visual differences still open
+
+Compared screen by screen with the Fiori elements apps (`npm run test:visual`, images in `test-results/visual/`). The list report, the object page forms and the table sections, and the confirmation, Adapt Filters, saved views and draft marker popovers are aligned; what is left:
+
+- **Adapt Filters** has no List / Group tabs and no Edit and Sort buttons.
+- **Saved views:** Manage Views only deletes views (FE can also rename and set a default); the popover is not resizable.
+- **Filter value help** selects several values like FE, with the tabs and OK. The Define Conditions tab closes it and opens the Define Conditions dialog of the field instead of switching inside the dialog; the empty rows under the table are ruled across the whole width where FE rules only the width of the table.
+- **Date filters:** a date range filter is FE's dynamic date range (one input, the list of choices, the calendar). A filter for a single date and the date-time filters still use the browser's own date inputs. "Month" in the list is a month of the current year, and the calendar has no keyboard navigation of the days yet.
+- **Export menu** has only "Export"; FE also offers "Export as...".
+- **Date-times** are shown as ISO text; dates and numbers follow the request locale.
+- **The two Manage Authors apps do not share annotations** (the FE one has no table title and its own date format, the htmx one has both), so some screens differ by what they are annotated with rather than by how they are drawn.
+- **Column layout (Manage Authors):** the columns, the separator, the gutters, the header with its column buttons above the title, the narrow list report and the active row marker are aligned with FE in the two-column layout. Not yet compared: edit mode and the draft dialogs of the Authors pages, and the toggle buttons FE puts in the narrow list report's toolbar. The htmx demo app opens its third column with `ThreeColumnsEndExpanded` where the FE app uses `ThreeColumnsMidExpanded`; that is each app's own setting, so the two third columns differ in width.

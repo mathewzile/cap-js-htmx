@@ -79,7 +79,8 @@ describe('round 5: tree table, paging, date filters', () => {
     })
 
     test('the Create toolbar stays out of the way of a Genres title that has no HeaderInfo', async () => {
-      assert.match(await get('/htmx/admin/Genres'), /hf-table-toolbar__title">Genres</)
+      // FE shows no table title without a TypeNamePlural; the heading stays in the page (hidden) because the count in it is updated
+      assert.match(await get('/htmx/admin/Genres'), /hf-table-toolbar__title" hidden>Genres</)
     })
   })
 
@@ -126,7 +127,7 @@ describe('round 5: tree table, paging, date filters', () => {
   describe('paging through the 1005 books', () => {
     test('the first page, the total and the trigger: [ 20 / 1,005 ]', async () => {
       const html = await get('/htmx/catalog/Books')
-      assert.match(html, /Books \(<span id="lr-count">1,005<\/span>\)/)
+      assert.match(html, /<span id="lr-count">1,005<\/span>\)<\/span>/)
       assert.match(html, /hf-table__growing-info">\[ 20 \/ 1,005 \]</)
       assert.equal((html.match(/<tr id="lr-row--/g) || []).length, 20)
     })
@@ -171,7 +172,7 @@ describe('round 5: tree table, paging, date filters', () => {
     test('the picker value is kept in the inputs and filters the rows', async () => {
       const html = await get('/htmx/admin/Authors?f.dateOfBirth.ge=1810-01-01&f.dateOfBirth.le=1820-12-31')
       assert.match(html, /name="f\.dateOfBirth\.ge" type="date" class="hf-date-range__input" value="1810-01-01"/)
-      assert.match(html, /Authors \(<span id="lr-count">2<\/span>\)/)
+      assert.match(html, /<span id="lr-count">2<\/span>\)<\/span>/)
     })
 
     test('a date field can be filtered with a date operator typed into the field', async () => {
