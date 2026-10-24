@@ -41,13 +41,13 @@ Open the sample pages (the SQLite database is in memory):
 | [Frontend deployment and extensibility](FRONTEND_DEPLOYMENT_AND_EXTENSIBILITY.md) | the design of the shell, the app sources and the extension points |
 | [Known deviations from Fiori elements](deviations.md) | what differs or is missing on purpose |
 | [Open items and roadmap](OPEN_ITEMS_AND_ROADMAP.md) | gaps and future work |
-| [Implementation plan](IMPLEMENTATION_PLAN.md) | the phases the project was built in |
 
 ## Tests
 
 ```sh
 npm test            # unit and integration tests (node:test)
 npm run test:e2e    # browser tests (Playwright), light and dark theme, including the Fiori elements parity checks (fe-parity.spec.js)
+npm run docs:screenshots   # retakes the pictures in docs/images from the running sample app
 ```
 
 On Windows the browser tests use the installed Edge. Set `PW_CHANNEL` to use another installed browser, or leave it unset on Linux and CI to use Playwright's own Chromium.

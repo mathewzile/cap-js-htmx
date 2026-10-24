@@ -1,6 +1,6 @@
 # Frontend deployment, Work Zone integration and extensibility for `cds-htmx`
 
-Companion to `IMPLEMENTATION_PLAN.md`. It adds Phases 7 and 9 and the extensibility work. Phase 8 is FE feature parity (see `IMPLEMENTATION_PLAN.md` §8): the shell/Work Zone work comes after the htmx app behaves like standard Fiori elements. Frontend extensibility (§6) and Custom Pages (non-standard floorplans, which need their own design first) are items of `OPEN_ITEMS_AND_ROADMAP.md`, not numbered phases. Phases 7 and 9 are implemented.
+It covers app bundles (Phase 7), the shell and deployment (Phase 9) and the extensibility work. Phase 8 is FE feature parity: the shell/Work Zone work comes after the htmx app behaves like standard Fiori elements. Frontend extensibility (§6) and Custom Pages (non-standard floorplans, which need their own design first) are items of `OPEN_ITEMS_AND_ROADMAP.md`, not numbered phases. Phases 7 and 9 are implemented.
 
 ## 0. Decisions
 
@@ -161,7 +161,7 @@ mta.yaml                                  # srv + html5 deployer + destination c
 - **9. Shell + Work Zone + deployment**: `cds-htmx-shell`, CSS scoping, versioned assets, sticky cookie, `app/manage-books-htmx`, `xs-app.json`, `mta.yaml`, deploy guide. Spike: SSE through `@sap/approuter` locally. Tests: Playwright standalone behind a local approuter (deep link, back/forward, CSRF); FLP sandbox for in-place hash and IBN.
 - **Roadmap: Frontend extensibility**: `template.js` + sanitizer, building blocks, all §6A points, `hx-fiori` façade + ExtensionAPI, server SPI, coverage entries. Sample uses each point once (column, filter field, section, header facet, form element, action with handler, `onBeforeSave` veto). Tests: sanitizer XSS, path collection, fragment rendering and SELECT, E2E handler + veto.
 - **Roadmap: Custom Pages (non-standard floorplans)**: not started; needs a design and developer documentation first.
-- **10. Open Items** and **11. E2E + visual parity + README + documentation site** (former Phase 7), also covering shell mode: see the plan.
+- **10. Open Items** and **11. E2E + visual parity + README + documentation site** (former Phase 7), also covering shell mode.
 
 ## 9. Config additions (`cds.htmx`)
 `apps: { sources: [{ kind: "local" }], allow: ["*"] (production: explicit list), ttl: 60000, refetchInterval: 5000, localRecheck: 1000, maxApps: 50, maxBundleBytes: 2097152, fetchTimeout: 5000 }`, `extensions: []`, `assetsVersioned: true`, `stickySessions: true`.

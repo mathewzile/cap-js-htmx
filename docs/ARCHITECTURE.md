@@ -184,7 +184,9 @@ image on another site cannot trigger them.
 
 ## 5. Phase 8 in pictures
 
-**Filters, tables and dialogs.** Filter bar with value help, column menu and View Settings are the same widgets as FE.
+**Filters, tables and dialogs.** Filter bar with value help, column menu and View Settings are the same widgets as FE. The List Report loads the next rows by itself when the table is scrolled to its end (the
+"More" button under the table stays, shows `[ loaded / total ]` and works without scripts); table sections of an Object Page
+load more on the button only. The empty space after the last column is not part of a row: no row line, no hover and no click.
 
 | | |
 |---|---|
@@ -192,7 +194,8 @@ image on another site cannot trigger them.
 | ![Column menu](images/phase8-column-menu.png) | ![Tree table](images/phase8-tree-table.png) |
 
 **Object Page and drafts.** Edit creates a draft, a field is saved when it loses focus, messages collect in the footer and
-Save activates the draft.
+Save activates the draft. A sub-object page shows Edit as well, as in FE: it edits the first page (the root) and stays on
+the same sub-object page, now as its draft.
 
 ![Object Page](images/phase8-object-page.png)
 ![Draft with a message](images/phase8-object-page-draft.png)
