@@ -329,9 +329,10 @@ html:has(body.htmx-fiori), body.htmx-fiori {
   height: auto;
   background: var(--sapList_Background, #fff);
   border: none;
-  border-bottom: 1px solid var(--sapList_BorderColor, #e5e5e5);
 }
-.htmx-fiori .hf-table tbody .fd-table__row:last-child { border-bottom: none; }
+/* the row lines are the cells': the filler after the last column (FE's dummy cell) has none, nor does it react to hover or a click */
+.htmx-fiori .hf-table .fd-table__cell:not(.hf-col-fill) { border-bottom: 1px solid var(--sapList_BorderColor, #e5e5e5); }
+.htmx-fiori .hf-table tbody .fd-table__row:last-child .fd-table__cell { border-bottom: none; }
 
 .htmx-fiori .hf-table .fd-table__cell {
   height: 2.0625rem;
@@ -383,6 +384,7 @@ html:has(body.htmx-fiori), body.htmx-fiori {
 .htmx-fiori .hf-table.hf-table--sized { table-layout: fixed; width: 100%; min-width: 0; }
 /* the column after the last one takes what the others leave, white like the table (FE's dummy cell) */
 .htmx-fiori .hf-table .hf-col-fill { width: auto; padding: 0; }
+.htmx-fiori .hf-table tbody .hf-col-fill { background: var(--sapList_Background, #fff); pointer-events: none; }
 .htmx-fiori .hf-table--sized .fd-table__cell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .htmx-fiori .hf-table .hf-col-nav {
@@ -397,7 +399,8 @@ html:has(body.htmx-fiori), body.htmx-fiori {
 .htmx-fiori .hf-table tbody .fd-table__row--hoverable:hover { background: var(--sapList_Hover_Background, #eaecee); }
 /* a ticked row is selected: the selection background and, under it, the selection border */
 .htmx-fiori .hf-table tbody .fd-table__row:has(.hf-checkbox:checked),
-.htmx-fiori .hf-table tbody .fd-table__row--hoverable:has(.hf-checkbox:checked):hover { background: var(--sapList_SelectionBackgroundColor, #ebf8ff); border-bottom-color: var(--sapList_SelectionBorderColor, #0064d9); }
+.htmx-fiori .hf-table tbody .fd-table__row--hoverable:has(.hf-checkbox:checked):hover { background: var(--sapList_SelectionBackgroundColor, #ebf8ff); }
+.htmx-fiori .hf-table tbody .fd-table__row:has(.hf-checkbox:checked) .fd-table__cell:not(.hf-col-fill) { border-bottom-color: var(--sapList_SelectionBorderColor, #0064d9); }
 
 /* the table title counts the ticked rows too: "Books (Selected: 1, Rows: 1,005)", the numbers in the regular font */
 .hf-table-toolbar__title .hf-count { font-family: var(--sapFontBoldFamily, '72-Bold', '72', Arial, sans-serif); }

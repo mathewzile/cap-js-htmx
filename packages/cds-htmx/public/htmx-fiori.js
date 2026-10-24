@@ -292,8 +292,24 @@ document.addEventListener('hf:ready', hfLoadMessages)
 document.addEventListener('htmx:config:request', e => {
   const { sourceElement, sourceEvent } = e.detail.ctx
   if (sourceElement.matches?.('tr.fd-table__row--activable') && sourceEvent?.type === 'click'
-    && sourceEvent.target.closest?.('.fd-table__cell--checkbox, input, select, textarea, button, a')) e.preventDefault()
+    && sourceEvent.target.closest?.('.fd-table__cell--checkbox, .hf-col-fill, input, select, textarea, button, a')) e.preventDefault()
 })
+
+// ---------- growing: the List Report loads the rows after the ones shown when its "More" button scrolls into view ----------
+// Table sections of an Object Page keep the button alone (FE: they grow on demand). The button stays (it is what loads the rows without scripts, and says how many are there); scrolling to it presses it.
+// Every `$table` response replaces the button, so each new one is observed; one that is still in view after its rows
+// arrived (a tall window, a short page) loads the next batch too.
+const hfGrowObserver = 'IntersectionObserver' in window && new IntersectionObserver(entries => {
+  for (const { isIntersecting, target } of entries) {
+    if (isIntersecting && target.isConnected && !target.disabled && !target.classList.contains('htmx-request')) target.click()
+  }
+}, { rootMargin: '0px 0px 80px 0px' })
+function hfObserveGrowing() {
+  if (hfGrowObserver) document.querySelectorAll('#lr-growing .hf-table__growing-button').forEach(button => hfGrowObserver.observe(button))
+}
+document.addEventListener('htmx:after:swap', hfObserveGrowing)
+document.addEventListener('DOMContentLoaded', hfObserveGrowing)
+document.addEventListener('hf:ready', hfObserveGrowing)
 
 // ---------- flexible column layout (render/fcl.js) ----------
 // The server swaps one column at a time and says in #fcl-marker which layout that column asks for. The layout is applied

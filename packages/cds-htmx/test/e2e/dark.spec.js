@@ -52,6 +52,16 @@ test.describe('dark', () => {
     expect(brightness(await background(page, '.hf-fcl__grip'))).toBeLessThan(120)
   })
 
+  test('the shell page is dark all the way down when the list is scrolled', async ({ page }) => {
+    await page.goto('/manage-books-htmx/webapp/index.html')
+    await expect(page.locator('#lr-table-body tr').first()).toBeVisible()
+    await page.mouse.move(400, 500)
+    await page.mouse.wheel(0, 3000)
+    await page.waitForTimeout(500)
+    const bottom = await page.evaluate(() => document.querySelector('.hf-root').getBoundingClientRect().bottom)
+    expect(bottom).toBeGreaterThanOrEqual(await page.evaluate(() => innerHeight))
+  })
+
   test('the shell follows the browser, also when it changes while the page is open', async ({ page }) => {
     await page.goto('/manage-books-htmx/webapp/index.html')
     await expect(page.locator('#lr-table-body tr').first()).toBeVisible()

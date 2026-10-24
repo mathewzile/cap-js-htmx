@@ -18,7 +18,7 @@ sap.ui.define([
 
   return UIComponent.extend('cds.htmx.shell.Component', {
     createContent() {
-      return new HTML({ content: '<div class="htmx-fiori hf-root" style="height:100%"></div>', afterRendering: () => this._start() })
+      return new HTML({ content: '<div class="htmx-fiori hf-root"></div>', afterRendering: () => this._start() })
     },
 
     async _start() {
