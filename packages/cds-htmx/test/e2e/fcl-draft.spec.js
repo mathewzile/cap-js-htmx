@@ -29,10 +29,21 @@ async function openChapter(page) {
 }
 
 test.describe('drafts in the column layout: one root, the first page', () => {
-  test('the third column has no Edit; Edit on the first page keeps it and makes it editable', async ({ page }) => {
+  test('Edit on the sub-object page edits the first page and keeps the chapter open as the draft', async ({ page }) => {
+    await openChapter(page)
+    await expect(editButton(page, 2)).toBeVisible()
+    await editButton(page, 2).click()
+    await expect(col(page, 1).locator('.hf-page--edit')).toBeVisible()
+    await expect(col(page, 2).locator('.hf-page--edit')).toBeVisible()
+    await expect(col(page, 2).locator('input[name=title]')).toBeVisible()
+    await expect(editButton(page, 2)).toHaveCount(0)
+    await expect.poll(() => hash(page)).toMatch(/Books\(ID='[^']+',IsActiveEntity=false\)\/chapters\(ID='[^']+',IsActiveEntity=false\)$/)
+    expect(await page.locator('#fcl').getAttribute('data-hf-layout')).toBe('ThreeColumnsEndExpanded')
+  })
+
+  test('Edit on the first page keeps the third column and makes it editable', async ({ page }) => {
     await openChapter(page)
     await expect(editButton(page, 1)).toBeVisible()
-    await expect(editButton(page, 2)).toHaveCount(0) // the sub-object page edits through the first page, as in FE
     await expect(col(page, 2).locator('.hf-page--edit')).toHaveCount(0)
     expect(hash(page)).toMatch(/chapters\(ID='[^']+',IsActiveEntity=true\)$/)
 

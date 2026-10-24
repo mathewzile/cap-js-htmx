@@ -11,7 +11,6 @@ The goal is a List Report and Object Page that behave and look like the standard
 ## By design
 
 - **No UI code in an app, and no UI5 in the browser.** Controller extensions and XML fragments of Fiori elements do not run. The extension model is a declarative one (HTML fragments, building blocks, a server extension SPI), see the extensibility design.
-- **A sub-object page has no Edit button of its own**, with or without columns. While the first page is edited the sub-object page is the draft; otherwise it shows the saved version. The Manage Books Fiori elements app shows an Edit button on a sub-object page in display mode that edits the root draft; this plugin leaves it out.
 - **Personalization is browser-local.** Saved views (variants) are kept in the browser, not on the server, and the UI5 flexibility features (key user adaptation) are not there.
 
 ## Not complete yet

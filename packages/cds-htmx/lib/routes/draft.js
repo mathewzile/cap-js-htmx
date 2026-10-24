@@ -66,12 +66,40 @@ module.exports = {
     const entity = this.entitySet(set)
     if (!entity) return res.sendStatus(404)
     const keys = keysLib.parseKeys(raw)
-    const edit = this.editOf(req, entity.name)
     const { IsActiveEntity: _active, ...plainKeys } = keys
+    const refused = await this.openRootDraft(req, res, tx, entity, plainKeys)
+    if (refused) return refused
+    const draftKeys = { ...plainKeys, IsActiveEntity: false }
+    const draftRaw = keysLib.formatKeys(draftKeys)
+    res.set('HX-Replace-Url', `${this.basePath(req)}/${set}(${draftRaw})`)
+    return this.objectPage(req, res, tx, {
+      entityType: entity.name, keys: draftKeys, segments: [{ set, raw: draftRaw }], contextPath: `/${set}`
+    })
+  },
+
+  /** `POST /…(keys)/<nav>(keys)/$edit`: Edit on a sub-object page (FE shows it in display mode). The draft belongs to the first
+   *  page, so this edits the root and shows the same sub-object page in its draft. */
+  async editNested(req, res, tx, n) {
+    if (n.raw == null) return res.sendStatus(404)
+    const entity = this.entitySet(n.root.set)
+    const { IsActiveEntity: _active, ...plainKeys } = n.root.keys
+    const refused = await this.openRootDraft(req, res, tx, entity, plainKeys)
+    if (refused) return refused
+    const segments = n.segments.map(s => ({ set: s.set, raw: s.raw?.replace(/IsActiveEntity=(?:true|false)/g, 'IsActiveEntity=false') }))
+    const path = segments.map(s => `${s.set}${s.raw ? `(${s.raw})` : ''}`).join('/')
+    res.set('HX-Replace-Url', `${this.basePath(req)}/${path}`)
+    return this.objectPage(req, res, tx, {
+      entityType: n.entityType, keys: keysLib.parseKeys(segments[segments.length - 1].raw), segments, contextPath: n.parent.contextPath + `/${n.nav}`
+    })
+  },
+
+  /** EDIT of a draft root's active instance, shared by both Edit routes: an own draft is resumed, someone else's locks the object (409).
+   *  Returns the response of a refusal, `undefined` when the draft is there. */
+  async openRootDraft(req, res, tx, entity, plainKeys) {
+    const edit = this.editOf(req, entity.name)
     const current = await tx.run(SELECT.one.from(entity.name).where(edit.mode === 'draft' ? { ...plainKeys, IsActiveEntity: true } : plainKeys))
     if (!current) return res.sendStatus(404)
     if (!canEdit(edit, current)) return this.reject(req, res, 405, 'NotAllowed')
-
     try {
       await draftLib.edit(tx, entity.name, { ...plainKeys, IsActiveEntity: true })
     } catch (err) {
@@ -82,12 +110,6 @@ module.exports = {
       }
       // your own draft: resume it
     }
-    const draftKeys = { ...plainKeys, IsActiveEntity: false }
-    const draftRaw = keysLib.formatKeys(draftKeys)
-    res.set('HX-Replace-Url', `${this.basePath(req)}/${set}(${draftRaw})`)
-    return this.objectPage(req, res, tx, {
-      entityType: entity.name, keys: draftKeys, segments: [{ set, raw: draftRaw }], contextPath: `/${set}`
-    })
   },
 
   /** `POST /:Set/$action/:name` (§routes Phase 5d): Invoke a bound action and re-render the OP with the result. */

@@ -70,7 +70,7 @@ module.exports = {
     let action = null
     let property = null
     const field = /\/\$field\/(\w+)$/.exec(full)
-    if (field) { action = 'field'; property = field[1]; full = full.slice(0, field.index) } else if (/\/\$delete$/.test(full)) { action = 'delete'; full = full.slice(0, -'/$delete'.length) } else if (/\/\$paste$/.test(full)) { action = 'paste'; full = full.slice(0, -'/$paste'.length) }
+    if (field) { action = 'field'; property = field[1]; full = full.slice(0, field.index) } else if (/\/\$delete$/.test(full)) { action = 'delete'; full = full.slice(0, -'/$delete'.length) } else if (/\/\$paste$/.test(full)) { action = 'paste'; full = full.slice(0, -'/$paste'.length) } else if (/\/\$edit$/.test(full)) { action = 'edit'; full = full.slice(0, -'/$edit'.length) }
     const segments = keysLib.splitSegments(full)
     if (segments.length < 2 || segments[0].raw == null) return null
     const top = this.entitySet(segments[0].set)
@@ -172,6 +172,7 @@ module.exports = {
   async postNested(req, res, tx) {
     const n = this.parseNested(req)
     if (n?.action === 'paste') return this.pasteRows(req, res, tx, n)
+    if (n?.action === 'edit') return this.editNested(req, res, tx, n)
     if (!n || n.action !== 'delete') return res.sendStatus(404)
     if (this.editOf(req, n.root.entityType).mode !== 'draft') return this.reject(req, res, 405, 'NotAllowed')
     if (this.editOf(req, n.entityType).deletable === false || (n.segments.length === 2 && this.sectionCaps(req, n.root.entityType, n.root.set, n.nav).deletable === false)) return this.reject(req, res, 405, 'NotAllowed')

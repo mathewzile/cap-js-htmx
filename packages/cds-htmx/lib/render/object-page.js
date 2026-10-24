@@ -233,7 +233,7 @@ function anchorBar(sections) {
  *  back to List Report); in draft (edit) mode neither applies -- Save/Discard live in the floating
  *  footer instead (§3.4: "floating footer ... Save ... Discard Draft"). Actions are now active buttons
  *  that POST to $action/:name (Phase 5d). */
-function headerActions(actions, bundle, t, { basePath, entitySetPath, editMode, canEdit, canDelete, draftExists, isDraftRoot } = {}) {
+function headerActions(actions, bundle, t, { basePath, entitySetPath, editMode, canEdit, canDelete, draftExists, isDraftRoot, editPath } = {}) {
   const opPath = `${basePath}/${entitySetPath}`
   const display = !editMode
   return html`
@@ -245,7 +245,7 @@ function headerActions(actions, bundle, t, { basePath, entitySetPath, editMode, 
       })}
       ${display && canEdit && !draftExists ? html`
         <button class="fd-button fd-button--emphasized" aria-label="${t(bundle, 'Edit')}"
-          hx-post="${opPath}/$edit" hx-target="#app" hx-push-url="false" hx-swap="innerHTML show:window:top">${t(bundle, 'Edit')}</button>` : html``}
+          hx-post="${editPath ?? opPath}/$edit" hx-target="#app" hx-push-url="false" hx-swap="innerHTML show:window:top">${t(bundle, 'Edit')}</button>` : html``}
       ${display && canDelete ? html`
         <button class="fd-button" aria-label="${t(bundle, 'Delete')}" ${draftExists ? raw('disabled') : html``}
           hx-delete="${opPath}" hx-target="#app" hx-push-url="false" hx-swap="innerHTML show:window:top"
@@ -354,6 +354,7 @@ function objectPageFragment(layout, row, ctx) {
   // A page reached through a navigation of another object page (an Award, a Book of an Author) has no Delete of its own, as in FE:
   // rows are deleted from the table of the page before it
   const subPage = ctx.trail?.length > 2
+  const node = layout.edit?.mode === 'node'
   const editMode = editModeOf(ctx, row)
   const isDraft = editMode === 'draft'
   const fullCtx = { ...ctx, isDraft, editMode }
@@ -375,8 +376,10 @@ function objectPageFragment(layout, row, ctx) {
           <div class="hf-spacer"></div>
           ${headerActions(layout.headerActions || [], ctx.bundle, ctx.t, {
             basePath: ctx.basePath, entitySetPath: ctx.entitySetPath, editMode,
-            canEdit: !layout.edit || canEdit(layout.edit, row), canDelete: (!layout.edit || canDelete(layout.edit, row)) && !subPage,
-            draftExists: row.HasDraftEntity === true, isDraftRoot: layout.edit?.mode === 'draft'
+            canEdit: node ? !!ctx.rootEdit?.canEdit : !layout.edit || canEdit(layout.edit, row), canDelete: (!layout.edit || canDelete(layout.edit, row)) && !subPage,
+            draftExists: node ? !!ctx.rootEdit?.draftExists : row.HasDraftEntity === true, isDraftRoot: layout.edit?.mode === 'draft',
+            // the draft belongs to the first page: in columns its Edit is asked for directly (the sub-object page then follows it), else the sub-object page's own `$edit` edits the root and stays
+            editPath: node && ctx.fcl ? ctx.rootEdit?.path : undefined
           })}
           ${ctx.fcl ? fclRender.columnButtons(ctx.fcl.column, { t: ctx.t, bundle: ctx.bundle, closeHref: ctx.fcl.closeHref, editing: !!editMode }) : html``}
         </div>

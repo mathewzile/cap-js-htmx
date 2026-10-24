@@ -393,7 +393,7 @@ const hfFclColumn = n => {
 }
 
 // Drafts: one root (the first page, like in Fiori elements / CAP): Edit makes the whole object editable, the pages of the columns
-// to its right (the sub-object page has no Edit of its own) show its draft; Save and Discard bring them back to the saved version.
+// to its right (their Edit, on a sub-object page, edits this root) show its draft; Save and Discard bring them back to the saved version.
 // The third column asks for the version that matches the first page's mode, whatever happened (a refused Save changes nothing).
 let hfFclFollowing = false
 function hfFclFollowRoot() {
