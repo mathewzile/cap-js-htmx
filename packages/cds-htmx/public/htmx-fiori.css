@@ -55,6 +55,10 @@ html:has(body.htmx-fiori), body.htmx-fiori {
   height: 1.625rem;
   min-width: 2rem;
   padding: 0 .4375rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
   font-family: var(--sapButton_FontFamily, '72-SemiboldDuplex', '72', Arial, sans-serif);
   font-size: .875rem;
   border-radius: var(--sapButton_BorderCornerRadius, .5rem);
@@ -1114,9 +1118,17 @@ body.htmx-fiori:has(#fcl) { height: 100vh; height: 100dvh; overflow: hidden; dis
 /* a list with a semantic key (its bold object identifier) has taller rows in FE: 41px; one of plain text 33px */
 .htmx-fiori .hf-table--semantic tbody .fd-table__cell { height: 2.5625rem; }
 
-/* the column buttons of an Object Page in a column layout sit on their own, above the title, as in FE */
-.hf-fcl .hf-op-title { padding-top: calc(1.6875rem + 2.125rem); }
-.hf-fcl .hf-op-title > .hf-fcl__buttons { position: absolute; top: .875rem; inset-inline-end: var(--hf-pad); margin: 0; gap: .5rem; }
+/* the column buttons of an Object Page in a column layout follow its actions on the same row, after a divider, as in FE */
+.hf-fcl .hf-op-title > .hf-fcl__buttons { margin-inline-start: 0; gap: .5rem; align-items: center; }
+/* a column too narrow for the title and both groups on one row: the buttons go above the title, without a divider */
+.hf-fcl .hf-op-header { container-type: inline-size; }
+@container (min-width: 30rem) {
+  .hf-fcl .hf-op-title > .hf-op-title__actions:has(> button) + .hf-fcl__buttons { padding-inline-start: .75rem; border-inline-start: 1px solid var(--sapToolbar_SeparatorColor, #d9d9d9); }
+}
+@container (max-width: 29.999rem) {
+  .hf-fcl .hf-op-title { padding-top: calc(1.6875rem + 2.125rem); }
+  .hf-fcl .hf-op-title > .hf-fcl__buttons { position: absolute; top: .875rem; inset-inline-end: var(--hf-pad); margin: 0; }
+}
 
 /* inside a column layout the column decides the page's gutters (not the window) */
 .hf-fcl .hf-page__header-content { padding-right: 0; }
