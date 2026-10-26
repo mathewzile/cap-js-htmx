@@ -140,7 +140,7 @@ describe('manifest routing', () => {
 describe('the Work Zone app', () => {
   test('the layout of an htmx app applies to the pages requested for it, and to nothing else', async () => {
     const authors = await get('/htmx/admin/Authors(ID=\'9d703c23-7cf7-4cad-9f2b-0e1e1a8c0001\')/books(ID=\'3d2d2d2d-1c1c-4b4b-8a8a-000000000001\')', { ...HX, 'X-Htmx-App': 'manageauthors.htmx@1.0.0' })
-    assert.match(authors, /data-hf-layout="ThreeColumnsEndExpanded"/, 'the app says End, the FE manifest says Mid')
+    assert.match(authors, /data-hf-layout="ThreeColumnsMidExpanded"/, 'the app\'s own manifest (manage-authors-htmx) says Mid, as the FE manifest does')
     // manage-books-htmx has no columns; the fixture app fixture.fclbooks (a draft root in columns) does, for its own pages only
     assert.doesNotMatch(await get('/htmx/catalog/Books', { ...HX, 'X-Htmx-App': 'managebooks.htmx@1.0.0' }), /id="fcl"/)
     const fixtures = path.join(__dirname, '..', 'fixtures', 'apps')

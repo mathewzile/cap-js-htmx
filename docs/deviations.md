@@ -17,7 +17,7 @@ The goal is a List Report and Object Page that behave and look like the standard
 
 - **Tree tables are display-only:** no create child, no move node, and no draft roots. See Open items.
 - **New drafts do not yet appear in the List Report** of their creator after leaving the app.
-- **Intent-based navigation links** (`DataFieldWithIntentBasedNavigation`) are rendered disabled; `SemanticObject` links are disabled outside a launchpad.
+- **Intent-based navigation**: only `DataFieldForIntentBasedNavigation` in an Object Page form navigates (no parameters, and not in a launchpad it shows an error); `DataFieldWithIntentBasedNavigation` is not a link yet; `SemanticObject` links are disabled outside a launchpad.
 - **Charts** are micro charts and a simple column or bar chart as inline SVG, not the full `sap.viz` set.
 - **The "locked by" name** of another user's draft is not shown.
 - **Responsive behavior** is partial. See Open items.
@@ -33,4 +33,4 @@ Compared screen by screen with the Fiori elements apps (`npm run test:visual`, i
 - **Export menu** has only "Export"; FE also offers "Export as...".
 - **Date-times** are shown as ISO text; dates and numbers follow the request locale.
 - **The two Manage Authors apps do not share annotations** (the FE one has no table title and its own date format, the htmx one has both), so some screens differ by what they are annotated with rather than by how they are drawn.
-- **Column layout (Manage Authors):** the columns, the separator, the gutters, the header with its column buttons above the title, the narrow list report and the active row marker are aligned with FE in the two-column layout. Not yet compared: edit mode and the draft dialogs of the Authors pages, and the toggle buttons FE puts in the narrow list report's toolbar. The htmx demo app opens its third column with `ThreeColumnsEndExpanded` where the FE app uses `ThreeColumnsMidExpanded`; that is each app's own setting, so the two third columns differ in width.
+- **Column layout (Manage Authors):** the columns, the separator, the gutters, the header with its column buttons above the title, the narrow list report and the active row marker are aligned with FE in the two-column layout. Not yet compared: edit mode and the draft dialogs of the Authors pages, and the toggle buttons FE puts in the narrow list report's toolbar.

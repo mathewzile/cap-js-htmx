@@ -29,13 +29,16 @@
     })
   }
 
-  function loadScript(src) {
-    if (loadedScripts.has(src)) return Promise.resolve()
+  /** Loads a script once per page. In a launchpad several apps start in one page, each serving the same files below its own prefix
+   *  (`base`), so a file is the same one whichever app asked: the key is the path below the prefix. */
+  function loadScript(src, base = '') {
+    const key = base && src.startsWith(base) ? src.slice(base.length) : src
+    if (loadedScripts.has(key)) return Promise.resolve()
     return new Promise((resolve, reject) => {
       const script = document.createElement('script')
       script.src = src
       script.async = false
-      script.onload = () => { loadedScripts.add(src); resolve() }
+      script.onload = () => { loadedScripts.add(key); resolve() }
       script.onerror = () => reject(new Error('Could not load ' + src))
       document.head.append(script)
     })
@@ -132,11 +135,11 @@
       meta.name = 'htmx-config'
       meta.content = JSON.stringify({ extensions: 'sse' })
       document.head.append(meta)
-      await loadScript(info.scripts.htmx)
+      await loadScript(info.scripts.htmx, base)
     }
-    await loadScript(info.scripts.sse)
+    await loadScript(info.scripts.sse, base)
     if (csrf && global.HtmxCsrf) global.HtmxCsrf.install({ url: shellUrl, headers })
-    for (const src of info.scripts.own) await loadScript(src)
+    for (const src of info.scripts.own) await loadScript(src, base)
     global.htmx.process(root)
 
     // routes: the URL/hash holds the path below `base`. htmx still decides what is a push and what a replace (hx-push-url, HX-Push-Url,
@@ -169,8 +172,9 @@
     const first = adapter.current()
     await show(first || entry)
     if (!first) adapter.replace(entry)
+    global.HtmxShell.adapter = adapter // the page script reaches the launchpad through it (intent-based navigation)
     document.dispatchEvent(new CustomEvent('hf:ready'))
-    return { info, clientId: id, show, destroy() { abort.abort(); adapter.detach?.(); document.getElementById('sse')?.remove(); root.replaceChildren() } }
+    return { info, clientId: id, show, destroy() { if (global.HtmxShell.adapter === adapter) global.HtmxShell.adapter = null; abort.abort(); adapter.detach?.(); document.getElementById('sse')?.remove(); root.replaceChildren() } }
   }
 
   global.HtmxShell = { start, motionFor }

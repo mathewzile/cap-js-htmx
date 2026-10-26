@@ -1,0 +1,15 @@
+{
+  "tiles": [
+    {
+      "semanticObject": "Authors",
+      "action": "manageHtmx",
+      "rootPath": "/manage-authors-htmx/webapp/"
+    },
+    {
+      "semanticObject": "Books",
+      "action": "manageHtmx",
+      "rootPath": "/manage-books-htmx/webapp/"
+    }
+  ],
+  "rootIntent": "Shell-home"
+}

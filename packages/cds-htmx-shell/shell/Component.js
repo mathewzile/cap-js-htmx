@@ -17,6 +17,9 @@ sap.ui.define([
   'use strict'
 
   return UIComponent.extend('cds.htmx.shell.Component', {
+    // like sap.fe.core.AppComponent: the launchpad gives the app the whole width instead of a centered 1280px
+    metadata: { config: { fullWidth: true } },
+
     createContent() {
       return new HTML({ content: '<div class="htmx-fiori hf-root"></div>', afterRendering: () => this._start() })
     },
@@ -32,11 +35,15 @@ sap.ui.define([
       const base = sap.ui.require.toUrl(id.replace(/\./g, '/')).replace(/\/$/, '')
       const root = this.getRootControl().getDomRef()
 
-      for (const file of ['hx-csrf.js', 'standalone.js', 'flp.js', 'shell.js']) {
-        await includeScript({ url: sap.ui.require.toUrl('cds/htmx/shell/' + file) })
+      // once per page: a second app in the launchpad finds the shell of the first one (loading it again would reset its state)
+      if (!window.HtmxShell) {
+        for (const file of ['hx-csrf.js', 'standalone.js', 'flp.js', 'shell.js']) {
+          await includeScript({ url: sap.ui.require.toUrl('cds/htmx/shell/' + file) })
+        }
       }
       const ui5 = { HashChanger, Theming, ControlBehavior }
       try { ui5.ShellUIService = await this.getService('ShellUIService') } catch (err) { /* not in a launchpad */ }
+      try { ui5.Navigation = await sap.ushell.Container.getServiceAsync('Navigation') } catch (err) { /* not in a launchpad */ }
       const startup = this.getComponentData()?.startupParameters || {}
       this._shell = await window.HtmxShell.start({
         root,

@@ -2,7 +2,7 @@
  * kept by UI5's HashChanger, the theme follows the launchpad's and the page title goes to the shell bar through ShellUIService. The launchpad is
  * never told about unsaved changes: a draft is saved on the server as it is edited, so leaving it loses nothing (and would only prompt).
  *
- * `ui5` carries the UI5 modules the component loaded: { HashChanger, Theming, ControlBehavior, ShellUIService }. */
+ * `ui5` carries the UI5 modules the component loaded: { HashChanger, Theming, ControlBehavior, ShellUIService, Navigation }. */
 ;(function (global) {
   'use strict'
 
@@ -23,6 +23,11 @@
       // UI5's animation mode (`full`, `basic`, `minimal`, `none`): the launchpad's setting for how much the page moves
       animationMode() { return ui5.ControlBehavior?.getAnimationMode?.() ?? null },
       onAnimationMode(callback) { ui5.ControlBehavior?.attachChange?.(() => callback(ui5.ControlBehavior.getAnimationMode())) },
+      // intent-based navigation through the launchpad's Navigation service, which is missing when the component runs outside a launchpad
+      async navigate({ semanticObject, action }) {
+        if (!ui5.Navigation) throw new Error('No launchpad Navigation service')
+        await ui5.Navigation.navigate({ target: { semanticObject, action } })
+      },
       setTitle(title) { ui5.ShellUIService?.setTitle?.(title) }
     }
   }

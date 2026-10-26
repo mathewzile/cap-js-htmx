@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>cds-htmx - FLP Sandbox</title>
+    <!-- Local SAP Fiori launchpad for the htmx apps (see fioriSandboxAppConfig.json for the tiles). The apps load from their source
+         URLs, which the cds-htmx plugin serves with the generic shell and the /htmx mapping; sap.ushell comes from the UI5 CDN.
+         The apps' Component.js extends cds/htmx/shell/Component, whose root their manifests declare as ./shell; the sandbox needs the
+         module before it reads a manifest, so the root is registered here (the plugin serves the same shell folder for every app). -->
+    <script src="https://sapui5.hana.ondemand.com/1.153.0/resources/sap/ushell/sandbox/SandboxBootTask.js"></script>
+    <script
+        id="sap-ui-bootstrap"
+        src="https://sapui5.hana.ondemand.com/1.153.0/resources/sap-ui-core.js"
+        data-sap-ui-async="true"
+        data-sap-ui-compat-version="edge"
+        data-sap-ui-boot-manifest="sap/ushell/sandbox/sandboxManifest.json"
+        data-sap-ui-theme="sap_horizon"
+        data-sap-ui-resource-roots='{
+            "cds.htmx.shell": "/manage-books-htmx/webapp/shell"
+        }'
+    ></script>
+</head>
+<body class="sapUiBody">
+    <div id="canvas"></div>
+</body>
+</html>

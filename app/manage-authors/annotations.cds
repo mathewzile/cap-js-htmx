@@ -131,6 +131,12 @@ annotate service.Books with @(
                 Value : stock,
                 Label : 'stock',
             },
+            {
+                $Type : 'UI.DataFieldForIntentBasedNavigation',
+                Label : 'Open Manage Books App',
+                SemanticObject : 'Books',
+                Action : 'manageHtmx'
+            },
         ],
     },
     UI.Facets : [

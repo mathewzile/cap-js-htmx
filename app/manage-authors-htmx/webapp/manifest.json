@@ -90,7 +90,7 @@
         "routerClass": "sap.f.routing.Router",
         "flexibleColumnLayout": {
           "defaultTwoColumnLayoutType": "TwoColumnsMidExpanded",
-          "defaultThreeColumnLayoutType": "ThreeColumnsEndExpanded"
+          "defaultThreeColumnLayoutType": "ThreeColumnsMidExpanded"
         }
       },
       "routes": [

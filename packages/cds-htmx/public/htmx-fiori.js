@@ -711,8 +711,11 @@ document.addEventListener('htmx:finally:request', e => {
 // A request that cannot be answered (network down, timeout) or that the server fails (5xx) says so in a message strip; the
 // page stays as it was (a 5xx body is not swapped in).
 function hfRequestFailed() {
-  let text = 'The request could not be completed. Please try again.'
-  try { text = JSON.parse(document.getElementById('hf-texts')?.textContent || '{}').RequestFailed || text } catch { /* keep the default */ }
+  hfShowError('RequestFailed', 'The request could not be completed. Please try again.')
+}
+function hfShowError(key, fallback) {
+  let text = fallback
+  try { text = JSON.parse(document.getElementById('hf-texts')?.textContent || '{}')[key] || text } catch { /* keep the default */ }
   const holder = document.getElementById('messages')
   if (!holder) return
   holder.replaceChildren()
@@ -725,6 +728,19 @@ function hfRequestFailed() {
   holder.append(strip)
 }
 document.addEventListener('htmx:error', hfRequestFailed)
+
+// ---------- intent-based navigation ----------
+// The link of a UI.DataFieldForIntentBasedNavigation asks the shell's adapter to navigate. Only the launchpad adapter can; a page
+// without one (standalone, or rendered by the plugin itself) reports that it needs a launchpad.
+document.addEventListener('click', async e => {
+  const link = e.target.closest?.('[data-hf-intent-object]')
+  if (!link) return
+  e.preventDefault()
+  const unavailable = () => hfShowError('NavigationUnavailable', 'Navigation to another app is only possible in an SAP Fiori launchpad.')
+  const adapter = window.HtmxShell?.adapter
+  if (!adapter?.navigate) return unavailable()
+  try { await adapter.navigate({ semanticObject: link.dataset.hfIntentObject, action: link.dataset.hfIntentAction }) } catch { unavailable() }
+})
 document.addEventListener('htmx:after:request', e => {
   if ((e.detail?.ctx?.response?.status ?? 0) < 500) return
   e.preventDefault()

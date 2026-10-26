@@ -36,7 +36,8 @@ function buildColumn(store, entityType, record) {
       return { ...common, target: record.Target }
     case 'UI.DataFieldWithIntentBasedNavigation':
     case 'UI.DataFieldForIntentBasedNavigation':
-      return { ...common, field: valueField(store, entityType, record, common.label), disabled: true } // no FLP (§3.2)
+      // the click asks the shell to navigate through the launchpad's Navigation service; without a launchpad it reports that it cannot
+      return { ...common, field: valueField(store, entityType, record, common.label), semanticObject: record.SemanticObject, action: record.Action }
     default: // UI.DataField
       return { ...common, field: valueField(store, entityType, record, common.label) }
   }

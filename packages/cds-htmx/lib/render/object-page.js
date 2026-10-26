@@ -1,7 +1,7 @@
 const { html, raw } = require('./html')
 const ids = require('./ids')
 const { evaluate, paths: pathsOf } = require('../annotations/expressions')
-const { formField, fieldLabel } = require('./field')
+const { formField, fieldLabel, isIntentAction, intentButton } = require('./field')
 const { rowsHtml, tableHead, columnVisibilityStyle, rowHref, treeAttributes, sectionGrowing } = require('./table')
 const { exportSplitButton } = require('./list-report')
 const { formatCount } = require('../data/format')
@@ -210,9 +210,13 @@ function facetBlock(facet, row, ctx, { asSection, hidden = false } = {}) {
     return html`
       <section id="${ids.opSection(facet.id)}" class="hf-section hf-section--table" aria-label="${facet.label}" data-hf-view="section:${facet.content.targetEntityType}:${facet.id}">${body}</section>`
   }
+  // the intent-based navigation actions of a form go to the heading row, right-aligned
+  const intents = (facet.content?.kind === 'form' ? facet.content.fields : []).filter(col => isIntentAction(col) && !(col.hidden && evaluate(col.hidden, row) === true))
   return html`
     <section id="${ids.opSection(facet.id)}" class="hf-section">
-      <h2 class="hf-section__title">${facet.label}</h2>
+      <div class="hf-section__header">
+        <h2 class="hf-section__title">${facet.label}</h2>${intents.length ? html`<div class="hf-section__actions">${intents.map(intentButton)}</div>` : html``}
+      </div>
       <div class="hf-section__card">${body}</div>
     </section>`
 }

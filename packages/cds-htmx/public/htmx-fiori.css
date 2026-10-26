@@ -573,6 +573,10 @@ html:has(body.htmx-fiori), body.htmx-fiori {
   color: var(--sapGroup_TitleTextColor, #131e29);
 }
 
+.hf-section__header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.hf-section__header .hf-section__title { flex: 1 1 auto; min-width: 0; }
+.hf-section__actions { display: flex; align-items: center; gap: .25rem; flex: none; }
+
 .hf-section__card {
   background: var(--sapGroup_ContentBackground, #fff);
   border-radius: var(--sapElement_BorderCornerRadius, .75rem);

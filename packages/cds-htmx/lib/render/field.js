@@ -92,6 +92,14 @@ function amountWithUnit(field, row, { basePath, entitySetPath, valueLists, input
   </div>`
 }
 
+/** A `DataFieldForIntentBasedNavigation` of a form section: a text button in the section's heading row (as FE puts the actions of a
+ *  FieldGroup there) that asks the shell to navigate to the intent. The page script (`htmx-fiori.js`) handles the click; without a
+ *  launchpad (an adapter with no `navigate`) it shows an error instead. */
+const isIntentAction = col => col.kind === 'UI.DataFieldForIntentBasedNavigation'
+function intentButton(col) {
+  return html`<button type="button" class="fd-button fd-button--transparent hf-intent" data-hf-intent-object="${col.semanticObject}" data-hf-intent-action="${col.action}">${col.label ?? `${col.semanticObject}-${col.action}`}</button>`
+}
+
 /** One label/value pair in an Object Page form section (§3.4: "label above value (Horizon),
  *  empty values show '–'"). `facetId` namespaces the field's DOM id for side-effect targeting.
  *  In draft (edit) mode, editable fields render as inputs (§3.4 "inputs replace values"); criticality
@@ -99,6 +107,7 @@ function amountWithUnit(field, row, { basePath, entitySetPath, valueLists, input
 function formField(col, row, { facetId, isDraft, editMode, basePath, entitySetPath, valueLists } = {}) {
   const editing = !!editMode || !!isDraft
   if (col.hidden && evaluate(col.hidden, row) === true) return html``
+  if (isIntentAction(col)) return html`` // it is in the section's heading row, not a form field
   const field = col.field
   if (!field) return html`` // DataFieldForAction/ForAnnotation aren't plain form fields -- their own facet content kind renders them
   const id = ids.opField(facetId ?? '', field.path)
@@ -131,4 +140,4 @@ function formField(col, row, { facetId, isDraft, editMode, basePath, entitySetPa
     </div>`
 }
 
-module.exports = { fieldText, fieldLabel, formField, isMandatory, isReadOnly }
+module.exports = { fieldText, fieldLabel, formField, isIntentAction, intentButton, isMandatory, isReadOnly }
