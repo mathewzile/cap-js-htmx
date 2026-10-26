@@ -6,4 +6,7 @@ service AdminService @(odata:'/admin') @htmx {
   @readonly
   entity Books as projection on my.Books;
   entity Genres as projection on my.Genres;
+
+  event AuthorChanged : { ID: UUID };
+  event StockChanged  : { ID: UUID };
 }

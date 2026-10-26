@@ -2,6 +2,12 @@ using AdminService as service from '../../srv/admin-service';
 using from '../../db/schema';
 
 annotate service.Authors with @(
+    // pushed by srv/admin-service.js when a draft of an author is created (SSE test in the launchpad)
+    Common.SideEffects #Push : {
+        SourceEvents     : ['AuthorChanged'],
+        TargetProperties : ['dateOfBirth'],
+        TargetEntities   : [books]
+    },
     UI.FieldGroup #GeneratedGroup : {
         $Type : 'UI.FieldGroupType',
         Data : [
@@ -88,6 +94,10 @@ annotate service.Authors with {
 };
 
 annotate service.Books with @(
+    Common.SideEffects #Push : {
+        SourceEvents     : ['StockChanged'],
+        TargetProperties : ['stock']
+    },
     UI.LineItem #Books : [
         {
             $Type : 'UI.DataField',

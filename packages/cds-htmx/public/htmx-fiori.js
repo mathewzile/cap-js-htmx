@@ -15,6 +15,8 @@ function hfSyncStream() {
     el.id = 'sse'
     el.setAttribute('hx-sse:connect', url)
     el.setAttribute('hx-swap', 'none')
+    // the extension closes the stream of a hidden tab by default; the page stays registered (and live) in the background, like a WebSocket
+    el.setAttribute('hx-config', '{"sse":{"pauseOnBackground":false}}')
     ;(document.querySelector('.hf-root') || document.body).append(el)
     htmx.process(el)
   }

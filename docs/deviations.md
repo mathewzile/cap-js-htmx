@@ -16,6 +16,7 @@ The goal is a List Report and Object Page that behave and look like the standard
 ## Not complete yet
 
 - **Tree tables are display-only:** no create child, no move node, and no draft roots. See Open items.
+- **Server events (SSE) reach one column of a Flexible Column Layout:** a browser page holds one event stream and the server remembers one view for it, the page of the column opened last. With a List Report, an Object Page and a sub-object page open together, only the last one is updated by a `SourceEvents` side effect or a live row; the others show the old values until they are loaded again (closing the last column makes the one before it the page that is updated). It is not checked how Fiori elements behaves here.
 - **New drafts do not yet appear in the List Report** of their creator after leaving the app.
 - **Intent-based navigation**: only `DataFieldForIntentBasedNavigation` in an Object Page form navigates (no parameters, and not in a launchpad it shows an error); `DataFieldWithIntentBasedNavigation` is not a link yet; `SemanticObject` links are disabled outside a launchpad.
 - **Charts** are micro charts and a simple column or bar chart as inline SVG, not the full `sap.viz` set.
