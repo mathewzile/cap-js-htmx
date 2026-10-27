@@ -851,6 +851,11 @@ tr[aria-busy=true] { cursor: progress; }
 @keyframes hf-busy-spin { to { transform: rotate(360deg); } }
 .hf-busy::after { animation-name: hf-busy-show, hf-busy-spin; }
 @keyframes hf-busy-show { to { opacity: 1; } }
+/* a button press (Edit, Save, Discard Draft, Go...) shows the overlay without the delay */
+.hf-busy--now::before { animation-delay: 0s; }
+.hf-busy--now::after { animation-delay: 0s, 0s; }
+.hf-no-motion .hf-busy--now::before { animation: hf-busy-in 0s 0s forwards !important; }
+.hf-no-motion .hf-busy--now::after { animation: hf-busy-show 0s 0s forwards !important; }
 /* the action button that sent the request: kept as it is (disabled until the answer is in), the pointer says the work goes on */
 .fd-button.hf-busy-button { cursor: progress; }
 

@@ -715,6 +715,7 @@ document.addEventListener('htmx:after:request', e => { if (String(e.detail?.ctx?
 // the page, the column or page it sits in is the busy host.
 const hfBusyCounts = new WeakMap()
 const hfIsAction = ctx => /^(POST|DELETE)$/i.test(String(ctx?.request?.method)) && ctx?.sourceElement?.matches?.('button')
+const hfIsPress = ctx => !!ctx?.sourceElement?.matches?.('button') // any request a button press sends
 function hfBusyHost(ctx) {
   const target = ctx?.target
   if (!target || !target.closest) return null
@@ -735,6 +736,7 @@ document.addEventListener('htmx:before:request', e => {
   if (!host) return
   hfBusyCounts.set(host, (hfBusyCounts.get(host) || 0) + 1)
   host.classList.add('hf-busy')
+  if (hfIsPress(e.detail?.ctx)) host.classList.add('hf-busy--now') // a button press shows its busy state at once, so it is not pressed again
   host.setAttribute('aria-busy', 'true')
 })
 document.addEventListener('htmx:finally:request', e => {
@@ -744,7 +746,7 @@ document.addEventListener('htmx:finally:request', e => {
   const left = hfBusyCounts.get(host) - 1
   if (left > 0) return hfBusyCounts.set(host, left)
   hfBusyCounts.delete(host)
-  host.classList.remove('hf-busy')
+  host.classList.remove('hf-busy', 'hf-busy--now')
   host.removeAttribute('aria-busy')
 })
 
