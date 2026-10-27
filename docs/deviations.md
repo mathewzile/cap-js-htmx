@@ -11,6 +11,7 @@ The goal is a List Report and Object Page that behave and look like the standard
 ## By design
 
 - **No UI code in an app, and no UI5 in the browser.** Controller extensions and XML fragments of Fiori elements do not run. The extension model is a declarative one (HTML fragments, building blocks, a server extension SPI), see the extensibility design.
+- **Edit does not move the page.** In Fiori elements a form field is a few pixels taller in edit mode than in display mode, so the form shifts when Edit is pressed. Here a field, a table row of a section and the card keep one size in both modes (60px per field, 125px with a text area, 35px per row) and the draft indicator adds nothing to the height of the title; `edit-no-shift.spec.js` checks it.
 - **Personalization is browser-local.** Saved views (variants) are kept in the browser, not on the server, and the UI5 flexibility features (key user adaptation) are not there.
 
 ## Not complete yet

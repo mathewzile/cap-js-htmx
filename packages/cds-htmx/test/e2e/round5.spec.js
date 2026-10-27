@@ -134,7 +134,7 @@ test.describe('busy state and failures', () => {
   test('a slow table request shows the busy overlay after about a second, a quick one never does', async ({ page }) => {
     await page.goto('/htmx/catalog/Books')
     await page.route('**/$table**', async route => { await new Promise(r => setTimeout(r, 2500)); await route.continue() })
-    await page.locator('#lr-growing .hf-table__growing-button').click()
+    await page.locator('#lr-search').press('Enter') // not a button: the busy overlay waits for UI5's delay
     const card = page.locator('.hf-table-card')
     await expect(card).toHaveClass(/hf-busy/)
     await expect(card).toHaveAttribute('aria-busy', 'true')
@@ -142,6 +142,16 @@ test.describe('busy state and failures', () => {
     await page.waitForTimeout(1500)
     expect(await overlayOpacity(page, '.hf-table-card')).toBeGreaterThan(0)
     await page.screenshot({ path: 'test-results/round5/busy.png' })
+    await expect(card).not.toHaveClass(/hf-busy/)
+  })
+
+  test('a button press shows the busy overlay at once, so it is not pressed twice', async ({ page }) => {
+    await page.goto('/htmx/catalog/Books')
+    await page.route('**/$table**', async route => { await new Promise(r => setTimeout(r, 2500)); await route.continue() })
+    await page.locator('#lr-growing .hf-table__growing-button').click()
+    const card = page.locator('.hf-table-card')
+    await expect(card).toHaveClass(/hf-busy--now/)
+    await expect.poll(() => overlayOpacity(page, '.hf-table-card')).toBeGreaterThan(0.3) // the overlay fades in over .2s from the press, no delay
     await expect(rows(page)).toHaveCount(40)
     await expect(card).not.toHaveClass(/hf-busy/)
   })

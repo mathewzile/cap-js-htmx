@@ -603,7 +603,8 @@ html:has(body.htmx-fiori), body.htmx-fiori {
 .hf-form { display: block; column-count: 1; column-gap: 1.5rem; }
 @container hf-opc (min-width: 536px) { .hf-form { column-count: 2; } }
 @container hf-opc (min-width: 960px) { .hf-form { column-count: 3; } }
-@container hf-opc (min-width: 1376px) { .hf-form { column-count: 4; } }
+/* FE shows 4 columns once the form itself is about 1050px wide (measured on Manage Authors and Manage Books: the form is 56px narrower than this container) */
+@container hf-opc (min-width: 1100px) { .hf-form { column-count: 4; } }
 .hf-op-content { container: hf-opc / inline-size; }
 
 /* the server groups the fields into columns; the browser does that now */
@@ -626,7 +627,10 @@ html:has(body.htmx-fiori), body.htmx-fiori {
   color: var(--sapTextColor, #131e29);
   overflow-wrap: anywhere;
 }
-.hf-field--edit .hf-field__label { margin-bottom: 0; }
+/* The space under the label is its margin, not the field's flex gap: a gap is added around every child, so an element an extension puts next to the
+   input (even one of no size) would push the input around. */
+.hf-field--edit { gap: 0; }
+.hf-field--edit .hf-field__label { margin-bottom: .25rem; }
 .fd-input.hf-input--end { text-align: end; }
 .hf-field--edit .fd-textarea { min-height: 5.75rem; }
 .hf-page--edit .hf-form__column { gap: .75rem; }
@@ -1037,7 +1041,8 @@ body.htmx-fiori:has(#fcl) { height: 100vh; height: 100dvh; overflow: hidden; dis
 
 /* a table section is laid out condensed: 33px rows, and its sub-section sits 8px under its neighbour like FE's block container */
 .htmx-fiori .hf-section--table { padding-top: 1.5rem; }
-.htmx-fiori .hf-section--table .hf-table tbody .fd-table__cell { height: 2.0625rem; }
+/* as tall as a row with inputs in it (35px), so the rows do not grow when the draft is edited */
+.htmx-fiori .hf-section--table .hf-table tbody .fd-table__cell { height: 2.1875rem; }
 /* the stars of a page being edited are the smaller ones (FE's editable indicator) */
 .hf-page--edit .hf-rating i { font-size: 1.375rem; width: 1.375rem; height: 1.375rem; }
 
@@ -1073,7 +1078,18 @@ body.htmx-fiori:has(#fcl) { height: 100vh; height: 100dvh; overflow: hidden; dis
 .htmx-fiori .hf-field--edit > .hf-select,
 .htmx-fiori .hf-field--edit > .hf-input-group,
 .htmx-fiori .hf-field--edit > .fd-textarea { margin: 2px 0 0; }
-.hf-page--edit .hf-section__card { padding-bottom: 2.125rem; }
+/* Edit changes nothing in the layout of a form: a field takes 60px (125px with a text area) in display and in edit mode, the draft indicator
+   does not make the title row taller, and the card keeps its padding, so the page does not move when Edit is pressed. A value is as tall as
+   the input that replaces it (26px, 2px below the label) and sits where the text of the input sits. */
+.hf-section .hf-field:not(.hf-field--edit) { min-height: 3.75rem; }
+.hf-section .hf-field:not(.hf-field--edit) { padding-bottom: 0; }
+.hf-section .hf-field:not(.hf-field--edit) > .hf-field__value { display: block; min-height: 1.625rem; margin-top: 2px; padding-block: .3125rem; }
+.hf-section .hf-field--multiline:not(.hf-field--edit) { min-height: 7.8125rem; }
+/* An editable field has exactly the height of its input: the columns of a form are balanced by height, and fields of equal height balance one
+   way only. Whatever a browser extension (a password manager's button) adds to an input, even 1px, must not move a field to another column. */
+.hf-section .hf-field--edit { height: 3.75rem; }
+.hf-section .hf-field--edit:has(> textarea) { height: 7.8125rem; }
+.hf-op-title__draft { margin-bottom: -.375rem; }
 
 /* ---------- the date filter: one input with a calendar button, and FE's list of date choices ---------- */
 .hf-filter { position: relative; }

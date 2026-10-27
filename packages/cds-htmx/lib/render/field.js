@@ -134,7 +134,7 @@ function formField(col, row, { facetId, isDraft, editMode, basePath, entitySetPa
   const text = fieldText(field, row)
   const display = text === '' ? '–' : text
   return html`
-    <div class="fd-form-item hf-field" id="${id}">
+    <div class="fd-form-item hf-field${field.multiline ? ' hf-field--multiline' : ''}" id="${id}">
       ${fieldLabel(field.label)}
       <span class="hf-field__value">${display}</span>
     </div>`
