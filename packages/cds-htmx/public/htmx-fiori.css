@@ -18,6 +18,9 @@ html:has(body.htmx-fiori), body.htmx-fiori {
 }
 
 .hf-root { background: var(--sapBackgroundColor, #f5f6f7); min-height: 100%; position: relative; }
+/* the launchpad's app container has the height of the window and clips (UI5 apps scroll inside their own pages): the root scrolls.
+   The flexible column layout rule below comes later and keeps its own scrolling columns. */
+.hf-root.hf-root--flp { height: 100%; min-height: 0; overflow-y: auto; }
 
 .htmx-fiori, .htmx-fiori *, .htmx-fiori *::before, .htmx-fiori *::after { box-sizing: border-box; }
 

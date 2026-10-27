@@ -43,6 +43,11 @@ document.addEventListener('click', e => {
   const tab = e.target.closest('.hf-anchor-bar__tab')
   if (tab) {
     for (const t of tab.parentElement.children) t.classList.toggle('is-selected', t === tab)
+    // the hash is the app's route in the shell (and the launchpad's), so it is not a link to an element: scroll to the section
+    e.preventDefault()
+    const section = document.getElementById(tab.getAttribute('href').slice(1))
+    const still = document.documentElement.classList.contains('hf-no-motion') || tab.closest('.hf-no-motion')
+    section?.scrollIntoView({ block: 'start', behavior: still ? 'auto' : 'smooth' })
   }
 })
 

@@ -88,6 +88,7 @@
 
     // the container: the same elements a page rendered by the plugin has
     root.classList.add('htmx-fiori', 'hf-root', 'is-compact')
+    root.classList.toggle('hf-root--flp', adapter.name === 'flp')
     // motion: the app's (sap.htmx.animations, from $shell) and, in the launchpad, UI5's animation mode; the calmer of the two applies
     const applyMotion = () => {
       const mode = motionFor(info.animations, adapter.animationMode?.())
