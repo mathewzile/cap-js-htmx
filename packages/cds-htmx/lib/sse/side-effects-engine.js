@@ -221,6 +221,7 @@ async function pushListRow(tx, client, { srv, servicePath, entityType, view, key
 
 const served = new Set() // the `@htmx` services, for the apps that are loaded later
 const registered = new WeakMap() // srv -> Set of the event names it already listens for
+const afterCommit = new WeakMap() // transaction context -> the runs to start when it has succeeded (one listener per transaction, however many events it emits)
 
 /** Registers `srv.on(<event>)` for every event named as a `SourceEvents` of some entity's
  *  `Common.SideEffects` (§4.2.3). Runs once per `@htmx` service from `cds-plugin.js`, and again for an
@@ -246,8 +247,12 @@ function registerSourceEvents(srv, app) {
       const run = () => Promise.all(entityTypes.map(entityType => onSourceEvent(srv, { entityType, eventName, data: msg.data })))
         .catch(err => cds.log('sse').error('SourceEvents', eventName, 'failed:', err.message))
       const ctx = cds.context
-      if (typeof ctx?.on === 'function') ctx.on('succeeded', run)
-      else setImmediate(run)
+      if (typeof ctx?.on !== 'function') setImmediate(run)
+      else if (afterCommit.has(ctx)) afterCommit.get(ctx).push(run)
+      else {
+        afterCommit.set(ctx, [run])
+        ctx.on('succeeded', () => Promise.all(afterCommit.get(ctx).map(start => start())))
+      }
       return next()
     })
   }
