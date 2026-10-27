@@ -18,7 +18,7 @@ async function sectionPage(tx, { parentEntityType, parentKeys, content, query = 
     tx.run(queryLib.listReportCountQuery(targetEntityType, { filters, search }))
   ])
   const hasMore = found.length > pageSize
-  return { rows: hasMore ? found.slice(0, pageSize) : found, hasMore, count: counted.count, pageSize }
+  return { rows: hasMore ? found.slice(0, pageSize) : found, hasMore, count: queryLib.countOf(counted), pageSize }
 }
 
 module.exports = { sectionPage }

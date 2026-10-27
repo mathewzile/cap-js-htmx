@@ -11,6 +11,12 @@ const { canCreate, canEdit, canDelete } = require('../model/edit-capabilities')
 /** Draft lifecycle and write routes: create, edit, save, discard, delete, actions.
  *  Mixed into `HtmxAdapter` (`Object.assign(HtmxAdapter.prototype, ...)`), so `this` is the adapter. */
 module.exports = {
+  /** Tells the page script that what the List Report shows changed (a draft was created, edited, saved or discarded):
+   *  a List Report that stays on screen in another column asks for its rows again (`hfRefreshList`). */
+  listChanged(res) {
+    return this.trigger(res, JSON.stringify({ 'hf:listChanged': true }))
+  },
+
   /** A refused edit/save: the page stays as it is, the messages go to the page script (value states on the
    *  fields and the footer's message button, like FE). The body only clears the message strip: 4xx bodies are
    *  swapped by htmx, and an empty one would empty the page. */
@@ -30,6 +36,7 @@ module.exports = {
     const keys = { ...pk, IsActiveEntity: false }
     const raw = keysLib.formatKeys(keys)
     res.set('HX-Push-Url', `${this.basePath(req)}/${req.params.Set}(${raw})`)
+    this.listChanged(res)
     return this.objectPage(req, res, tx, {
       entityType: entity.name, keys, segments: [{ set: req.params.Set, raw }], contextPath: `/${req.params.Set}`
     })
@@ -72,6 +79,7 @@ module.exports = {
     const draftKeys = { ...plainKeys, IsActiveEntity: false }
     const draftRaw = keysLib.formatKeys(draftKeys)
     res.set('HX-Replace-Url', `${this.basePath(req)}/${set}(${draftRaw})`)
+    this.listChanged(res)
     return this.objectPage(req, res, tx, {
       entityType: entity.name, keys: draftKeys, segments: [{ set, raw: draftRaw }], contextPath: `/${set}`
     })
@@ -88,6 +96,7 @@ module.exports = {
     const segments = n.segments.map(s => ({ set: s.set, raw: s.raw?.replace(/IsActiveEntity=(?:true|false)/g, 'IsActiveEntity=false') }))
     const path = segments.map(s => `${s.set}${s.raw ? `(${s.raw})` : ''}`).join('/')
     res.set('HX-Replace-Url', `${this.basePath(req)}/${path}`)
+    this.listChanged(res)
     return this.objectPage(req, res, tx, {
       entityType: n.entityType, keys: keysLib.parseKeys(segments[segments.length - 1].raw), segments, contextPath: n.parent.contextPath + `/${n.nav}`
     })
@@ -154,6 +163,7 @@ module.exports = {
       const activeKeys = { ...keys, IsActiveEntity: true }
       const activeRaw = keysLib.formatKeys(activeKeys)
       res.set('HX-Replace-Url', `${this.basePath(req)}/${set}(${activeRaw})`)
+      this.listChanged(res)
       req.successMessage = this.text(req, 'ObjectSaved')
       return this.objectPage(req, res, tx, {
         entityType: entity.name, keys: activeKeys, segments: [{ set, raw: activeRaw }], contextPath: `/${set}`
@@ -177,6 +187,7 @@ module.exports = {
     const draftRow = await tx.run(SELECT.one.from(entity.name).columns('HasActiveEntity').where({ ...plainKeys, IsActiveEntity: false }))
     await draftLib.discard(tx, entity.name, keys)
     req.successMessage = this.text(req, 'DraftDiscarded')
+    this.listChanged(res)
     if (draftRow?.HasActiveEntity) {
       const activeKeys = { ...plainKeys, IsActiveEntity: true }
       const activeRaw = keysLib.formatKeys(activeKeys)

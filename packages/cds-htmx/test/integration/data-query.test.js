@@ -7,7 +7,7 @@ const { cds: test_cds } = cds.test(path.join(__dirname, '..', '..', '..', '..'))
 
 const cache = require('../../lib/model/cache')
 const { parseFilters, parseSearch } = require('../../lib/data/filters')
-const { selectColumns, listReportQuery, listReportCountQuery, parseOrderBy } = require('../../lib/data/query')
+const { selectColumns, listReportQuery, listReportCountQuery, countOf, parseOrderBy } = require('../../lib/data/query')
 
 const appRoot = path.join(__dirname, '..', '..', '..', '..', 'app')
 const servicePath = '/odata/v4/catalog/'
@@ -44,12 +44,13 @@ test('listReportQuery() runs against the real service and respects filters/searc
   })
 })
 
-test('listReportCountQuery() returns a single row with a count field', async () => {
+test('listReportCountQuery() counts through countOf(), for the plain read and for the draft "All" read', async () => {
   const srv = await cds.connect.to('CatalogService')
+  const all = [{ ref: ['IsActiveEntity'] }, '=', { val: false }, 'or', { ref: ['SiblingEntity', 'IsActiveEntity'] }, '=', { val: null }]
   await srv.tx({}, async tx => {
-    const result = await tx.run(listReportCountQuery('CatalogService.Books', {}))
-    assert.ok(typeof result.count === 'number')
-    assert.ok(result.count > 0)
+    const plain = countOf(await tx.run(listReportCountQuery('CatalogService.Books', {})))
+    assert.ok(plain > 0)
+    assert.equal(countOf(await tx.run(listReportCountQuery('CatalogService.Books', { filters: all }))), plain)
   })
 })
 

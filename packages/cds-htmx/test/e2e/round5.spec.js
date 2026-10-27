@@ -155,6 +155,56 @@ test.describe('busy state and failures', () => {
     await expect(page.locator('#app')).not.toHaveClass(/hf-busy/)
   })
 
+  // Edit, Save and Discard Draft: the button goes busy at once and cannot send the action twice; the page is busy after a second
+  test('Edit, Save and Discard Draft disable their button until the answer is in, and the page goes busy after a second', async ({ page, request }) => {
+    const BOOK = '3d2d2d2d-1c1c-4b4b-8a8a-000000000002'
+    await page.goto(`/htmx/catalog/Books(ID='${BOOK}',IsActiveEntity=true)`)
+    const slow = pattern => page.route(pattern, async route => { await new Promise(r => setTimeout(r, 1800)); await route.continue() })
+    let posts = 0
+    page.on('request', r => { if (r.method() === 'POST' && /\$(edit|save|discard)$/.test(r.url())) posts++ })
+
+    await slow('**/$edit')
+    const edit = page.getByRole('button', { name: 'Edit', exact: true }).first()
+    await edit.click()
+    await expect(edit).toBeDisabled()
+    await expect(edit).toHaveClass(/hf-busy-button/)
+    await expect(page.locator('#app')).toHaveClass(/hf-busy/)
+    await expect(page.locator('#op-footer')).toBeVisible() // the draft page is in, nothing is busy any more
+    await expect(page.locator('#app')).not.toHaveClass(/hf-busy/)
+    expect(posts).toBe(1)
+
+    await page.unroute('**/$edit')
+    await slow('**/$save')
+    const save = page.getByRole('button', { name: 'Save', exact: true })
+    await save.click()
+    await expect(save).toBeDisabled()
+    await expect(save).toHaveAttribute('aria-busy', 'true')
+    await expect(page.getByRole('button', { name: 'Edit', exact: true }).first()).toBeVisible()
+    expect(posts).toBe(2)
+
+    await page.unroute('**/$save')
+    await page.getByRole('button', { name: 'Edit', exact: true }).first().click()
+    await slow('**/$discard')
+    const discard = page.getByRole('button', { name: 'Discard Draft' })
+    await discard.click()
+    await expect(discard).toBeDisabled()
+    await expect(page.getByRole('button', { name: 'Edit', exact: true }).first()).toBeVisible()
+    await request.delete(`/odata/v4/catalog/Books(ID=${BOOK},IsActiveEntity=false)`).catch(() => {})
+  })
+
+  test('a failed action gives its button back', async ({ page, request }) => {
+    const BOOK = '3d2d2d2d-1c1c-4b4b-8a8a-000000000002'
+    await page.goto(`/htmx/catalog/Books(ID='${BOOK}',IsActiveEntity=true)`)
+    await page.route('**/$edit', route => route.abort('connectionrefused'))
+    const edit = page.getByRole('button', { name: 'Edit', exact: true }).first()
+    await edit.click()
+    await expect(page.locator('#messages .fd-message-strip--error')).toContainText('could not be completed')
+    await expect(edit).toBeEnabled()
+    await expect(edit).not.toHaveClass(/hf-busy-button/)
+    await expect(page.locator('#app')).not.toHaveClass(/hf-busy/)
+    await request.delete(`/odata/v4/catalog/Books(ID=${BOOK},IsActiveEntity=false)`).catch(() => {})
+  })
+
   test('a failed request says so and leaves the page as it was', async ({ page }) => {
     await page.goto('/htmx/catalog/Books')
     await page.route('**/$table**', route => route.abort('connectionrefused'))

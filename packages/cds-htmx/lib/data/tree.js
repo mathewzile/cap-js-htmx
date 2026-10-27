@@ -48,7 +48,7 @@ async function topLevel(tx, model, entityType, layout, { query, rootParent, skip
   const hasMore = found.length > limit
   const tops = await markStates(tx, entityType, hierarchy, hasMore ? found.slice(0, limit) : found, 0)
   const rows = await expandInitially(tx, model, entityType, layout, tops, query)
-  return { rows, hasMore, count: counted.count }
+  return { rows, hasMore, count: queryLib.countOf(counted) }
 }
 
 /** `initialExpansionLevel`: the nodes above that level come open, their children read now and listed below them (the client

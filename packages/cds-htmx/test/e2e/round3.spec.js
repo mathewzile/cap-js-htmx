@@ -120,7 +120,8 @@ test.describe('List Report', () => {
   test('the draft indicator is shown under the semantic key column', async ({ page }) => {
     await edit(page)
     await page.goto('/htmx/catalog/Books')
-    const row = page.locator(`#lr-row--${BOOK}-true`) // your own draft stands in the saved row: "Draft", not "Locked"
+    const row = page.locator(`#lr-row--${BOOK}-false`) // like FE's "All": your own draft stands in the saved row, "Draft", not "Locked"
+    await expect(page.locator(`#lr-row--${BOOK}-true`)).toHaveCount(0)
     await expect(row.locator('td.hf-col-0 .hf-draft-indicator')).toHaveText('Draft')
     await expect(row.locator('td:not(.hf-col-0) .hf-draft-indicator')).toHaveCount(0)
   })

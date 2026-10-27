@@ -117,8 +117,9 @@ module.exports = {
       basePath: base, entitySetPath: req.params.Set, keyNames, orderBy,
       skip: skip + threshold, loaded, hasMore, count, query: req.query, bundle, t: i18n.t, locale: cds.context.locale
     })
-    // Go/sort keep the filter state in the (replaced, not pushed) URL, so Back from an object lands on the same list
-    if (!req.query.$skip) {
+    // Go/sort keep the filter state in the (replaced, not pushed) URL, so Back from an object lands on the same list;
+    // a refresh the page script makes for a List Report in a column (`X-Hf-Quiet`) leaves the URL of the page that is open alone
+    if (!req.query.$skip && req.headers['x-hf-quiet'] !== '1') {
       const params = new URLSearchParams(Object.entries(req.query).filter(([k, v]) => v !== '' && !(k === 'f.EditingStatus' && v === 'ALL')))
       res.set('HX-Replace-Url', `${base}/${req.params.Set}${params.size ? '?' + params : ''}`)
       // the header (outside the swapped rows) shows which column the rows are sorted by
@@ -142,7 +143,7 @@ module.exports = {
     const hasMore = rows.length > limit
     const pageRows = hasMore ? rows.slice(0, limit) : rows
     await queryLib.markDraftOwners(tx, entityType, lrLayout, pageRows, cds.context.user.id)
-    return { rows: pageRows, hasMore, count: counted.count }
+    return { rows: pageRows, hasMore, count: queryLib.countOf(counted) }
   },
 
   /** `GET /:Set/$children?node=<id>&level=<n>&hq=<qualifier>` (tree tables): the rows to insert below an expanded node.

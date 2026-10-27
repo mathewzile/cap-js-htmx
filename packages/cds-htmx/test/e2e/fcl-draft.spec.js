@@ -17,7 +17,9 @@ test.beforeEach(async ({ page }) => {
 })
 
 test.afterEach(async ({ request }) => {
-  await request.delete(`/odata/v4/catalog/Books(ID=${BOOK},IsActiveEntity=false)`).catch(() => {})
+  // every draft of the run, also the ones a Create left behind when its test failed (they would count in the list)
+  const drafts = await request.get('/odata/v4/catalog/Books?$filter=IsActiveEntity eq false&$select=ID').then(r => r.json()).catch(() => ({}))
+  for (const d of drafts.value || []) await request.delete(`/odata/v4/catalog/Books(ID=${d.ID},IsActiveEntity=false)`).catch(() => {})
 })
 
 async function openChapter(page) {
@@ -27,6 +29,51 @@ async function openChapter(page) {
   await page.locator('#op-section--Chapters tbody tr[hx-get]').first().click()
   await expect(page.locator('#c2-op-page')).toBeVisible()
 }
+
+test.describe('the List Report in the first column follows the drafts', () => {
+  const draftRows = page => col(page, 0).locator('tr[hx-get*="IsActiveEntity=false"]')
+  const total = async page => Number((await col(page, 0).locator('.hf-table-toolbar__title').textContent()).match(/\(([\d,]+)\)/)[1].replace(/,/g, ''))
+
+  test('a new draft is a row of the list at once, Discard removes it again, without a reload', async ({ page }) => {
+    await page.goto(SHELL)
+    await page.locator('#lr-table-body tr', { hasText: 'Jane Eyre' }).click()
+    await expect(page.locator('#op-page')).toBeVisible()
+    const before = await total(page)
+    const url = page.url()
+
+    await col(page, 0).getByRole('button', { name: 'Create' }).click()
+    await expect(col(page, 1).locator('.hf-page--edit')).toBeVisible()
+    await expect(col(page, 0).locator('.hf-table-toolbar__title')).toContainText(`(${(before + 1).toLocaleString('en-US')})`)
+    expect(page.url()).not.toBe(url) // the refresh of the list did not touch the URL of the page that is open
+    expect(hash(page)).toMatch(/Books\(IsActiveEntity=false,ID='[^']+'\)$/)
+    // the draft is one of the rows: asked for by its status it is the only one
+    await col(page, 0).locator('select[name="f.EditingStatus"]').selectOption('OWN_DRAFT')
+    await col(page, 0).getByRole('button', { name: 'Go' }).click()
+    await expect(draftRows(page)).toHaveCount(1)
+    await expect(draftRows(page).first()).toContainText('Draft')
+
+    // Discard: the draft is no row any more, without a reload (a new draft has nothing to go back to: the List Report is shown again)
+    await col(page, 1).getByRole('button', { name: 'Discard Draft' }).click()
+    await page.locator('.hf-confirm-popover__ok').click({ timeout: 2000 }).catch(() => {}) // a new draft is asked about
+    await expect(draftRows(page)).toHaveCount(0)
+    await expect.poll(() => total(page)).toBe(before)
+  })
+
+  test('Edit on a book turns its row into the draft, Discard Draft brings the saved row back', async ({ page }) => {
+    await page.goto(SHELL)
+    await page.locator('#lr-table-body tr', { hasText: 'Jane Eyre' }).click()
+    await editButton(page, 1).click()
+    await expect(col(page, 1).locator('.hf-page--edit')).toBeVisible()
+    // like FE's "All": the edited book is one row, its draft, with the Draft indicator
+    await expect(draftRows(page)).toHaveCount(1)
+    await expect(draftRows(page).first()).toContainText('Jane Eyre')
+    await expect(draftRows(page).first()).toContainText('Draft')
+
+    await col(page, 1).getByRole('button', { name: 'Discard Draft' }).click()
+    await expect(draftRows(page)).toHaveCount(0)
+    await expect(col(page, 0).locator('tr', { hasText: 'Jane Eyre' }).first()).not.toContainText('Draft')
+  })
+})
 
 test.describe('drafts in the column layout: one root, the first page', () => {
   test('the sub-object page in the columns has no Edit: the draft belongs to the first page', async ({ page }) => {

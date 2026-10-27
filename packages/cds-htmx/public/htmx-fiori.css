@@ -848,6 +848,8 @@ tr[aria-busy=true] { cursor: progress; }
 @keyframes hf-busy-spin { to { transform: rotate(360deg); } }
 .hf-busy::after { animation-name: hf-busy-show, hf-busy-spin; }
 @keyframes hf-busy-show { to { opacity: 1; } }
+/* the action button that sent the request: kept as it is (disabled until the answer is in), the pointer says the work goes on */
+.fd-button.hf-busy-button { cursor: progress; }
 
 /* ---------- tree table: expanding a node never changes the column widths ---------- */
 .htmx-fiori .hf-page--lr .hf-table[data-hf-tree], .htmx-fiori .hf-section--table .hf-table[data-hf-tree] { table-layout: fixed; width: 100%; }
@@ -1153,8 +1155,16 @@ body.htmx-fiori:has(#fcl) { height: 100vh; height: 100dvh; overflow: hidden; dis
 .hf-amount-field__unit .fd-input { padding-left: 1.125rem; }
 
 /* the popover over a button that asks a small question (Discard Draft): FE's, with its arrow towards the button */
-.hf-confirm-popover { position: fixed; z-index: 1100; min-width: 10rem; padding: .5rem; display: flex; flex-direction: column; gap: .5rem;
-  background: var(--sapGroup_ContentBackground, #fff); border-radius: var(--sapElement_BorderCornerRadius, .75rem); box-shadow: var(--sapContent_Shadow2, 0 0 .125rem rgba(34, 53, 72, .2), 0 .25rem .5rem rgba(34, 53, 72, .3)); }
-.hf-confirm-popover::after { content: ''; position: absolute; bottom: -.3125rem; left: var(--hf-arrow, 50%); width: .5rem; height: .5rem; margin-left: -.25rem; transform: rotate(45deg); background: inherit; }
-.hf-confirm-popover__text { margin: 0; padding: .125rem .25rem 0; }
-.hf-confirm-popover__ok { width: 100%; background: var(--sapGroup_ContentBackground, #fff); border: 1px solid var(--sapButton_BorderColor, #0064d9); color: var(--sapButton_TextColor, #0064d9); }
+/* The numbers are those of sap.m.Popover({ showHeader: false, placement: Top }) with sapUiContentPadding, VBox[Text, Button width 100%],
+   measured in the Fiori elements Books app (Horizon, compact): 18/17/20px around the content, 4px between the text and the 26px
+   button, 8px corners, an arrow 16px wide and 8px high. It sits on <body>, outside `.htmx-fiori`, so it sets its own font and button metrics. */
+.hf-confirm-popover { position: fixed; z-index: 1100; min-width: 100px; max-width: 100%; padding: 1.125rem 1.0625rem 1.25rem; display: flex; flex-direction: column; gap: .25rem;
+  font-family: var(--sapFontFamily, '72', '72full', Arial, Helvetica, sans-serif); font-size: var(--sapFontSize, .875rem); color: var(--sapTextColor, #131e29);
+  background: var(--sapGroup_ContentBackground, #fff); border-radius: var(--sapPopover_BorderCornerRadius, .5rem); box-shadow: var(--sapContent_Shadow2, 0 0 0 .0625rem rgba(34, 53, 72, .48), 0 .625rem 1.875rem 0 rgba(34, 53, 72, .25)); }
+.hf-confirm-popover__arrow { position: absolute; top: 100%; left: var(--hf-arrow, 50%); width: 1rem; height: .5rem; margin-left: -.5rem; overflow: hidden; pointer-events: none; }
+.hf-confirm-popover__arrow::after { content: ''; position: absolute; top: -.35rem; left: 50%; width: .7rem; height: .7rem; margin-left: -.35rem; transform: rotate(45deg);
+  background: var(--sapGroup_ContentBackground, #fff); box-shadow: var(--sapContent_Shadow2, 0 0 0 .0625rem rgba(34, 53, 72, .48), 0 .625rem 1.875rem 0 rgba(34, 53, 72, .25)); }
+.hf-confirm-popover__text { margin: 0; padding: 0; line-height: normal; }
+.hf-confirm-popover .hf-confirm-popover__ok { width: 100%; height: var(--sapElement_Compact_Height, 1.625rem); min-width: 2rem; padding: 0 .4375rem; display: inline-flex; align-items: center; justify-content: center; line-height: 1;
+  font-family: var(--sapButton_FontFamily, '72-SemiboldDuplex', '72', Arial, sans-serif); font-size: .875rem; border-radius: var(--sapButton_BorderCornerRadius, .5rem); }
+.hf-confirm-popover__ok { background: var(--sapButton_Background, #fff); border: 1px solid var(--sapButton_BorderColor, #bcc3ca); color: var(--sapButton_TextColor, #0064d9); }

@@ -101,7 +101,9 @@ function parseOrderBy(query, columns) {
  *  `PresentationVariant.SortOrder`, and `.limit()` for growing ("More"). */
 function listReportQuery(model, entitySet, entityType, layout, { filters = [], search, query, skip = 0, limit, tieBreak = false } = {}) {
   const columns = selectColumns(model, entityType, layout)
-  let q = SELECT.from(entitySet).columns(columns)
+  // a path column carries the alias it gets anyway (`author.name as author_name`): lean draft's "All" read looks for the
+  // sort columns by alias and adds a second one for a path without it ("Duplicate definition of element author_name")
+  let q = SELECT.from(entitySet).columns(columns.map(c => c.includes('.') ? { ref: c.split('.'), as: c.replaceAll('.', '_') } : c))
   if (filters.length) q = q.where(filters)
   if (search) q = q.search(search)
   const orderBy = parseOrderBy(query, columns) || defaultOrderBy(layout)
@@ -120,11 +122,20 @@ function parentFilter(model, parentEntityType, parentKeys, childEntityType) {
   return objectPageChildQuery(model, parentEntityType, parentKeys, childEntityType, ['*']).SELECT.where || []
 }
 
+/** Not `SELECT.one`, and the column is `$count`: lean draft's "All" read (actives + own drafts) runs the count as a
+ *  list, reads `$count` off the active rows and answers `{ $count }`; every other read answers `[{ $count }]`
+ *  (see `countOf`). */
 function listReportCountQuery(entitySet, { filters = [], search } = {}) {
-  let q = SELECT.one.from(entitySet).columns('count(*) as count')
+  let q = SELECT.from(entitySet).columns({ func: 'count', args: ['*'], as: '$count' })
   if (filters.length) q = q.where(filters)
   if (search) q = q.search(search)
   return q
+}
+
+/** The number out of what `listReportCountQuery` returned, whichever read answered it. */
+function countOf(result) {
+  const row = Array.isArray(result) ? result[0] : result
+  return Number(row?.count ?? row?.$count ?? 0)
 }
 
 /** A single facet's non-table content (form/dataPoint/contact/address/chart -- §3.2 Facets):
@@ -196,6 +207,6 @@ function objectPageChildQuery(model, parentEntityType, parentKeys, childEntityTy
 }
 
 module.exports = {
-  selectColumns, listReportQuery, listReportCountQuery, defaultOrderBy, parseOrderBy,
+  selectColumns, listReportQuery, listReportCountQuery, countOf, defaultOrderBy, parseOrderBy,
   objectPageColumns, objectPageQuery, objectPageChildQuery, parentFilter, markDraftOwners, draftLockUser
 }

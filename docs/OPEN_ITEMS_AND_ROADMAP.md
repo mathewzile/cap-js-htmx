@@ -11,15 +11,6 @@ Tree tables work for reading (`Aggregation.RecursiveHierarchy`, expand/collapse,
 - **Create child / move node**: FE's tree table toolbar creates a node below the selected one and moves nodes (cut / paste, `Aggregation.RecursiveHierarchyActions`). Today a tree table is display-only.
 - **Draft roots**: a tree whose entity is a draft root (nodes are edited as drafts) is not supported; the tree is read from the active data and only in display mode.
 
-### New drafts missing from the List Report
-
-A draft created with **New** does not show up in the List Report of the current user. After leaving the app and coming back there is no row to open the draft again, so it cannot be continued. The same holds after saving a newly created draft: the list does not show the new active entry. In FE the list contains the user's own drafts (draft indicator, "Own Draft") together with the active entries, and it refreshes by itself when a draft is created, saved or discarded. Wanted:
-
-- a newly created draft appears in the List Report for the user who created it (own drafts only, as in FE), so it can be opened again after exiting and re-entering the app;
-- saving a new draft replaces the draft row with the active entry, discarding it removes the row, without a manual reload;
-- the list updates as required, whenever a draft action changes what it contains (create, save, discard, and edit of an active entry that turns it into a draft);
-- a busy indicator shows while an action runs: the page's **Edit**, **Save** and **Discard Draft** buttons first, then every OData action (bound actions in the header, toolbar and rows, and the draft actions of a sub-object page). Today the page script only marks a swap target that is the whole app or a table card as busy (`hfBusyHost` in `htmx-fiori.js`, an overlay with a spinner that appears after a second), so an action that answers with partials, or is slow before its first byte, gives no sign that it is working. The pressed button goes busy and is disabled until the response is in, so a second click cannot send the action again; the indicator comes from the request itself (the `htmx:before:request` and `htmx:finally:request` events), not from each button, so a new action gets it without extra markup. Tests: the indicator appears for a slow `$edit`, `$save`, `$discard` and a bound action, and is gone after a success and after a failure.
-
 ### Intent-based navigation: context and parameters
 
 `DataFieldForIntentBasedNavigation` opens the target app through the launchpad's Navigation service (a button in the section's heading row, an error outside a launchpad). It passes nothing along and the target app opens on its own start page. Still missing, as in FE:
@@ -28,6 +19,7 @@ A draft created with **New** does not show up in the List Report of the current 
 - **Target: apply the parameters.** The launchpad hands them to the component as startup parameters (`getComponentData().startupParameters`; `Component.js` only reads `route` today). The shell passes them to the first page request. The List Report applies them as filter values for the properties it has (a parameter that is a filter field fills it and runs the search), and ignores the ones it has not.
 - **Target: open the Object Page when the keys are all there.** When the parameters hold a value for every key property of the root entity, apart from the draft key `IsActiveEntity`, the app opens that object's page directly (the active one), with the List Report beside it in the column layouts as a deep link does. A missing key leaves the List Report with the filters applied.
 - **Tests:** the parameters built from a page (mapping, required properties, no draft keys), a launchpad run from an Authors book page to the Books app that lands on the book (all keys), and one with a partial key that lands on a filtered List Report.
+- **Across the two kinds of app:** the same runs in the local launchpad sandbox from a Fiori elements app to its htmx counterpart (Manage Authors (FE) to Manage Books (htmx), and the other way round), so the context a page passes and the parameters a target applies work whichever of the two sits on either side. In both directions the target lands on the book (all keys) or on a filtered List Report (partial key), as it does between two apps of the same kind.
 
 ### Out of scope
 

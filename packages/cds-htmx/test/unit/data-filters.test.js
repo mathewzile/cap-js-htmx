@@ -70,13 +70,16 @@ test('parseFilters() wraps string values as {val}, never as bare (SQL-verbatim) 
 
 test('parseFilters() maps f.EditingStatus only for draft roots and only for known values', () => {
   const draftLayout = { filterBar: { ...layout.filterBar, editingStatus: true } }
-  assert.deepEqual(parseFilters({ 'f.EditingStatus': 'ALL' }, draftLayout), [])
+  const ALL = [R('IsActiveEntity'), '=', V(false), 'or', R('SiblingEntity.IsActiveEntity'), '=', V(null)]
+  assert.deepEqual(parseFilters({ 'f.EditingStatus': 'ALL' }, draftLayout), ALL)
+  assert.deepEqual(parseFilters({}, draftLayout), ALL) // no status is "All": own drafts show beside the active rows
+  assert.deepEqual(parseFilters({ 'f.stock': '1' }, draftLayout), [...ALL, 'and', R('stock'), '=', V(1)])
   assert.deepEqual(parseFilters({ 'f.EditingStatus': 'OWN_DRAFT' }, draftLayout), [R('IsActiveEntity'), '=', V(false)])
   assert.deepEqual(
     parseFilters({ 'f.EditingStatus': 'UNCHANGED', 'f.stock': '1' }, draftLayout),
     [R('IsActiveEntity'), '=', V(true), 'and', R('HasDraftEntity'), '=', V(false), 'and', R('stock'), '=', V(1)]
   )
-  assert.deepEqual(parseFilters({ 'f.EditingStatus': '__proto__' }, draftLayout), [])
+  assert.deepEqual(parseFilters({ 'f.EditingStatus': '__proto__' }, draftLayout), ALL)
   assert.deepEqual(parseFilters({ 'f.EditingStatus': 'OWN_DRAFT' }, layout), []) // not a draft root
 })
 

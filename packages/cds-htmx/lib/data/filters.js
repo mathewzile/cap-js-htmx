@@ -30,12 +30,13 @@ function coerce(raw, field) {
 
 /** EditingStatus values -> draft-state predicate. Kept flat (no `xpr` grouping, only `and`) so lean
  *  draft still sees `IsActiveEntity` at the top level of the `where` and routes to the drafts table.
- *  `ALL` adds nothing: lean draft's default read already is FE's "All" (actives + own drafts). */
+ *  `ALL` is FE's "All" (actives + own drafts): lean draft reads only the active rows unless the query asks for
+ *  `IsActiveEntity = false or SiblingEntity.IsActiveEntity = null`, so that is what `ALL` (and no status) adds. */
 const ref = path => ({ ref: path.split('.') })
 const val = v => ({ val: v })
 
 const EDITING_STATUS = {
-  ALL: [],
+  ALL: [ref('IsActiveEntity'), '=', val(false), 'or', ref('SiblingEntity.IsActiveEntity'), '=', val(null)],
   OWN_DRAFT: [ref('IsActiveEntity'), '=', val(false)],
   UNCHANGED: [ref('IsActiveEntity'), '=', val(true), 'and', ref('HasDraftEntity'), '=', val(false)]
 }
@@ -53,7 +54,7 @@ function parseFilters(query, layout) {
   // only with one of the fixed values (anything else is ignored like an unknown field)
   if (layout.filterBar.editingStatus) {
     const status = query?.['f.EditingStatus']
-    if (Object.hasOwn(EDITING_STATUS, status)) clauses.push(...EDITING_STATUS[status])
+    clauses.push(...EDITING_STATUS[Object.hasOwn(EDITING_STATUS, status) ? status : 'ALL'])
   }
 
   for (const [key, raw] of Object.entries(query || {})) {

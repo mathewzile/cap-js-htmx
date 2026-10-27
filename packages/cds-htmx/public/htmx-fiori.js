@@ -411,6 +411,24 @@ function hfFclFollowRoot() {
 }
 document.addEventListener('htmx:after:swap', () => setTimeout(hfFclFollowRoot, 0))
 
+// A draft action (New, Edit, Save, Discard) changes what the List Report holds: its own drafts are rows beside the saved ones. The
+// List Report in the first column stays on screen while the page beside it does the action, so it asks for its rows again (with the
+// filters, search and sort it shows, quietly: the URL is the open page's) once the response is swapped in. Without columns the list
+// is fetched afresh when the user comes back to it.
+let hfListDirty = false
+document.addEventListener('hf:listChanged', () => { hfListDirty = true })
+function hfRefreshList() {
+  if (!hfListDirty) return
+  hfListDirty = false
+  const body = document.querySelector('#fcl [id$="lr-table-body"]')
+  const form = body?.closest('.hf-page')?.querySelector('form[id$="lr-filter-bar"]')
+  if (!body || !form) return
+  const params = new URLSearchParams(new FormData(form))
+  for (const [key, value] of [...params]) if (value === '') params.delete(key)
+  htmx.ajax('GET', `${form.getAttribute('hx-get')}${params.size ? '?' + params : ''}`, { target: body, swap: 'innerHTML', headers: { 'X-Hf-Quiet': '1' } })
+}
+document.addEventListener('htmx:after:swap', () => setTimeout(hfRefreshList, 0))
+
 // resizing: dragging a separator (or the arrow keys on it) moves the border between two columns; neither gets narrower than 15%
 const HF_FCL_MIN = 0.15
 function hfFclResize(fcl, n, start, dx) {
@@ -687,13 +705,27 @@ document.addEventListener('htmx:after:request', e => { if (String(e.detail?.ctx?
 // Like Fiori elements: a request that takes longer than a second (UI5's busy indicator delay) puts a busy overlay on what is
 // being replaced -- the List Report's table card, or the whole page for a navigation. The delay is a CSS animation, so a quick
 // response never shows anything. The overlay also keeps a second click from queuing another request.
+// An action button (Edit, Save, Discard Draft, Delete, a bound action: a POST or DELETE sent by a button) goes busy at once and
+// is disabled until the response is in, so a second click cannot send it again; when its answer is partials, or does not swap
+// the page, the column or page it sits in is the busy host.
 const hfBusyCounts = new WeakMap()
+const hfIsAction = ctx => /^(POST|DELETE)$/i.test(String(ctx?.request?.method)) && ctx?.sourceElement?.matches?.('button')
 function hfBusyHost(ctx) {
   const target = ctx?.target
   if (!target || !target.closest) return null
-  return target.id === 'app' ? target : target.closest('.hf-table-card')
+  if (target.id === 'app') return target
+  return target.closest('.hf-table-card') || (hfIsAction(ctx) ? ctx.sourceElement.closest('.hf-fcl__col, #app') : null)
+}
+function hfBusyButton(ctx, on) {
+  if (!hfIsAction(ctx)) return
+  const button = ctx.sourceElement
+  button.classList.toggle('hf-busy-button', on)
+  button.disabled = on
+  if (on) button.setAttribute('aria-busy', 'true')
+  else button.removeAttribute('aria-busy')
 }
 document.addEventListener('htmx:before:request', e => {
+  hfBusyButton(e.detail?.ctx, true)
   const host = hfBusyHost(e.detail?.ctx)
   if (!host) return
   hfBusyCounts.set(host, (hfBusyCounts.get(host) || 0) + 1)
@@ -701,6 +733,7 @@ document.addEventListener('htmx:before:request', e => {
   host.setAttribute('aria-busy', 'true')
 })
 document.addEventListener('htmx:finally:request', e => {
+  hfBusyButton(e.detail?.ctx, false)
   const host = hfBusyHost(e.detail?.ctx)
   if (!host || !hfBusyCounts.has(host)) return
   const left = hfBusyCounts.get(host) - 1
@@ -805,17 +838,19 @@ function hfConfirmPopover(anchor, { text, ok }) {
     const pop = document.createElement('div')
     pop.className = 'hf-confirm-popover'
     pop.setAttribute('role', 'alertdialog')
-    pop.innerHTML = '<p class="hf-confirm-popover__text"></p><button type="button" class="fd-button hf-confirm-popover__ok"></button>'
+    pop.innerHTML = '<p class="hf-confirm-popover__text"></p><button type="button" class="fd-button hf-confirm-popover__ok"></button><span class="hf-confirm-popover__arrow" aria-hidden="true"></span>'
     pop.querySelector('p').textContent = text
     const button = pop.querySelector('button')
     button.textContent = ok
     document.body.appendChild(pop)
     const r = anchor.getBoundingClientRect()
-    pop.style.bottom = `${window.innerHeight - r.top + 12}px`
+    pop.style.bottom = `${window.innerHeight - r.top + 9}px` // FE: the arrow ends 1px above the button
     pop.style.right = `${Math.max(8, window.innerWidth - r.right - 6)}px`
     pop.style.setProperty('--hf-arrow', `${r.left + r.width / 2 - pop.getBoundingClientRect().left}px`)
+    anchor.disabled = true // like FE (cancelButton.setEnabled(false)): the button that asked is off while the question is open
     const done = result => {
       pop.remove()
+      anchor.disabled = false
       document.removeEventListener('mousedown', outside, true)
       document.removeEventListener('keydown', onKey, true)
       if (!result) anchor.focus?.()
