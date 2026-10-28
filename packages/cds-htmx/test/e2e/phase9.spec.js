@@ -39,7 +39,7 @@ test.describe('the shell behind the approuter', () => {
     await page.goto(APP)
     await expect(page.locator('.hf-table-toolbar__title')).toContainText('Books (1,005)')
     await expect(rows(page)).toHaveCount(20)
-    await expect(page).toHaveURL(/index\.html#\/htmx\/catalog\/Books$/)
+    await expect(page).toHaveURL(/index\.html$/) // the entry page has no route in the hash
     // every backend request went through the prefix and the approuter route; assets are at the versioned path
     const backend = requests.filter(u => u.includes('/htmx/'))
     expect(backend.length).toBeGreaterThan(5)
@@ -55,17 +55,26 @@ test.describe('the shell behind the approuter', () => {
     await expect(rows(page)).toHaveCount(20)
     await page.locator('#lr-row--3d2d2d2d-1c1c-4b4b-8a8a-000000000002-true').click()
     await expect(page.locator('#op-page')).toBeVisible()
-    await expect(page).toHaveURL(/#\/htmx\/catalog\/Books\(ID='3d2d2d2d-1c1c-4b4b-8a8a-000000000002',IsActiveEntity=true\)$/)
+    await expect(page).toHaveURL(/index\.html#\/Books\(ID='3d2d2d2d-1c1c-4b4b-8a8a-000000000002',IsActiveEntity=true\)$/)
     await page.goBack()
     await expect(page.locator('#lr-table')).toBeVisible()
-    await expect(page).toHaveURL(/#\/htmx\/catalog\/Books$/)
+    await expect(page).toHaveURL(/index\.html$/)
     await page.goForward()
     await expect(page.locator('#op-page')).toBeVisible()
     await page.reload() // a reload reopens the same page
     await expect(page.locator('#op-page h1')).toHaveText('Jane Eyre')
-    await page.goto(`${APP}#/htmx/catalog/Books(ID='3d2d2d2d-1c1c-4b4b-8a8a-000000000001',IsActiveEntity=true)`)
+    await page.goto(`${APP}#/Books(ID='3d2d2d2d-1c1c-4b4b-8a8a-000000000001',IsActiveEntity=true)`)
     await page.reload()
     await expect(page.locator('#op-page h1')).toHaveText('Wuthering Heights')
+    // a link in the long form (`#/htmx/catalog/Books(..)`) still opens the page and is shown in the short one
+    await page.goto(`${APP}#/htmx/catalog/Books(ID='3d2d2d2d-1c1c-4b4b-8a8a-000000000002',IsActiveEntity=true)`)
+    await page.reload()
+    await expect(page.locator('#op-page h1')).toHaveText('Jane Eyre')
+    await expect(page).toHaveURL(/index\.html#\/Books\(ID='3d2d2d2d-1c1c-4b4b-8a8a-000000000002',IsActiveEntity=true\)$/)
+    await page.goto(`${APP}#/htmx/catalog/Books`)
+    await page.reload()
+    await expect(page.locator('#lr-table')).toBeVisible()
+    await expect(page).toHaveURL(/index\.html$/)
   })
 
   test('List Report state is kept in the hash too (sort and filter replace, they do not push)', async ({ page }) => {
@@ -73,7 +82,7 @@ test.describe('the shell behind the approuter', () => {
     await page.locator('thead th[data-hf-sort=stock]').click()
     await page.locator('.hf-colmenu').getByRole('menuitem', { name: 'Sort Ascending' }).click()
     await expect(page.locator('thead th[data-hf-sort=stock]')).toHaveAttribute('aria-sort', 'ascending')
-    await expect(page).toHaveURL(/#\/htmx\/catalog\/Books\?(\$|%24)orderby=stock/)
+    await expect(page).toHaveURL(/#\/Books\?(\$|%24)orderby=stock/)
     expect(await page.evaluate(() => history.length)).toBeLessThanOrEqual(3)
   })
 

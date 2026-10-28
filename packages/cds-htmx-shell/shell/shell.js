@@ -149,32 +149,40 @@
     const appElement = document.getElementById('app')
     let current = null
     const toRoute = path => (path.startsWith(base) ? path.slice(base.length) : path)
+    // The hash holds the route below the app's service, as in FE (`#/Authors(ID=..)`), and nothing for the entry page: the app's
+    // manifest already says where it starts. A page outside the service keeps its full path (`/htmx/other/..`), and the long form
+    // of earlier links (`#/htmx/admin/Authors(..)`) is still understood.
+    const protocolRoot = '/' + service.split('/')[1] + '/'
+    const toHash = path => (path === entry ? '' : path.startsWith(service + '/') ? path.slice(service.length) : path)
+    const fromHash = hash => (!hash ? entry : hash.startsWith(protocolRoot) ? hash : service + hash)
     // the target is this start's own element, not '#app': a start the launchpad left behind (its root removed from the page, no headers
     // to inherit) would otherwise render a base-less page into the app that is showing now
-    const show = route => {
-      current = route
-      return global.htmx.ajax('GET', base + route, { source: appElement, target: appElement, swap: 'innerHTML' })
+    const show = hash => {
+      current = hash
+      return global.htmx.ajax('GET', base + fromHash(hash), { source: appElement, target: appElement, swap: 'innerHTML' })
     }
     document.addEventListener('htmx:before:history:update', e => {
       const { type, path } = e.detail.history
       e.preventDefault()
-      const route = toRoute(path)
+      const route = toHash(toRoute(path))
       current = route
       if (type === 'push') adapter.push(route); else adapter.replace(route)
     }, { signal })
     // The launchpad hands the route back through its hash, which may encode it (`(`, `=`, `,` in a key): the hash event of our own push
     // is the same route, not a navigation, and a real one (back, forward) is fetched in the form the server knows.
     const decoded = route => { try { return decodeURIComponent(route) } catch { return route } }
-    adapter.attach({ onRoute: route => { if (route && root.isConnected && route !== current && decoded(route) !== decoded(current ?? '')) show(decoded(route)) } })
+    // an empty route is the entry page (Back to the List Report)
+    adapter.attach({ onRoute: route => { if (root.isConnected && decoded(route ?? '') !== decoded(current ?? '')) show(decoded(route ?? '')) } })
     document.addEventListener('htmx:after:swap', e => {
       if (!root.contains(e.target)) return
       adapter.setTitle(document.title)
     }, { signal })
 
     // a first visit without a route gets the entry page's route, so a reload or a copied link opens the same page
-    const first = adapter.current()
-    await show(first || entry)
-    if (!first) adapter.replace(entry)
+    const first = adapter.current() ?? ''
+    await show(first)
+    const short = toHash(fromHash(first)) // a link in the long form is shown in the short one
+    if (short !== first) adapter.replace(short)
     global.HtmxShell.adapter = adapter // the page script reaches the launchpad through it (intent-based navigation)
     document.dispatchEvent(new CustomEvent('hf:ready'))
     return { info, clientId: id, show, destroy() { if (global.HtmxShell.adapter === adapter) global.HtmxShell.adapter = null; abort.abort(); adapter.detach?.(); document.getElementById('sse')?.remove(); root.replaceChildren() } }

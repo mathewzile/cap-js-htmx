@@ -2,7 +2,7 @@ const { test, expect } = require('@playwright/test')
 
 // The frontend projects open from their source URL during development: the plugin serves the generic shell from
 // `cds-htmx-shell` and maps `/<name>/webapp/htmx/...` to `/htmx/...` (cds-plugin.js). The deployed build is not involved.
-for (const [app, entry, rows] of [['manage-books-htmx', '#/htmx/catalog/Books', '#lr-table-body tr'], ['manage-authors-htmx', '#/htmx/admin/Authors', '#lr-table-body tr']]) {
+for (const [app, rows] of [['manage-books-htmx', '#lr-table-body tr'], ['manage-authors-htmx', '#lr-table-body tr']]) {
   test(`${app} starts from its source URL without errors`, async ({ page }) => {
     const problems = []
     page.on('pageerror', e => problems.push(`pageerror: ${e.message}`))
@@ -11,7 +11,7 @@ for (const [app, entry, rows] of [['manage-books-htmx', '#/htmx/catalog/Books', 
 
     await page.goto(`/${app}/webapp/index.html`)
     await expect(page.locator(rows).first()).toBeVisible()
-    expect(page.url()).toContain(entry)
+    expect(new URL(page.url()).hash).toBe('') // the entry page has no route: the manifest says where the app starts
 
     await page.locator(rows).first().click()
     await expect(page.locator('#op-page')).toBeVisible()

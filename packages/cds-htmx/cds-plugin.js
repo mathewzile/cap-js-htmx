@@ -4,9 +4,12 @@ const channels = require('./lib/sse/channels')
 
 cds.once('bootstrap', app => {
   // before the asset router: the rewrite of a project's `/<name>/webapp/htmx/...` has to see the asset requests too
-  if (!cds.env.production) mountShell(app)
+  if (!cds.env.production) { mountShell(app); require('./lib/index-page').mountWelcomePage(app) }
   app.use(assets.mountPath, assets.router)
 })
+
+// after `@sap/cds-fiori` has added its link providers (its handler of the same event is synchronous)
+cds.on('served', () => { if (!cds.env.production) setImmediate(() => require('./lib/index-page').previewForHtmx()) })
 
 /** Development only: an htmx frontend project (`app/<name>/webapp` with `sap.htmx` in its manifest) loads the generic shell
  *  from its own `shell/` folder, which only the build of `cds-htmx-shell` puts there. Served from the shell package instead,

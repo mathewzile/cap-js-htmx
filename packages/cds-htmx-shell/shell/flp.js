@@ -1,4 +1,4 @@
-/* Launchpad adapter (SAP Build Work Zone / Fiori launchpad): the route is the inner-app hash (`#Books-manageHtmx&/htmx/catalog/Books(..)`)
+/* Launchpad adapter (SAP Build Work Zone / Fiori launchpad): the route is the inner-app hash (`#Books-manageHtmx&/Books(..)`, nothing after the intent for the entry page)
  * kept by UI5's HashChanger, the theme follows the launchpad's and the page title goes to the shell bar through ShellUIService. The launchpad is
  * never told about unsaved changes: a draft is saved on the server as it is edited, so leaving it loses nothing (and would only prompt).
  *
