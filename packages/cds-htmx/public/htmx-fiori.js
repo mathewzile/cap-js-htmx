@@ -40,16 +40,21 @@ document.addEventListener('click', e => {
     pin.querySelector('i').className = pinned ? 'sap-icon--pushpin-on' : 'sap-icon--pushpin-off'
     return
   }
-  const tab = e.target.closest('.hf-anchor-bar__tab')
-  if (tab) {
-    for (const t of tab.parentElement.children) t.classList.toggle('is-selected', t === tab)
-    // the hash is the app's route in the shell (and the launchpad's), so it is not a link to an element: scroll to the section
-    e.preventDefault()
-    const section = document.getElementById(tab.getAttribute('href').slice(1))
-    const still = document.documentElement.classList.contains('hf-no-motion') || tab.closest('.hf-no-motion')
-    section?.scrollIntoView({ block: 'start', behavior: still ? 'auto' : 'smooth' })
-  }
 })
+
+// The hash is the app's route in the shell (and the launchpad's), so an anchor bar tab is not a link to an element: it scrolls to
+// the section. In the capture phase on window, ahead of any other listener (the launchpad treats a click on a hash link as a
+// navigation to an intent, "#op-section--X could not be resolved") and the link itself never navigates.
+window.addEventListener('click', e => {
+  const tab = e.target.closest?.('.hf-anchor-bar__tab')
+  if (!tab) return
+  e.preventDefault()
+  e.stopImmediatePropagation()
+  for (const t of tab.parentElement.children) t.classList.toggle('is-selected', t === tab)
+  const section = document.getElementById(tab.getAttribute('href').slice(1))
+  const still = document.documentElement.classList.contains('hf-no-motion') || tab.closest('.hf-no-motion')
+  section?.scrollIntoView({ block: 'start', behavior: still ? 'auto' : 'smooth' })
+}, true)
 
 // "Select all" checkbox in a table header toggles every row checkbox of that table
 document.addEventListener('change', e => {
