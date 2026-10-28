@@ -19,7 +19,7 @@
     "@playwright/test": "^1.64.1",
     "@sap/approuter": "^23.3.0",
     "cds-plugin-ui5": "^0.17.0",
-    "node-html-parser": "^6"
+    "node-html-parser": "^9"
   },
   "scripts": {
     "start": "cds-serve",

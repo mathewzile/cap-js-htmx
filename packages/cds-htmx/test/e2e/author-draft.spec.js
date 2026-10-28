@@ -63,7 +63,7 @@ test.describe('Author draft with Awards in the column layout', () => {
     await col(page, 1).locator('#op-section--Awards tbody tr[hx-get]').first().click()
     await expect(page.locator('#c2-op-page')).toBeVisible()
     await expect(col(page, 2).locator('input[name=year]')).toHaveCount(0) // saved version: no inputs
-    await expect(col(page, 2).getByRole('button', { name: 'Edit', exact: true })).toHaveCount(1) // it edits the first page, as in FE
+    await expect(col(page, 2).getByRole('button', { name: 'Edit', exact: true })).toHaveCount(0) // the sub-object page has no Edit, as in FE
 
     await col(page, 1).getByRole('button', { name: 'Edit', exact: true }).click()
     await expect(col(page, 2).locator('input[name=year]')).toBeVisible()

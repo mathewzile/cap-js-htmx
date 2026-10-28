@@ -58,7 +58,8 @@ test.describe('date filter', () => {
     await field(page).getByRole('button', { name: 'Open Picker' }).click()
     await popup(page).locator('.hf-datepop__item', { hasText: 'From / To' }).click()
     await expect(popup(page).getByRole('button', { name: 'Apply' })).toBeDisabled()
-    // 1816 and 1818: pick the year from the pages of years, then the month
+    // 1816 and 1818: pick the year from the pages of years, then the month. The end is a month after Emily's birthday (1818-07-30):
+    // creating an author draft moves it by a day (srv/admin-service.js), and other specs create some
     const goTo = async (year, monthName) => {
       await popup(page).locator('[data-mode=years]').click()
       for (let i = 0; i < 20 && !(await popup(page).locator(`[data-value="${year}"]`).count()); i++) {
@@ -70,10 +71,10 @@ test.describe('date filter', () => {
     }
     await goTo(1816, 'April')
     await popup(page).locator('[data-day="1816-04-21"]').click()
-    await goTo(1818, 'July')
-    await popup(page).locator('[data-day="1818-07-30"]').click()
+    await goTo(1818, 'August')
+    await popup(page).locator('[data-day="1818-08-30"]').click()
     await popup(page).getByRole('button', { name: 'Apply' }).click()
-    await expect(field(page).locator('.hf-date-range__text')).toHaveValue('Apr 21, 1816 – Jul 30, 1818')
+    await expect(field(page).locator('.hf-date-range__text')).toHaveValue('Apr 21, 1816 – Aug 30, 1818')
     await page.getByRole('button', { name: 'Go' }).click()
     await expect(rows(page)).toHaveCount(2)
   })
