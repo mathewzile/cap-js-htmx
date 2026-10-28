@@ -26,6 +26,9 @@
     return node
   }
 
+  /** A select in the FE look: the field box with the arrow at the right (the styles are those of `.hf-select`). */
+  const selectBox = select => el('span', { class: 'hf-select' }, select, el('i', { class: 'sap-icon--slim-arrow-down', 'aria-hidden': 'true' }))
+
   /** A modal dialog in the FE look: header (title, optional "Reset" at the right), optional tabs, body, footer
    *  (the first button is the emphasized one). `tabs` is [{label, content}]; without it `body` is the content.
    *  `reset.action(api)` runs on "Reset", which is enabled once anything in the dialog changed. */
@@ -421,10 +424,17 @@
       control.querySelectorAll('button').forEach(button => { button.disabled = true })
       const eye = el('button', { type: 'button', class: 'fd-button fd-button--transparent hf-adapt__eye', 'aria-pressed': String(box.checked), 'aria-label': T('Show'), title: T('Show') }, el('i', { class: 'sap-icon--show', 'aria-hidden': 'true' }))
       eye.addEventListener('click', () => { box.checked = !box.checked; eye.setAttribute('aria-pressed', String(box.checked)) })
-      const clear = el('button', { type: 'button', class: 'fd-button fd-button--transparent hf-adapt__clear', 'aria-label': T('Clear'), title: T('Clear') }, el('i', { class: 'sap-icon--decline', 'aria-hidden': 'true' }))
-      clear.addEventListener('click', () => inner.forEach(node => { node.value = node.tagName === 'SELECT' ? node.options[0]?.value ?? '' : '' }))
+      // the X takes the filter out of the dialog (FE: it is then back under "Add Filter") and out of the bar on OK
+      const clear = el('button', { type: 'button', class: 'fd-button fd-button--transparent hf-adapt__clear', 'aria-label': T('Delete'), title: T('Delete') }, el('i', { class: 'sap-icon--decline', 'aria-hidden': 'true' }))
       const row = el('li', { class: 'hf-adapt__row', 'data-label': label.toLowerCase() }, el('span', { class: 'hf-adapt__label', text: label + ':' }), el('div', { class: 'hf-adapt__field' }, control), eye, clear, box)
-      return { row, box, inner }
+      const entry = { row, box, inner, label, gone: false }
+      clear.addEventListener('click', () => {
+        inner.forEach(node => { node.value = node.tagName === 'SELECT' ? node.options[0]?.value ?? '' : '' })
+        entry.gone = true; box.checked = false
+        row.remove()
+        fillAdd()
+      })
+      return entry
     }
     const items = filterItems(lr).map(item => adaptRow(item.dataset.hfFilter, item.dataset.hfLabel, item.classList.contains('hf-filter--extra'), item))
     const list = el('ul', { class: 'hf-adapt__list' }, items.map(i => i.row))
@@ -433,15 +443,30 @@
     search.addEventListener('input', () => items.forEach(i => { i.row.hidden = !!search.value && !i.row.dataset.label.includes(search.value.toLowerCase()) }))
 
     // "Add Filter": any other property of the entity
-    const present = () => new Set(items.map(i => i.box.dataset.path))
+    const present = () => new Set(items.filter(i => !i.gone).map(i => i.box.dataset.path))
     const addSelect = el('select', { class: 'fd-select', 'aria-label': T('AddFilter') })
+    const addBox = selectBox(addSelect)
+    // what can be added: the other properties of the entity and the filters removed with their X
+    const candidates = () => {
+      const byPath = new Map(availableFilters(lr).map(f => [f.path, f.label]))
+      for (const i of items) if (i.gone) byPath.set(i.box.dataset.path, i.label)
+      return [...byPath].filter(([path]) => !present().has(path))
+    }
     const fillAdd = () => {
       addSelect.replaceChildren(el('option', { value: '', text: T('SelectOrType') }),
-        ...availableFilters(lr).filter(f => !present().has(f.path)).map(f => el('option', { value: f.path, text: f.label })))
+        ...candidates().map(([path, text]) => el('option', { value: path, text })))
     }
     fillAdd()
     addSelect.addEventListener('change', () => {
-      const f = availableFilters(lr).find(x => x.path === addSelect.value)
+      const path = addSelect.value
+      const back = items.find(i => i.gone && i.box.dataset.path === path)
+      if (back) {
+        back.gone = false; back.box.checked = true
+        back.row.querySelector('.hf-adapt__eye').setAttribute('aria-pressed', 'true')
+        list.append(back.row)
+        return fillAdd()
+      }
+      const f = availableFilters(lr).find(x => x.path === path)
       if (!f) return
       const added = adaptRow(f.path, f.label, true)
       items.push(added)
@@ -467,10 +492,10 @@
       body: el('div', { class: 'hf-dialog__panel hf-adapt' },
         el('div', { class: 'hf-adapt__head' }, el('h3', { text: T('FilterValuesAndVisibility') }), search),
         list,
-        el('div', { class: 'hf-adapt__add' }, el('label', { text: T('AddFilter') + ':' }), addSelect)),
+        el('div', { class: 'hf-adapt__add' }, el('label', { text: T('AddFilter') + ':' }), addBox)),
       reset: { label: T('Reset'), action() {
         for (const i of [...items]) {
-          if (i.box.dataset.extra) { i.row.remove(); items.splice(items.indexOf(i), 1) } else { i.box.checked = true; i.row.querySelector('.hf-adapt__eye').setAttribute('aria-pressed', 'true') }
+          if (i.box.dataset.extra) { i.row.remove(); items.splice(items.indexOf(i), 1) } else { if (i.gone) { i.gone = false; list.append(i.row) } i.box.checked = true; i.row.querySelector('.hf-adapt__eye').setAttribute('aria-pressed', 'true') }
         }
         fillAdd()
       } },
@@ -646,7 +671,7 @@
       select.addEventListener('change', () => { syncType(); sync() })
       syncType()
       const remove = el('button', { type: 'button', class: 'fd-button fd-button--compact fd-button--transparent', 'aria-label': T('Delete') }, el('i', { class: 'sap-icon--decline', 'aria-hidden': 'true' }))
-      const row = el('div', { class: 'hf-conditions__row' }, select, value, remove)
+      const row = el('div', { class: 'hf-conditions__row' }, selectBox(select), value, remove)
       remove.addEventListener('click', () => { row.remove(); if (!rows.children.length) addRow(); sync() })
       row.addEventListener('input', sync)
       rows.append(row)

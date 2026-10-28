@@ -82,15 +82,17 @@ function buildFilterBar(store, entityType, selectionFields = [], restrictions) {
  *  scalar properties, minus technical/draft ones, `@UI.HiddenFilter` and what `Capabilities.FilterRestrictions`
  *  names as non-filterable. They are whitelisted for `f.<path>` like the rendered filter fields. */
 const TECHNICAL = new Set(['IsActiveEntity', 'HasActiveEntity', 'HasDraftEntity', 'DraftAdministrativeData_DraftUUID', 'SiblingEntity', 'DraftAdministrativeData'])
-function buildAvailableFilters(store, entityType, selected, restrictions) {
+function buildAvailableFilters(store, entityType, selected, restrictions, columns = []) {
   const entity = require('../annotations/edm').entityDef(require('@sap/cds').model, entityType)
+  const titles = new Map(columns.filter(col => col.field?.path && col.label).map(col => [col.field.path, col.label]))
   const nonFilterable = new Set((restrictions?.NonFilterableProperties || []).map(p => p.$PropertyPath ?? p))
   const taken = new Set(selected)
   return Object.values(entity?.elements || {})
     .filter(el => !el.isAssociation && !el.virtual && el.type !== 'cds.Association' && el.type !== 'cds.Composition')
     .filter(el => !TECHNICAL.has(el.name) && !taken.has(el.name) && !nonFilterable.has(el.name))
     .filter(el => !store.raw(`${entityType}/${el.name}`)['@UI.HiddenFilter'])
-    .map(el => filterTraits(store, entityType, buildField(store, entityType, el.name), restrictions))
+    // labelled like the table column (its title), else the property's own label, else its name -- as FE does
+    .map(el => filterTraits(store, entityType, buildField(store, entityType, el.name, { label: titles.get(el.name) ?? store.raw(`${entityType}/${el.name}`)['@Common.Label'] ?? el.name }), restrictions))
 }
 
 /** The properties of the entity that the table has no column for: View Settings lists them (FE lists every property of the entity) and
@@ -132,7 +134,7 @@ function buildListReport(store, entityType, { pageSettings } = {}) {
     },
     filterBar: {
       fields: buildFilterBar(store, entityType, bag['@UI.SelectionFields'], filterRestrictions),
-      available: buildAvailableFilters(store, entityType, bag['@UI.SelectionFields'] || [], filterRestrictions),
+      available: buildAvailableFilters(store, entityType, bag['@UI.SelectionFields'] || [], filterRestrictions, columns),
       // FE shows the "Editing Status" filter for draft roots; it is not a model element, so it must
       // stay out of `fields` (those feed SELECT columns and the filter whitelist)
       editingStatus: !!store.raw(containerTarget(entityType))['@Common.DraftRoot']

@@ -142,11 +142,11 @@
 /* ---------- Define Conditions ---------- */
 .hf-conditions-form { flex: 1 1 auto; padding: 1.1875rem 2rem 1rem; gap: .5rem; }
 .hf-conditions__row { display: flex; gap: .5rem; align-items: center; margin-bottom: .5rem; }
-.hf-conditions__row .fd-select { flex: 0 0 15.6rem; }
+.hf-conditions__row .hf-select { flex: 0 0 15.6rem; }
 .hf-conditions__row .fd-input { flex: 1 1 auto; }
 .hf-conditions__add { display: flex; justify-content: flex-end; padding-right: 2.25rem; }
 .hf-conditions__title { margin: auto 0 0; font-family: var(--sapFontBoldFamily, '72-Bold', '72', Arial, sans-serif); font-size: .875rem; }
-.hf-conditions__summary { min-height: 2rem; border-bottom: 1px solid var(--sapField_BorderColor, #556b81); padding: .5rem; }
+.hf-conditions__summary { min-height: 1.625rem; box-sizing: border-box; padding: .25rem .625rem; font-size: .875rem; color: var(--sapField_TextColor, #131e29); background: var(--sapField_Background, #fff); border: none; border-bottom: 1px solid var(--sapField_BorderColor, #556b81); border-radius: var(--sapField_BorderCornerRadius, .25rem); box-shadow: var(--sapField_Shadow, inset 0 0 0 1px rgba(85, 107, 129, .25)); }
 
 /* ---------- value help field: editable input with the icon inside, type-ahead below ---------- */
 .hf-vh-field { position: relative; }
@@ -179,7 +179,8 @@
 .hf-adapt__eye { border: 1px solid transparent; border-radius: .5rem; }
 .hf-adapt__eye[aria-pressed="true"] { border-color: var(--sapButton_Selected_BorderColor, #0064d9); background: var(--sapButton_Selected_Background, #ebf8ff); }
 .hf-adapt__add { display: flex; align-items: center; gap: .5rem; margin-top: auto; flex: 0 0 auto; height: 2.75rem; padding: 0 1rem; border-top: 1px solid var(--sapList_BorderColor, #e5e5e5); }
-.hf-adapt__add .fd-select { width: 14rem; font-style: italic; }
+.hf-adapt__add .hf-select { width: 14rem; }
+.hf-adapt__add select { font-style: italic; }
 .hf-adapt { background: var(--sapBackgroundColor, #f5f6f7); }
 .hf-adapt__head, .hf-adapt__row, .hf-adapt__add { background: var(--sapGroup_ContentBackground, #fff); }
 .hf-adapt__add { margin-top: 0; border-top: 0; }
