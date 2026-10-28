@@ -52,7 +52,7 @@ window.addEventListener('click', e => {
   e.stopImmediatePropagation()
   for (const t of tab.parentElement.children) t.classList.toggle('is-selected', t === tab)
   const section = document.getElementById(tab.getAttribute('href').slice(1))
-  const still = document.documentElement.classList.contains('hf-no-motion') || tab.closest('.hf-no-motion')
+  const still = document.documentElement.classList.contains('hf-no-motion') || tab.closest('.hf-no-motion') || matchMedia('(prefers-reduced-motion: reduce)').matches
   section?.scrollIntoView({ block: 'start', behavior: still ? 'auto' : 'smooth' })
 }, true)
 
@@ -338,8 +338,9 @@ function hfFclSync() {
   if (deepest !== fcl.dataset.hfDeepest) {
     const opened = Number(deepest) > Number(fcl.dataset.hfDeepest)
     const column = fcl.querySelector(`:scope > [data-hf-col="${deepest}"]`)
-    // a column that opens grows from nothing: it is a new element, so it starts at zero width for one frame
-    if (opened && column) { column.style.setProperty('--hf-w', '0%'); void column.offsetWidth; requestAnimationFrame(() => column.style.removeProperty('--hf-w')) }
+    // a column that opens grows from nothing: it is a new element, so it starts at zero width for one frame (not without motion)
+    const still = document.body.classList.contains('hf-no-motion') || matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (opened && column && !still) { column.style.setProperty('--hf-w', '0%'); void column.offsetWidth; requestAnimationFrame(() => column.style.removeProperty('--hf-w')) }
     fcl.dataset.hfDeepest = deepest
     hfFclResetSize(fcl)
     if (marker?.dataset.hfLayout) fcl.dataset.hfLayout = marker.dataset.hfLayout

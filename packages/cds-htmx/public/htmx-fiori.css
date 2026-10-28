@@ -880,6 +880,14 @@ tr[aria-busy=true] { cursor: progress; }
 .hf-no-motion, .hf-no-motion *, .hf-no-motion *::before, .hf-no-motion *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
 .hf-no-motion .hf-busy::before { animation: hf-busy-in 0s 1s forwards !important; }
 .hf-no-motion .hf-busy::after { animation: hf-busy-show 0s 1s forwards !important; }
+/* The OS setting (Windows "Animation effects" off) is the same as `none`. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+  .hf-busy::before { animation: hf-busy-in 0s 1s forwards !important; }
+  .hf-busy::after { animation: hf-busy-show 0s 1s forwards !important; }
+  .hf-busy--now::before { animation: hf-busy-in 0s 0s forwards !important; }
+  .hf-busy--now::after { animation: hf-busy-show 0s 0s forwards !important; }
+}
 
 /* ---------- dialog animation ---------- */
 /* Like FE's dialogs: the block layer fades in, the dialog fades in while it grows from 90% (0.2s); closing (`.is-closing`, set by
