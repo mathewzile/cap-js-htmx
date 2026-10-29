@@ -1,7 +1,7 @@
 _schema-version: "3.3.0"
 ID: cap-htmx
 version: 1.0.0
-description: "CAP bookshop with cds-htmx (htmx List Report and Object Page) and an HTML5 app for SAP Build Work Zone"
+description: "CAP bookshop with cds-htmx (htmx List Report and Object Page) and Fiori Elements HTML5 apps for SAP Build Work Zone"
 
 parameters:
   enable-parallel-deployments: true
@@ -73,6 +73,37 @@ modules:
       build-result: dist
       supported-platforms: []
 
+  # ---- the Fiori elements apps (ui5 build zips the app with its xs-app.json, see ui5-task-zipper in their ui5.yaml) ----------
+  - name: cap-htmx-fe-browsegenres
+    type: html5
+    path: app/browse-genres
+    build-parameters:
+      builder: custom
+      commands:
+        - npm run build
+      build-result: dist
+      supported-platforms: []
+
+  - name: cap-htmx-fe-manageauthors
+    type: html5
+    path: app/manage-authors
+    build-parameters:
+      builder: custom
+      commands:
+        - npm run build
+      build-result: dist
+      supported-platforms: []
+
+  - name: cap-htmx-fe-managebooks
+    type: html5
+    path: app/manage-books
+    build-parameters:
+      builder: custom
+      commands:
+        - npm run build
+      build-result: dist
+      supported-platforms: []
+
   # ---- uploads the HTML5 app zip to the HTML5 Application Repository ---------------------------------------------------------
   - name: cap-htmx-app-content
     type: com.sap.application.content
@@ -91,6 +122,18 @@ modules:
         - name: cap-htmx-manageauthors
           artifacts:
             - manageauthorshtmx.zip
+          target-path: gen/app
+        - name: cap-htmx-fe-browsegenres
+          artifacts:
+            - browse-genres.zip
+          target-path: gen/app
+        - name: cap-htmx-fe-manageauthors
+          artifacts:
+            - manage-authors.zip
+          target-path: gen/app
+        - name: cap-htmx-fe-managebooks
+          artifacts:
+            - manage-books.zip
           target-path: gen/app
 
   # ---- the destination the approuter route sends /htmx/** to: the URL of the CAP service -------------------------------------

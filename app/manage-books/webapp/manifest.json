@@ -187,5 +187,9 @@
     "app": {
       "enableLazyLoading": true
     }
+  },
+  "sap.cloud": {
+    "public": true,
+    "service": "cap.htmx"
   }
 }
