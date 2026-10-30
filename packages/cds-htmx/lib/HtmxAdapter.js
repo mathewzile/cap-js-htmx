@@ -226,11 +226,36 @@ class HtmxAdapter extends HttpAdapter {
     // `req.hfFailure`: a handler that wants to answer an error itself, AFTER the transaction rolled back
     // (CAP persists draft messages from the rollback of a failed activation, so the error must propagate)
     // In a Flexible Column Layout the ids of the page depend on its column (render/ids.js): the request path says which one
-    const run = (req, res) => srv.tx(req, tx => fn.call(this, req, res, tx))
+    const run = (req, res) => srv.tx(req, tx => fn.call(this, req, res, this.timed(req, res, tx)))
     return (req, res, next) => {
       const column = this.fclColumnOfPath(req)
       return (column == null ? run(req, res) : ids.inColumn(column, () => run(req, res))).catch(err => req.hfFailure ? req.hfFailure(err) : next(err))
     }
+  }
+
+  /** `Server-Timing: db;desc="<n> stmts";dur=<ms>, app;dur=<ms>` (browser dev tools show it under Timing), so the time of a request can
+   *  be split between the database, this service and everything around it (approuter, network). `db` is the time at least one
+   *  statement was in flight, statements that run together are not counted twice. The event stream is left alone. */
+  timed(req, res, tx) {
+    if (!config().serverTiming || req.path === '/$events') return tx
+    const started = performance.now()
+    let statements = 0
+    let active = 0
+    let since = 0
+    let db = 0
+    const run = tx.run
+    tx.run = async function (...args) {
+      statements++
+      if (active++ === 0) since = performance.now()
+      try { return await run.apply(this, args) } finally { if (--active === 0) db += performance.now() - since }
+    }
+    const writeHead = res.writeHead
+    res.writeHead = function (...args) {
+      res.writeHead = writeHead
+      if (!res.headersSent) res.setHeader('Server-Timing', `db;desc="${statements} stmts";dur=${db.toFixed(1)}, app;dur=${(performance.now() - started).toFixed(1)}`)
+      return writeHead.apply(this, args)
+    }
+    return tx
   }
 
   /** How pages move (the manifest's `sap.htmx.animations`: `full`, `fast`, `none`); the page carries `hf-motion-fast` / `hf-no-motion`. */

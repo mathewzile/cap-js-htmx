@@ -12,13 +12,11 @@ async function sectionPage(tx, { parentEntityType, parentKeys, content, query = 
   const pageSize = limit ?? content.growingThreshold
   const filters = queryLib.parentFilter(cds.model, parentEntityType, parentKeys, targetEntityType)
   const search = filtersLib.parseSearch(query)
-  const [found, counted] = await Promise.all([
-    // a total order (the keys break ties) so that no row repeats or goes missing between pages
-    tx.run(queryLib.listReportQuery(cds.model, targetEntityType, targetEntityType, layout, { filters, search, query, skip, limit: pageSize, tieBreak: true })),
-    tx.run(queryLib.listReportCountQuery(targetEntityType, { filters, search }))
-  ])
+  // a total order (the keys break ties) so that no row repeats or goes missing between pages
+  const rowsQuery = queryLib.listReportQuery(cds.model, targetEntityType, targetEntityType, layout, { filters, search, query, skip, limit: pageSize, tieBreak: true })
+  const { rows: found, count } = await queryLib.pageAndCount(tx, targetEntityType, rowsQuery, queryLib.listReportCountQuery(targetEntityType, { filters, search }), { skip, limit: pageSize, exact: true })
   const hasMore = found.length > pageSize
-  return { rows: hasMore ? found.slice(0, pageSize) : found, hasMore, count: queryLib.countOf(counted), pageSize }
+  return { rows: hasMore ? found.slice(0, pageSize) : found, hasMore, count, pageSize }
 }
 
 module.exports = { sectionPage }

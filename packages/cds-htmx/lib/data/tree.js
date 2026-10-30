@@ -54,18 +54,32 @@ async function topLevel(tx, model, entityType, layout, { query, rootParent, skip
 /** `initialExpansionLevel`: the nodes above that level come open, their children read now and listed below them (the client
  *  finds them loaded, like the result of a filter). At most LIMIT rows are read this way. */
 async function expandInitially(tx, model, entityType, layout, tops, query) {
-  const levels = layout.table.hierarchy.initialExpansionLevel
+  const hierarchy = layout.table.hierarchy
+  const { nodeProperty, parentKey } = hierarchy
+  const levels = hierarchy.initialExpansionLevel
   if (!levels) return tops
+  // One read per level (the children of all its collapsed nodes together) instead of one per node
+  const childrenByNode = new Map()
+  let frontier = tops
+  let read = tops.length
+  for (let level = 0; level < levels && read < LIMIT; level++) {
+    const open = frontier.filter(row => row._state === 'collapsed')
+    if (!open.length) break
+    const found = await tx.run(queryLib.listReportQuery(model, entityType, entityType, layout, { filters: [ref(parentKey), 'in', { list: open.map(row => val(row[nodeProperty])) }], query, limit: LIMIT }))
+    frontier = await markStates(tx, entityType, hierarchy, found.slice(0, LIMIT), level + 1)
+    for (const row of frontier) childrenByNode.set(row[parentKey], [...(childrenByNode.get(row[parentKey]) ?? []), row])
+    read += frontier.length
+  }
   const rows = []
-  const walk = async row => {
+  const walk = row => {
     rows.push(row)
-    if (row._level >= levels || row._state !== 'collapsed' || rows.length >= LIMIT) return
-    const { rows: children } = await childrenOf(tx, model, entityType, layout, { node: row[layout.table.hierarchy.nodeProperty], level: row._level + 1, query })
+    const children = childrenByNode.get(row[nodeProperty])
+    if (row._level >= levels || row._state !== 'collapsed' || rows.length >= LIMIT || !children) return
     row._state = 'expanded'
     row._loaded = true
-    for (const child of children) await walk(child)
+    for (const child of children) walk(child)
   }
-  for (const top of tops) await walk(top)
+  for (const top of tops) walk(top)
   return rows
 }
 

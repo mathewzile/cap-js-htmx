@@ -15,7 +15,7 @@ const ids = require('../render/ids')
 const { loadObjectPage } = require('../data/page')
 const csvLib = require('../data/csv')
 const { EXPORT_LIMIT } = require('./support')
-const { canEdit } = require('../model/edit-capabilities')
+const { canEdit, capabilityColumns } = require('../model/edit-capabilities')
 
 /** Object Page routes: the page of an object, of a sub-object and of a table section.
  *  Mixed into `HtmxAdapter` (`Object.assign(HtmxAdapter.prototype, ...)`), so `this` is the adapter. */
@@ -151,8 +151,9 @@ module.exports = {
     if (opLayout.edit?.mode === 'node' && !editMode && row.IsActiveEntity !== false && segments.length > 1 && segments[0].raw != null) {
       const rootType = this.entitySet(segments[0].set)?.name
       const rootKeys = { ...keysLib.parseKeys(segments[0].raw), IsActiveEntity: true }
-      const rootRow = rootType && await tx.run(SELECT.one.from(rootType).where(rootKeys))
-      if (rootRow) rootEdit = { canEdit: canEdit(this.editOf(req, rootType), rootRow), draftExists: rootRow.HasDraftEntity === true, path: `${base}/${segments[0].set}(${segments[0].raw})` }
+      const rootCaps = rootType && this.editOf(req, rootType)
+      const rootRow = rootType && await tx.run(SELECT.one.from(rootType).columns([...capabilityColumns(rootCaps, rootType), 'HasDraftEntity']).where(rootKeys))
+      if (rootRow) rootEdit = { canEdit: canEdit(rootCaps, rootRow), draftExists: rootRow.HasDraftEntity === true, path: `${base}/${segments[0].set}(${segments[0].raw})` }
     }
     let body = objectPageRender.objectPageFragment(opLayout, row, {
       basePath: base, entitySetPath, trail, children, bundle, t: i18n.t, valueLists, editMode, rootEdit,

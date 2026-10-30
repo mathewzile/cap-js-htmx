@@ -26,8 +26,8 @@ export default cds.service.impl(async function () {
   this.after(['CREATE', 'UPDATE', 'DELETE'], 'Books.chapters', async (_, req) => {
     const bookID = req.data?.book_ID ?? req.params.at(-2)?.ID
     if (!bookID) return
-    const chapters = await SELECT.from(Chapters).where({ book_ID: bookID })
-    const totalPages = chapters.reduce((sum, c) => sum + (c.pages || 0), 0)
+    const sum = await SELECT.one.from(Chapters).columns('sum(pages) as total').where({ book_ID: bookID })
+    const totalPages = Number(sum?.total) || 0
     await UPDATE(Books).set({ totalPages }).where({ ID: bookID })
   })
 

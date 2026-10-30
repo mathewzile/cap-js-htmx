@@ -11,6 +11,7 @@ Set in `package.json` (`"cds": { "htmx": { ... } }`), in `.cdsrc.json` or with e
 | `sse.heartbeat` | `15000` | milliseconds between heartbeats on the event stream |
 | `liveListReport` | `true` | a List Report updates its rows from `SourceEvents` of the side effects |
 | `requireHxRequestForMutations` | `true` | a write must come from htmx (`HX-Request`), a CSRF guard besides the token |
+| `serverTiming` | `true` | every answer carries `Server-Timing: db;desc="<n> stmts";dur=…, app;dur=…` (browser dev tools, Network → Timing): the database statements and the time spent in the service, to tell them from the approuter and the network. `false` turns it off |
 | `stickySessions` | `true` | session cookie so the event stream and the requests reach the same instance: `true` uses `JSESSIONID`, a string names the cookie, `false` turns it off |
 
 ### `cds.htmx.apps`

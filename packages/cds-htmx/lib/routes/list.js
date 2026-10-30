@@ -41,13 +41,13 @@ module.exports = {
     const threshold = lrLayout.table.growingThreshold
     const columns = queryLib.selectColumns(cds.model, entityType, lrLayout)
     const orderByTerms = queryLib.parseOrderBy(req.query, columns)
-    const { rows: pageRows, hasMore, count } = await this.listRows(tx, entityType, lrLayout, { filters: parsedFilters, search, query: req.query, limit: threshold })
+    const fixedFields = lrLayout.filterBar.fields.filter(field => field.fixedValues && field.valueList)
+    const [{ rows: pageRows, hasMore, count }, ...options] = await Promise.all([
+      this.listRows(tx, entityType, lrLayout, { filters: parsedFilters, search, query: req.query, limit: threshold }),
+      ...fixedFields.map(field => valueListLib.fixedValueOptions(tx, field.valueList))
+    ])
     const orderBy = orderByFromTerms(orderByTerms)
-
-    const filterOptions = {}
-    for (const field of lrLayout.filterBar.fields) {
-      if (field.fixedValues && field.valueList) filterOptions[field.path] = await valueListLib.fixedValueOptions(tx, field.valueList)
-    }
+    const filterOptions = Object.fromEntries(fixedFields.map((field, i) => [field.path, options[i]]))
 
     const body = listReportRender.listReportFragment(lrLayout, pageRows, {
       basePath: base, entitySetPath: req.params.Set, keyNames, count,
@@ -136,14 +136,13 @@ module.exports = {
         ? treeLib.matching(tx, cds.model, entityType, lrLayout, { filters, search, query, skip, limit })
         : treeLib.topLevel(tx, cds.model, entityType, lrLayout, { query, skip, limit })
     }
-    const [rows, counted] = await Promise.all([
-      tx.run(queryLib.listReportQuery(cds.model, entityType, entityType, lrLayout, { filters, search, query, skip, limit })),
-      tx.run(queryLib.listReportCountQuery(entityType, { filters, search }))
-    ])
+    const { rows, count } = await queryLib.pageAndCount(tx, entityType,
+      queryLib.listReportQuery(cds.model, entityType, entityType, lrLayout, { filters, search, query, skip, limit }),
+      queryLib.listReportCountQuery(entityType, { filters, search }), { skip, limit })
     const hasMore = rows.length > limit
     const pageRows = hasMore ? rows.slice(0, limit) : rows
     await queryLib.markDraftOwners(tx, entityType, lrLayout, pageRows, cds.context.user.id)
-    return { rows: pageRows, hasMore, count: queryLib.countOf(counted) }
+    return { rows: pageRows, hasMore, count }
   },
 
   /** `GET /:Set/$children?node=<id>&level=<n>&hq=<qualifier>` (tree tables): the rows to insert below an expanded node.

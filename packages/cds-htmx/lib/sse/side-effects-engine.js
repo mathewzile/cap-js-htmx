@@ -95,7 +95,9 @@ function pushObjectPage(tx, client, view, targets) {
 async function pushObjectPageIn(tx, client, view, targets) {
   const { service, servicePath, entityType, keys, contextPath, basePath, entitySetPath } = view
   const locale = client.locale
-  const page = await loadObjectPage(tx, { service, servicePath, entityType, keys, contextPath, appRoot: appRoot(), locale, app: view.app })
+  const layout = cache.objectPageFor(cds.model, service, servicePath, entityType, contextPath, { appRoot: appRoot(), locale, app: view.app })
+  const need = objectPageRender.partsNeeds(layout, { properties: [...targets.properties], entities: [...targets.entities], all: targets.all })
+  const page = await loadObjectPage(tx, { service, servicePath, entityType, keys, contextPath, appRoot: appRoot(), locale, app: view.app, need })
   if (!page) return
   const ctx = {
     basePath, entitySetPath, bundle: page.bundle, t: i18n.t,
@@ -112,7 +114,9 @@ async function pushObjectPageIn(tx, client, view, targets) {
  *  edited field's own element id, left alone so the caret and focus stay where the user is typing.
  *  Also returns the layout and the fresh row, for validating the value. */
 async function bindingParts(tx, view, { path, source, appRoot: root, locale, app }) {
-  const page = await loadObjectPage(tx, { service: view.service, servicePath: view.servicePath, entityType: view.entityType, keys: view.keys, contextPath: view.contextPath, appRoot: root, locale, app, editing: true })
+  const layout = cache.objectPageFor(cds.model, view.service, view.servicePath, view.entityType, view.contextPath, { appRoot: root, locale, app })
+  const need = objectPageRender.partsNeeds(layout, { properties: [path] })
+  const page = await loadObjectPage(tx, { service: view.service, servicePath: view.servicePath, entityType: view.entityType, keys: view.keys, contextPath: view.contextPath, appRoot: root, locale, app, editing: true, need })
   if (!page) return { parts: [], layout: null, row: null }
   const ctx = { basePath: view.basePath, entitySetPath: view.entitySetPath, bundle: page.bundle, t: i18n.t, valueLists: page.valueLists, children: page.children, trail: [] }
   const parts = [

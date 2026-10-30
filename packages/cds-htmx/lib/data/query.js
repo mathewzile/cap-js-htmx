@@ -28,14 +28,45 @@ async function draftLockUser(tx, entityType, where) {
 
 /** Rows whose active version has a draft get `_draftOwn`: true when that draft is the current user's, else
  *  it is locked by somebody else (FE shows "Draft" for the former, "Locked" for the latter). Only needed
- *  when the table shows the indicator (a `Common.SemanticKey` column), so other tables pay nothing. */
+ *  when the table shows the indicator (a `Common.SemanticKey` column), so other tables pay nothing.
+ *  The drafts of all rows are read in one statement and their administrative records in a second one. */
 async function markDraftOwners(tx, entityType, layout, rows, userId) {
   if (!layout.semanticKey?.length || !isDraftRoot(entityDef(cds.model, entityType))) return
   const keyNames = keyElements(entityDef(cds.model, entityType)).map(k => k.name).filter(n => n !== 'IsActiveEntity')
-  await Promise.all(rows.filter(r => r.IsActiveEntity !== false && r.HasDraftEntity === true).map(async row => {
-    const where = { IsActiveEntity: false, ...Object.fromEntries(keyNames.map(n => [n, row[n]])) }
-    row._draftOwn = (await draftLockUser(tx, entityType, where)) === userId
-  }))
+  const drafted = rows.filter(r => r.IsActiveEntity !== false && r.HasDraftEntity === true)
+  if (!drafted.length) return
+  if (keyNames.length !== 1) {
+    // compound keys: one lookup per row
+    await Promise.all(drafted.map(async row => {
+      const where = { IsActiveEntity: false, ...Object.fromEntries(keyNames.map(n => [n, row[n]])) }
+      row._draftOwn = (await draftLockUser(tx, entityType, where)) === userId
+    }))
+    return
+  }
+  const [key] = keyNames
+  try {
+    const drafts = await tx.run(SELECT.from(entityType).columns(key, 'DraftAdministrativeData_DraftUUID as uuid').where({ IsActiveEntity: false, [key]: { in: drafted.map(r => r[key]) } }))
+    const uuidOf = new Map(drafts.map(d => [d[key], d.uuid]))
+    const uuids = [...new Set(uuidOf.values())].filter(Boolean)
+    const admins = uuids.length ? await cds.db.run(SELECT.from('DRAFT.DraftAdministrativeData').columns('DraftUUID', 'InProcessByUser').where({ DraftUUID: { in: uuids } })) : []
+    const ownerOf = new Map(admins.map(a => [a.DraftUUID, a.InProcessByUser]))
+    for (const row of drafted) row._draftOwn = (ownerOf.get(uuidOf.get(row[key])) ?? null) === userId
+  } catch {
+    for (const row of drafted) row._draftOwn = false
+  }
+}
+
+/** The rows of one page and the total. When the page is not full (no row beyond `limit`) the rows already tell the total, so the
+ *  count statement is only sent when there is more to see. Not used for draft roots: the "All" read counts actives only. */
+async function pageAndCount(tx, entityType, rowsQuery, countQuery, { skip = 0, limit, exact = false }) {
+  // `exact`: the query pins the draft state (a table section), so rows and count cover the same set
+  if (!exact && isDraftRoot(entityDef(cds.model, entityType))) {
+    const [rows, counted] = await Promise.all([tx.run(rowsQuery), tx.run(countQuery)])
+    return { rows, count: countOf(counted) }
+  }
+  const rows = await tx.run(rowsQuery)
+  if (rows.length <= limit) return { rows, count: skip + rows.length }
+  return { rows, count: countOf(await tx.run(countQuery)) }
 }
 
 /** The union of every `$Path` reachable from the rendered columns/filter fields/key, mapped
@@ -207,6 +238,6 @@ function objectPageChildQuery(model, parentEntityType, parentKeys, childEntityTy
 }
 
 module.exports = {
-  selectColumns, listReportQuery, listReportCountQuery, countOf, defaultOrderBy, parseOrderBy,
+  selectColumns, listReportQuery, listReportCountQuery, countOf, pageAndCount, defaultOrderBy, parseOrderBy,
   objectPageColumns, objectPageQuery, objectPageChildQuery, parentFilter, markDraftOwners, draftLockUser
 }

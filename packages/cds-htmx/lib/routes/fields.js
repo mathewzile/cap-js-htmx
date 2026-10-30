@@ -6,7 +6,8 @@ const { coerce, InputError } = require('../data/form')
 const { partial } = require('../render/html')
 const cache = require('../model/cache')
 const i18n = require('../i18n')
-const { entityDef, resolveElement, backlinkElement } = require('../annotations/edm')
+const { entityDef, resolveElement, backlinkElement, cqlPath } = require('../annotations/edm')
+const { paths: pathsOf } = require('../annotations/expressions')
 const keysLib = require('../keys')
 const draftLib = require('../data/draft')
 const valueListLib = require('../data/value-list')
@@ -152,7 +153,9 @@ module.exports = {
       const column = tableFacets(layout)
         .find(f => f.content.nav === n.nav)?.content.columns.find(c => c.field?.path === n.property)
       const { IsActiveEntity: _a, ...plain } = n.keys
-      const row = await tx.run(SELECT.one.from(n.entityType).where(entityDef(cds.model, n.entityType)?.elements?.IsActiveEntity ? { ...plain, IsActiveEntity: false } : plain))
+      // only what the mandatory check reads: the cell's column and the properties its `FieldControl` expression names
+      const cellColumns = column ? [...new Set([column.field.cqlPath, ...pathsOf(column.field.fieldControl).map(cqlPath)])] : []
+      const row = cellColumns.length && await tx.run(SELECT.one.from(n.entityType).columns(cellColumns).where(entityDef(cds.model, n.entityType)?.elements?.IsActiveEntity ? { ...plain, IsActiveEntity: false } : plain))
       const missing = column && row && isMandatory(column.field, row) && draftMessages.isEmpty(row[column.field.cqlPath])
         ? [{ path: key, text: this.text(req, 'MissingValue'), severity: 'error', label: column.field.label }] : []
       this.trigger(res, draftMessages.triggerHeader({ clear: [key], set: missing }))
@@ -262,15 +265,14 @@ module.exports = {
       const v = req.query[`c.${prop}`]
       if (typeof v === 'string' && v.trim()) { columnFilters[prop] = v.trim(); q = q.where(`${prop} like`, `%${v.trim()}%`) }
     }
-    let rows = await tx.run(q.limit(limit))
-    if (search && searchSupported && !Object.keys(columnFilters).length) {
-      // `$search` only covers the text columns; what is typed is often the key itself (a UUID is not searched)
-      try {
-        const byKey = await tx.run(SELECT.from(collectionPath).columns(props).where(`${valueProp} like`, `%${search}%`).limit(limit))
-        const seen = new Set(rows.map(r => r[valueProp]))
-        rows = [...rows, ...byKey.filter(r => !seen.has(r[valueProp]))].slice(0, limit)
-      } catch { /* key type not comparable with text: the search result stands */ }
-    }
+    // `$search` only covers the text columns; what is typed is often the key itself (a UUID is not searched): both reads go out together
+    const byKeyToo = search && searchSupported && !Object.keys(columnFilters).length
+    const [found, byKey] = await Promise.all([
+      tx.run(q.limit(limit)),
+      byKeyToo ? tx.run(SELECT.from(collectionPath).columns(props).where(`${valueProp} like`, `%${search}%`).limit(limit)).catch(() => []) : []  // key type not comparable with text: the search result stands
+    ])
+    const seen = new Set(found.map(r => r[valueProp]))
+    const rows = [...found, ...byKey.filter(r => !seen.has(r[valueProp]))].slice(0, limit)
 
     const t = key => i18n.t(bundle, key)
     // Type-ahead under the input while typing: the best matches only

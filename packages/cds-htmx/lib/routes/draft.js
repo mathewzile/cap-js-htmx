@@ -6,7 +6,7 @@ const queryLib = require('../data/query')
 const draftLib = require('../data/draft')
 const actionsLib = require('../data/actions')
 const draftMessages = require('../data/draft-messages')
-const { canCreate, canEdit, canDelete } = require('../model/edit-capabilities')
+const { canCreate, canEdit, canDelete, capabilityColumns } = require('../model/edit-capabilities')
 
 /** Draft lifecycle and write routes: create, edit, save, discard, delete, actions.
  *  Mixed into `HtmxAdapter` (`Object.assign(HtmxAdapter.prototype, ...)`), so `this` is the adapter. */
@@ -106,7 +106,7 @@ module.exports = {
    *  Returns the response of a refusal, `undefined` when the draft is there. */
   async openRootDraft(req, res, tx, entity, plainKeys) {
     const edit = this.editOf(req, entity.name)
-    const current = await tx.run(SELECT.one.from(entity.name).where(edit.mode === 'draft' ? { ...plainKeys, IsActiveEntity: true } : plainKeys))
+    const current = await tx.run(SELECT.one.from(entity.name).columns(capabilityColumns(edit, entity.name)).where(edit.mode === 'draft' ? { ...plainKeys, IsActiveEntity: true } : plainKeys))
     if (!current) return res.sendStatus(404)
     if (!canEdit(edit, current)) return this.reject(req, res, 405, 'NotAllowed')
     try {
@@ -208,7 +208,7 @@ module.exports = {
     if (!entity) return res.sendStatus(404)
     const keys = keysLib.parseKeys(raw)
     const edit = this.editOf(req, entity.name)
-    const current = await tx.run(SELECT.one.from(entity.name).where(keys))
+    const current = await tx.run(SELECT.one.from(entity.name).columns(capabilityColumns(edit, entity.name)).where(keys))
     if (!current) return res.sendStatus(404)
     if (!canDelete(edit, current)) return this.reject(req, res, 405, 'NotAllowed')
     await this.removeObject(tx, entity, edit, keys)
@@ -226,13 +226,14 @@ module.exports = {
     if (!canDelete(edit)) return this.reject(req, res, 405, 'NotAllowed')
     const selected = [].concat(req.body?.keys ?? []).slice(0, 200)
     if (!selected.length) return this.reject(req, res, 400, 'NotAllowed')
-    for (const raw of selected) {
+    // the restrictions are checked on all the ticked objects first (one read each, together), then they are deleted
+    const columns = capabilityColumns(edit, entity.name)
+    const targets = (await Promise.all(selected.map(async raw => {
       const keys = keysLib.parseKeys(raw)
-      const current = await tx.run(SELECT.one.from(entity.name).where(keys))
-      if (!current) continue
-      if (!canDelete(edit, current)) return this.reject(req, res, 405, 'NotAllowed')
-      await this.removeObject(tx, entity, edit, keys)
-    }
+      return { keys, current: await tx.run(SELECT.one.from(entity.name).columns(columns).where(keys)) }
+    }))).filter(t => t.current)
+    if (targets.some(t => !canDelete(edit, t.current))) return this.reject(req, res, 405, 'NotAllowed')
+    for (const { keys } of targets) await this.removeObject(tx, entity, edit, keys)
     req.successMessage = this.text(req, 'ObjectDeleted')
     return this.listReport(req, res, tx)
   },

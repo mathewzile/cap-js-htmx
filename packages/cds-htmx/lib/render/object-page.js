@@ -489,6 +489,36 @@ function visibilityParts(layout, row, ctx, properties) {
   return parts
 }
 
+/** What `sideEffectParts` and `visibilityParts` will read from the database for this change: the ids of the table sections they
+ *  render (`sections`) and the paths of the form fields whose fixed-value options they need (`fields`). Mirrors their rules, so a
+ *  refresh loads those and nothing else. `undefined` when the whole page is re-rendered (`all`). */
+function partsNeeds(layout, { properties = [], entities = [], all = false } = {}) {
+  if (all) return undefined
+  const props = new Set(properties)
+  const touches = expr => !!expr && pathsOf(expr).some(p => props.has(p))
+  const need = { sections: new Set(), fields: new Set() }
+  const addFields = facet => { for (const col of facet.content.fields) if (col.field) need.fields.add(col.field.path) }
+  const visit = (facets, touched) => {
+    for (const facet of facets || []) {
+      const state = touched || touches(facet.hidden)
+      if (facet.kind === 'CollectionFacet') { visit(facet.facets, state); continue }
+      const content = facet.content
+      if (!content) continue
+      const fieldTouched = content.kind === 'form' && content.fields.some(col => touches(col.hidden))
+      if (content.kind === 'table') {
+        // re-rendered by a `TargetEntities` side effect, or whole because its `Hidden` reads a changed property
+        if (entities.includes(content.nav) || state) need.sections.add(facet.id)
+      } else if (content.kind === 'form') {
+        if (state || fieldTouched) addFields(facet) // the facet is re-rendered whole
+        else for (const col of content.fields) if (col.field && (props.has(col.field.path) || touches(col))) need.fields.add(col.field.path)
+      }
+    }
+  }
+  visit(layout.headerFacets, false)
+  visit(layout.sections, false)
+  return need
+}
+
 /** Does a change to these properties alter the page title (header title/description)? Returns the new
  *  title text for the browser tab, else null. */
 function titleIfChanged(layout, row, ctx, properties) {
@@ -508,4 +538,4 @@ function sectionRowsHtml(facet, rows, keyNames, ctx) {
   return rowsHtml(miniLayout, rows, { basePath: ctx.basePath, entitySetPath, keyNames, bundle: ctx.bundle, t: ctx.t, selectable, edit, locale: ctx.locale })
 }
 
-module.exports = { sectionRowsHtml, sectionGrowing, objectPageFragment, breadcrumbs, facetBlock, facetContent, footerBar, sideEffectParts, visibilityParts, titleIfChanged }
+module.exports = { sectionRowsHtml, sectionGrowing, objectPageFragment, breadcrumbs, facetBlock, facetContent, footerBar, sideEffectParts, visibilityParts, partsNeeds, titleIfChanged }

@@ -1,5 +1,7 @@
 const { buildCapabilities, containerTarget } = require('./capabilities')
-const { evaluate } = require('../annotations/expressions')
+const cds = require('@sap/cds')
+const { evaluate, paths: pathsOf } = require('../annotations/expressions')
+const { cqlPath, entityDef, keyElements } = require('../annotations/edm')
 
 /** How an entity set can be changed, from the annotations the OData service exposes (the same ones
  *  Fiori elements V4 reads), never from CSN:
@@ -28,6 +30,16 @@ function editCapabilities(store, entityType) {
   }
 }
 
+/** The columns of an object that `canEdit` / `canDelete` read: its keys and the properties named by the path-based restrictions,
+ *  so that the check reads those instead of the whole row. */
+function capabilityColumns(edit, entityType) {
+  const cols = new Set(keyElements(entityDef(cds.model, entityType)).map(k => k.name).filter(n => n !== 'IsActiveEntity'))
+  for (const expr of [edit.updatable, edit.deletable, edit.updateHidden, edit.deleteHidden]) {
+    for (const p of pathsOf(expr)) cols.add(cqlPath(p))
+  }
+  return [...cols]
+}
+
 const allowed = (value, row) => evaluate(value, row ?? {}) !== false
 const hidden = (value, row) => value != null && evaluate(value, row ?? {}) === true
 
@@ -45,4 +57,4 @@ function canDelete(edit, row) {
   return edit.mode !== 'node' && allowed(edit.deletable, row) && !hidden(edit.deleteHidden, row)
 }
 
-module.exports = { editCapabilities, canCreate, canEdit, canDelete }
+module.exports = { editCapabilities, capabilityColumns, canCreate, canEdit, canDelete }

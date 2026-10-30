@@ -9,6 +9,7 @@ const DEFAULTS = {
   treeChildrenPage: 100, // children of a tree node read per request (a `More` row asks for the next page)
   sse: { heartbeat: 15000 },
   liveListReport: true,
+  serverTiming: true, // answers carry a `Server-Timing` header: the database statements and the time spent in this service
   requireHxRequestForMutations: true,
   stickySessions: true, // cookie name, or true for JSESSIONID (what Cloud Foundry's router keys on), or false
   apps: { sources: [{ kind: 'local' }], allow: ['*'], ttl: 60000, refetchInterval: 5000, localRecheck: 1000, maxApps: 50, maxBundleBytes: 2097152, fetchTimeout: 5000 }

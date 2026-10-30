@@ -62,6 +62,8 @@ function needsRefresh(entry, headerVersion, now) {
   const { ttl, refetchInterval, localRecheck } = config().apps
   // a `volatile` (local) source is re-checked for edits instead of trusted for a TTL
   if (entry.source.volatile) return now - entry.checkedAt > localRecheck
+  // a deployed instance does not change its own files: re-reading them (a directory walk) on every TTL would only cost time
+  if (entry.source.kind === 'local') return false
   if (now - entry.fetchedAt > ttl) return true
   // The page was built against a different version than we hold: look again, but not on every request
   return headerVersion !== entry.app.version && now - entry.fetchedAt > refetchInterval
