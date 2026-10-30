@@ -9,7 +9,6 @@
     },
     "title": "{{appTitle}}",
     "description": "{{appDescription}}",
-    "resources": "resources.json",
     "sourceTemplate": {
       "id": "@sap/generator-fiori:lrop",
       "version": "1.33.0",
@@ -28,8 +27,9 @@
     "crossNavigation": {
       "inbounds": {
         "Authors-manage": {
-          "semanticObject": "Authors-manage",
-          "action": "display",
+          "semanticObject": "Authors",
+          "action": "manage",
+          "title": "{{Authors-manage.flpTitle}}",
           "signature": {
             "parameters": {},
             "additionalParameters": "allowed"

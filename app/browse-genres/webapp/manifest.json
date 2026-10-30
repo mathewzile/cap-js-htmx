@@ -9,7 +9,6 @@
     },
     "title": "{{appTitle}}",
     "description": "{{appDescription}}",
-    "resources": "resources.json",
     "sourceTemplate": {
       "id": "@sap/generator-fiori:lrop",
       "version": "1.33.0",
@@ -30,6 +29,7 @@
         "Genres-browse": {
           "semanticObject": "Genres",
           "action": "browse",
+          "title": "{{Genres-browse.flpTitle}}",
           "signature": {
             "parameters": {},
             "additionalParameters": "allowed"

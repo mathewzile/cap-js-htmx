@@ -3,8 +3,8 @@
   "authenticationMethod": "route",
   "routes": [
     {
-      "source": "^/?odata/(.*)$",
-      "target": "/odata/$1",
+      "source": "^/?admin/(.*)$",
+      "target": "/admin/$1",
       "destination": "cap-htmx-srv",
       "authenticationType": "xsuaa",
       "csrfProtection": true
