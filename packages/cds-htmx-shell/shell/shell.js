@@ -176,11 +176,10 @@
     // after htmx has applied the response's <title> (it does that right after htmx:after:swap)
     document.addEventListener('htmx:finally:swap', e => {
       if (!root.contains(e.target)) return
-      // As in Fiori elements: the launchpad's title is the app's name whatever page is open, and only the browser tab follows the page.
-      // The List Report's tab is the app's name; an Object Page's is the server's "<object title> - <entity set>".
-      if (!appTitle) return adapter.setTitle(document.title)
-      adapter.setTitle(appTitle)
-      if (!root.querySelector('.hf-page--op')) document.title = appTitle
+      // As in Fiori elements: the List Report's tab is the app's name, an Object Page's is the server's "<object title> - <entity set>".
+      // In a launchpad the tab is the shell's title (not the iframe's document.title), so the same title goes to both.
+      if (appTitle && !root.querySelector('.hf-page--op')) document.title = appTitle
+      adapter.setTitle(document.title)
     }, { signal })
 
     // a first visit without a route gets the entry page's route, so a reload or a copied link opens the same page
