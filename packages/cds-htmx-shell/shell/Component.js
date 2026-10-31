@@ -49,6 +49,7 @@ sap.ui.define([
         root,
         base,
         app: `${id}@${version}`,
+        appTitle: this.getManifestEntry('/sap.app/title'), // the i18n-resolved title of the app's tile
         service: htmx.service,
         entry: (startup.route && startup.route[0]) || htmx.entry,
         language: Localization.getLanguageTag().toString(),

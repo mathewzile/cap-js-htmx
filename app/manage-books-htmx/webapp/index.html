@@ -20,6 +20,7 @@
       await HtmxShell.start({
         root: document.getElementById('root'),
         base,
+        appTitle: document.title, // the app's name: the List Report's tab
         app: manifest['sap.app'].id + '@' + manifest['sap.app'].applicationVersion.version,
         service: manifest['sap.htmx'].service,
         entry: manifest['sap.htmx'].entry,

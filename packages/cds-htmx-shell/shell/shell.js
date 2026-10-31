@@ -68,7 +68,7 @@
   }
 
   async function start(options) {
-    const { root, base = '', app, service, entry, adapter, csrf = true } = options
+    const { root, base = '', app, appTitle, service, entry, adapter, csrf = true } = options
     const abort = new AbortController() // every document listener of this start; destroy() removes them, so a second start does not stack them
     const { signal } = abort
     const language = options.language || navigator.language || 'en'
@@ -173,9 +173,14 @@
     const decoded = route => { try { return decodeURIComponent(route) } catch { return route } }
     // an empty route is the entry page (Back to the List Report)
     adapter.attach({ onRoute: route => { if (root.isConnected && decoded(route ?? '') !== decoded(current ?? '')) show(decoded(route ?? '')) } })
-    document.addEventListener('htmx:after:swap', e => {
+    // after htmx has applied the response's <title> (it does that right after htmx:after:swap)
+    document.addEventListener('htmx:finally:swap', e => {
       if (!root.contains(e.target)) return
-      adapter.setTitle(document.title)
+      // As in Fiori elements: the launchpad's title is the app's name whatever page is open, and only the browser tab follows the page.
+      // The List Report's tab is the app's name; an Object Page's is the server's "<object title> - <entity set>".
+      if (!appTitle) return adapter.setTitle(document.title)
+      adapter.setTitle(appTitle)
+      if (!root.querySelector('.hf-page--op')) document.title = appTitle
     }, { signal })
 
     // a first visit without a route gets the entry page's route, so a reload or a copied link opens the same page

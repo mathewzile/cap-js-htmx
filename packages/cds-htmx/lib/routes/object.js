@@ -161,7 +161,8 @@ module.exports = {
     })
     if (messages?.length) body = html`${rawHtml(this.messagesPartial(messages))}${body}`
     if (status) res.status(status)
-    this.render(req, res, { title, body, keepMessages: !!messages?.length, fcl })
+    // the browser tab, as in Fiori elements: "<object title> - <entity set>"
+    this.render(req, res, { title: `${title} - ${segments[segments.length - 1].set}`, body, keepMessages: !!messages?.length, fcl })
   },
 
   /** A page whose object is gone: a draft that was saved or discarded (browser back/forward onto its URL)

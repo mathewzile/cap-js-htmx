@@ -525,7 +525,8 @@ function titleIfChanged(layout, row, ctx, properties) {
   const header = layout.header || {}
   const props = new Set(properties)
   if (![header.title, header.description].some(expr => pathsOf(expr).some(p => props.has(p)))) return null
-  return String(titleOf(layout, row, ctx))
+  const set = String(ctx.entitySetPath ?? '').match(/([^/()]+)(?:\([^/]*\))?$/)?.[1]
+  return `${titleOf(layout, row, ctx)}${set ? ` - ${set}` : ''}`
 }
 
 /** The rows of a table section as the section itself renders them (display, or draft: inputs), for its `$table` partials. */
