@@ -1,0 +1,7 @@
+ID,catalog_ID,parent_ID,name,descr
+50aaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa,40aaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa,,Science,Natural sciences
+51aaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa,40aaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa,50aaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa,Physics,Matter and energy
+52aaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa,40aaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa,50aaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa,Biology,Living things
+53aaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa,40aaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa,51aaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa,Optics,Light and lenses
+54aaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa,40aaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa,,Arts,Painting and music
+55aaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa,41aaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa,,Stories,Picture books

@@ -12,7 +12,7 @@ const { keyElements, entityDef } = require('../annotations/edm')
 function collectTableFacets(facets, out = []) {
   for (const facet of facets || []) {
     if (facet.kind === 'CollectionFacet') collectTableFacets(facet.facets, out)
-    else if (facet.content?.kind === 'table') out.push(facet)
+    else if (facet.content?.kind === 'table' || facet.content?.kind === 'chart') out.push(facet) // a chart's data is read like a table's rows
   }
   return out
 }
@@ -53,11 +53,16 @@ async function loadObjectPage(tx, { service, servicePath, entityType, keys, cont
 
   const wanted = keys ? collectTableFacets(facets).filter(facet => !need || need.sections.has(facet.id)) : []
   const isTree = facet => { const { hierarchy, targetEntityType } = facet.content; return hierarchy && !editing && targetEntityType === entityType && treeLib.isUsable(cds.model, targetEntityType, hierarchy) }
-  const sectionPromises = wanted.filter(facet => !isTree(facet) || keys.IsActiveEntity === false)
+  // A tree table of a composition (the nodes of this object, an entity of its own): read within the object (its draft while it is
+  // edited), in display and in edit mode alike -- the Object Page of FE edits its rows in place
+  const isCompositionTree = facet => { const { hierarchy, targetEntityType } = facet.content; return hierarchy && targetEntityType !== entityType && treeLib.isUsable(cds.model, targetEntityType, hierarchy) }
+  const sectionPromises = wanted.filter(facet => isCompositionTree(facet) ? false : !isTree(facet) || keys.IsActiveEntity === false)
     .map(facet => sectionLib.sectionPage(tx, { parentEntityType: entityType, parentKeys: keys, content: facet.content }).then(page => [facet, page]))
 
   const [row, lists, sections] = await Promise.all([rowPromise, valueListsPromise, Promise.all(sectionPromises)])
   if (!row) return null
+  // the saved version of an object whose draft somebody else holds: the header says who ("Locked by <name>", as FE does)
+  if (!need && row.IsActiveEntity === true && row.HasDraftEntity === true) await queryLib.markDraftOwners(tx, entityType, null, [row], cds.context.user.id)
 
   let valueLists
   if (fixedFields.length && (row.IsActiveEntity === false || editing)) {
@@ -77,6 +82,16 @@ async function loadObjectPage(tx, { service, servicePath, entityType, keys, cont
     const treeLayout = { table: { columns: childFacetColumns, hierarchy }, filterBar: { fields: [] } }
     const top = await treeLib.topLevel(tx, cds.model, targetEntityType, treeLayout, { rootParent: row[hierarchy.nodeProperty], limit: treeLib.LIMIT })
     children[facet.id] = { rows: top.rows, keyNames: keyNamesOf(targetEntityType), tree: { set: targetEntityType.split('.').pop() } }
+  }))
+
+  // (the tree of a composition: its top level, deeper levels are read when a node is opened)
+  await Promise.all(wanted.filter(isCompositionTree).map(async facet => {
+    const { targetEntityType, columns: treeColumns, hierarchy } = facet.content
+    const scope = queryLib.parentFilter(cds.model, entityType, keys, targetEntityType)
+    const treeLayout = { table: { columns: treeColumns, hierarchy, scope, sortOrder: facet.content.sortOrder }, filterBar: { fields: [] } }
+    const top = await treeLib.topLevel(tx, cds.model, targetEntityType, treeLayout, { limit: treeLib.LIMIT })
+    const total = queryLib.countOf(await tx.run(queryLib.listReportCountQuery(targetEntityType, { filters: scope })))
+    children[facet.id] = { rows: top.rows, keyNames: keyNamesOf(targetEntityType), tree: { scoped: true }, treeCount: total }
   }))
 
   return { layout, row, bundle, valueLists, children }

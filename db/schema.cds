@@ -42,3 +42,28 @@ entity Genres : cuid, CodeList {
   parent   : Association to Genres;
   children : Composition of many Genres on children.parent = $self;
 }
+
+// A tree edited as drafts (create child, move node): the Fiori elements reference sample for the htmx tree table's editing
+entity Categories : cuid {
+  name     : String(111) @mandatory;
+  descr    : String(1111);
+  rank     : Integer; // the order among the nodes of one parent (changed by the changeNextSibling action)
+  parent   : Association to Categories;
+  children : Composition of many Categories on children.parent = $self;
+}
+
+// A draft root with a tree inside it (the tree is a composition of the root, shown as the hierarchy table of its Object Page):
+// the Fiori elements reference sample for the htmx tree table in an Object Page, edited together with the root's draft
+entity Catalogs : cuid {
+  name   : String(111) @mandatory;
+  descr  : String(1111);
+  topics : Composition of many Topics on topics.catalog = $self;
+}
+
+entity Topics : cuid {
+  catalog  : Association to Catalogs;
+  name     : String(111) @mandatory;
+  descr    : String(1111);
+  parent   : Association to Topics;
+  children : Composition of many Topics on children.parent = $self;
+}

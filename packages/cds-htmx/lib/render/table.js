@@ -23,7 +23,10 @@ function cellText(col, row) {
 }
 
 /** The columns of the table: the LineItem's, then the properties View Settings can add (hidden until someone does). */
-const tableColumns = layout => [...layout.table.columns, ...(layout.table.extraColumns ?? [])]
+// a DataFieldForIntentBasedNavigation is a button of the table's toolbar, not a column
+const isToolbarIntent = col => col.kind === 'UI.DataFieldForIntentBasedNavigation'
+const tableColumns = layout => [...layout.table.columns, ...(layout.table.extraColumns ?? [])].filter(col => !isToolbarIntent(col))
+const toolbarIntents = layout => layout.table.columns.filter(isToolbarIntent)
 
 const NUMERIC_TYPES = new Set(['cds.Integer', 'cds.Int16', 'cds.Int32', 'cds.Int64', 'cds.Integer64', 'cds.UInt8', 'cds.Decimal', 'cds.DecimalFloat', 'cds.Double'])
 
@@ -166,17 +169,17 @@ function headerCell(col, { basePath, entitySetPath, orderBy, numeric, sortable, 
 /** A section table's cell while the draft is edited (FE: every editable DataField column is an input in
  *  the row). Changes are PATCHed to the child's own draft; the cell has its own message key
  *  (`nav(rowKey).property`) so a value state can be shown on exactly this cell. */
-function editCell(col, row, { rowPath, rowKey, cls, numeric }) {
-  const { isReadOnly, isMandatory } = require('./field')
+function editCell(col, row, { rowPath, rowKey, cls, numeric, node = html`` }) {
+  const { isMandatory } = require('./field')
   const field = col.field
   const path = field.path
   const id = `cell-${ids.sanitize(rowKey)}--${ids.sanitize(path)}`
   const mandatory = isMandatory(field, row)
-  return html`<td class="${cls}" data-hf-field="${rowKey}.${path}">
+  return html`<td class="${cls}" data-hf-field="${rowKey}.${path}"><span class="hf-cell-with-node">${node}
     <input type="text" class="fd-input${numeric ? ' hf-input--end' : ''}" id="${id}" name="${path}" value="${row[field.cqlPath] ?? ''}"${mandatory ? raw(' required') : html``}
       hx-patch="${rowPath}/$field/${path}" hx-trigger="change" hx-include="this" hx-push-url="false" hx-swap="none"
       hx-headers:inherited:append='{"X-Hf-Source":"${id}"}' aria-label="${field.label}">
-    <span class="hf-field__message" role="alert"></span>
+    <span class="hf-field__message" role="alert"></span></span>
   </td>`
 }
 
@@ -189,7 +192,7 @@ function treeNode({ level, state }, { bundle, t }) {
     : html`<button type="button" class="hf-tree-toggle" aria-expanded="${expanded}" aria-label="${t(bundle, expanded ? 'CollapseNode' : 'ExpandNode')}"><i class="${expanded ? 'sap-icon--navigation-down-arrow' : 'sap-icon--navigation-right-arrow'}" aria-hidden="true"></i></button>`}</span>`
 }
 
-function dataCell(col, row, { bundle, t, isSemanticKey, numeric, index, edit, rowKey, tree, type, locale } = {}) {
+function dataCell(col, row, { bundle, t, isSemanticKey, numeric, index, edit, rowKey, tree, type, locale, rowPath } = {}) {
   const cls = `fd-table__cell hf-col-${index}${numeric ? ' hf-cell--end' : ''}${isSemanticKey ? ' hf-semantic-key' : ''}`
   if (col.hidden && evaluate(col.hidden, row) === true) return html`<td class="${cls}"></td>`
   if (col.kind === 'UI.DataFieldForAction' || col.kind === 'UI.DataFieldForAnnotation') {
@@ -197,22 +200,24 @@ function dataCell(col, row, { bundle, t, isSemanticKey, numeric, index, edit, ro
   }
   if (edit && col.kind === 'UI.DataField' && col.field?.cqlPath && !col.field.cqlPath.includes('.')) {
     const { isReadOnly } = require('./field')
-    if (!isReadOnly(col.field, row, 'draft')) return editCell(col, row, { rowPath: edit.rowPath(row), rowKey, cls, numeric })
+    if (!isReadOnly(col.field, row, 'draft')) return editCell(col, row, { rowPath: edit.rowPath(row), rowKey, cls, numeric, node: tree && index === 0 ? treeNode(tree, { bundle, t }) : html`` })
   }
   const { text, unit } = cellParts(col, row, { type, locale })
   const badge = isSemanticKey ? draftStatusBadge(row, bundle, t) : html``
   const crit = col.criticality ? criticalityClass(evaluate(col.criticality, row)) : ''
   // an amount and its currency or unit sit side by side, the unit in a slot of its own so the amounts of all rows line up
-  const content = unit && !crit ? html`<span class="hf-amount"><span class="hf-amount__value">${text}</span><span class="hf-amount__unit">${unit}</span></span>` : objectStatus(crit, unit ? `${text} ${unit}` : text)
+  // a DataFieldWithIntentBasedNavigation: the value is a link to the intent, the row is its context (the click must not open the row)
+  const fieldRender = require('./field')
+  const linked = fieldRender.isIntentLink(col) && rowPath && text !== '' ? fieldRender.intentLink(col, text, rowPath) : null
+  const semantic = !linked && col.field?.semanticObject && text !== '' && !edit ? fieldRender.semanticLink(col.field, text) : null
+  const content = linked ?? semantic ?? (unit && !crit ? html`<span class="hf-amount"><span class="hf-amount__value">${text}</span><span class="hf-amount__unit">${unit}</span></span>` : objectStatus(crit, unit ? `${text} ${unit}` : text))
   return html`<td class="${cls}"${col.extra ? raw(' hidden') : html``}>${tree && index === 0 ? treeNode(tree, { bundle, t }) : html``}${content}${raw(badge.value)}</td>`
 }
 
 /** A draft-root row's "Draft" (own draft shown in place of the active row, FE's "All" default view)
  *  or "Locked" (another draft exists on this active row) status, under the first column (§3.4 List
- *  Report checklist). Simplified vs. FE: shows "Locked by Another User" generically rather than the
- *  actual lock-holder's name, since that needs a `DraftAdministrativeData` expand the generic-service
- *  auth layer rejects for multi-segment nav paths (`"Navigation ... in expand is not supported"`,
- *  verified live) -- listed as a known deviation. */
+ *  Report checklist). "Locked by <name>": the holder's `InProcessByUserDescription`, else the user id (as FE);
+ *  "Locked by Another User" only when the holder cannot be read. */
 function draftStatusBadge(row, bundle, t) {
   if (!bundle) return html``
   if (row.IsActiveEntity === false) {
@@ -221,7 +226,7 @@ function draftStatusBadge(row, bundle, t) {
   if (row.HasDraftEntity === true) {
     // your own draft is "Draft" (the active row stands in for it), somebody else's locks the object
     const own = row._draftOwn === true
-    return html`<div class="hf-draft-indicator"><span class="fd-object-status fd-object-status--informative">${t(bundle, own ? 'Draft' : 'LockedByAnotherUser')}</span></div>`
+    return html`<div class="hf-draft-indicator"><span class="fd-object-status fd-object-status--informative">${own ? t(bundle, 'Draft') : row._lockedBy ? t(bundle, 'LockedByUser').replace('{0}', row._lockedBy) : t(bundle, 'LockedByAnotherUser')}</span></div>`
   }
   return html``
 }
@@ -236,14 +241,14 @@ function rowMarkup(layout, row, { basePath, entitySetPath, keyNames, bundle, t, 
   const href = rowHref(basePath, entitySetPath, keyNames, row)
   const rowKey = edit ? `${edit.nav}(${formatKeys(keyValues(keyNames, row))})` : undefined
   const hierarchy = layout.table.hierarchy
-  const tree = hierarchy && !edit ? { level: row._level ?? 0, state: row._state ?? 'leaf' } : undefined
+  const tree = hierarchy ? { level: row._level ?? 0, state: row._state ?? 'leaf' } : undefined
   // The manifest's routing decides whether a row opens a page (no route for the navigation = FE shows no arrow either)
   const navigable = layout.navigable !== false
   return html`
     <tr id="${rowId(keyNames, row)}" class="fd-table__row${navigable ? ' fd-table__row--activable fd-table__row--hoverable' : ''}"${tree ? html` data-hf-level="${tree.level}" data-hf-state="${tree.state}" data-hf-node="${row[hierarchy.nodeProperty]}"${row._loaded ? raw(' data-hf-loaded') : html``}` : html``}
         ${navigable ? html`hx-get="${href}" hx-trigger="click" hx-target="#app" hx-push-url="true" hx-swap="innerHTML show:window:top"` : html``}>
       ${selectable ? html`<td class="fd-table__cell fd-table__cell--checkbox">${checkbox('Select row', { name: 'keys', value: formatKeys(keyValues(keyNames, row)) })}</td>` : html``}
-      ${tableColumns(layout).map((col, i) => dataCell(col, row, { bundle, t, isSemanticKey: !!layout.semanticKey?.includes(col.field?.path), numeric: numeric[i], index: i, edit, rowKey, tree, type: types[i], locale }))}
+      ${tableColumns(layout).map((col, i) => dataCell(col, row, { bundle, t, isSemanticKey: !!layout.semanticKey?.includes(col.field?.path), numeric: numeric[i], index: i, edit, rowKey, tree, type: types[i], locale, rowPath: { basePath, entitySetPath: `${entitySetPath}(${formatKeys(keyValues(keyNames, row))})` } }))}
       <td class="fd-table__cell hf-col-nav">
         ${navigable ? html`<i class="sap-icon--navigation-right-arrow" aria-hidden="true"></i>` : html``}
       </td>
@@ -308,6 +313,26 @@ function tableHead(columns, rows, { basePath, entitySetPath, orderBy, selectable
     </thead>`
 }
 
+/** The toolbar buttons of a tree table whose nodes can be moved, as Fiori elements has them: Cut and Paste (Paste stays off until something was cut),
+ *  and Move Up / Move Down when the hierarchy has a `ChangeNextSiblingAction`. `scope` is the selector of the table's rows (the selection the buttons
+ *  work on), `moveUrl` the `$move` route, `label(key)` the text. `htmx-fiori.js` enables and handles them. */
+function treeMoveButtons(hierarchy, { scope, moveUrl, label }) {
+  const button = (attrs, key) => html`<button type="button" class="fd-button fd-button--transparent" disabled ${attrs} data-hf-selection-max="1" aria-label="${label(key)}">${label(key)}</button>`
+  return html`
+      ${button(html`data-hf-tree-cut data-hf-needs-selection="${scope}"`, 'Cut')}
+      ${button(html`data-hf-tree-paste="${moveUrl}" data-hf-selection-scope="${scope}"`, 'Paste')}
+      ${hierarchy.siblingAction ? ['Up', 'Down'].map(dir => button(html`data-hf-tree-sibling="${dir.toLowerCase()}" data-hf-sibling-url="${moveUrl}" data-hf-sibling-roots="${hierarchy.rootSiblings !== false}" data-hf-needs-selection="${scope}"`, 'Move' + dir)) : html``}`
+}
+
+/** Expand / Collapse Entire Tree: icon buttons behind a separator (`htmx-tables.js` opens and closes every node). */
+function treeExpandButtons(label) {
+  const button = (attr, icon, key) => html`<button type="button" class="fd-button fd-button--transparent hf-icon-button" ${attr} aria-label="${label(key)}" title="${label(key)}"><i class="sap-icon--${icon}" aria-hidden="true"></i></button>`
+  return html`<span class="hf-toolbar-separator"></span>
+      ${button(html`data-hf-tree-expand-all`, 'expand-all', 'ExpandAll')}
+      ${button(html`data-hf-tree-collapse-all`, 'collapse-all', 'CollapseAll')}`
+}
+
+
 /** What the page script needs to expand a node: where its children come from (`$children`, with the hierarchy's qualifier). */
 function treeAttributes(layout, basePath, entitySetPath) {
   const hierarchy = layout.table.hierarchy
@@ -329,4 +354,4 @@ function table(layout, rows, ctx) {
   `
 }
 
-module.exports = { tableColumns, table, treeAttributes, growingButton, sectionGrowing, tableHead, isSelectable, rowsHtml, rowMarkup, rowId, isNumericColumn, cellText, rowHref, keyValues, objectStatus, columnBreakpoints, columnVisibilityStyle }
+module.exports = { toolbarIntents, tableColumns, table, treeAttributes, treeMoveButtons, treeExpandButtons, growingButton, sectionGrowing, tableHead, isSelectable, rowsHtml, rowMarkup, rowId, isNumericColumn, cellText, rowHref, keyValues, objectStatus, columnBreakpoints, columnVisibilityStyle, draftStatusBadge }

@@ -1200,3 +1200,82 @@ body.htmx-fiori:has(#fcl) { height: 100vh; height: 100dvh; overflow: hidden; dis
 .hf-confirm-popover .hf-confirm-popover__ok { width: 100%; height: var(--sapElement_Compact_Height, 1.625rem); min-width: 2rem; padding: 0 .4375rem; display: inline-flex; align-items: center; justify-content: center; line-height: 1;
   font-family: var(--sapButton_FontFamily, '72-SemiboldDuplex', '72', Arial, sans-serif); font-size: .875rem; border-radius: var(--sapButton_BorderCornerRadius, .5rem); }
 .hf-confirm-popover__ok { background: var(--sapButton_Background, #fff); border: 1px solid var(--sapButton_BorderColor, #bcc3ca); color: var(--sapButton_TextColor, #0064d9); }
+
+/* a tree node that was cut (waiting to be pasted) is shown dimmed, as in Fiori elements */
+tr.hf-row--cut { opacity: 0.5; }
+
+/* ---------- UI.Chart (inline SVG, lib/render/chart.js) ---------- */
+.hf-chart { margin: 0; max-width: 40rem; }
+.hf-chart__title { font-size: var(--sapFontHeader5Size, 1rem); color: var(--sapTitleColor, #131e29); margin-bottom: .5rem; }
+.hf-chart__svg { width: 100%; height: auto; display: block; }
+.hf-chart__grid { stroke: var(--sapList_BorderColor, #e5e5e5); stroke-width: 1; }
+.hf-chart__axis { stroke: var(--sapContent_ForegroundBorderColor, #89919a); stroke-width: 1; }
+.hf-chart__tick { fill: var(--sapContent_LabelColor, #556b82); font-size: 11px; }
+.hf-chart__hole { fill: var(--sapBaseColor, #fff); }
+.hf-chart__legend { list-style: none; display: flex; flex-wrap: wrap; gap: .25rem 1rem; margin: .5rem 0 0; padding: 0; font-size: var(--sapFontSmallSize, .75rem); color: var(--sapTextColor, #131e29); }
+.hf-chart__swatch { display: inline-block; width: .75rem; height: .75rem; border-radius: 2px; margin-right: .375rem; vertical-align: -1px; }
+.hf-chart__empty { color: var(--sapContent_LabelColor, #556b82); }
+
+/* ---------- responsive: the UI5 device ranges (phone < 600px, tablet < 960px) ---------- */
+
+/* Flexible Column Layout (sap.f.FlexibleColumnLayout): by the width of the layout, not the window. On a phone one column shows (the
+   deepest one; the others are reached with the Close button of its header and the browser's back), on a tablet at most two. The
+   resize handles have nothing to resize then. Specificity beats the per-layout widths above. */
+.hf-fcl { container: hf-fcl / inline-size; }
+@container hf-fcl (max-width: 599.98px) {
+  .hf-fcl[data-hf-layout][data-hf-deepest="1"] > [data-hf-col="0"],
+  .hf-fcl[data-hf-layout][data-hf-deepest="2"] > [data-hf-col="0"],
+  .hf-fcl[data-hf-layout][data-hf-deepest="2"] > [data-hf-col="1"] { --hf-w: 0%; }
+  .hf-fcl[data-hf-layout][data-hf-deepest="0"] > [data-hf-col="0"],
+  .hf-fcl[data-hf-layout][data-hf-deepest="1"] > [data-hf-col="1"],
+  .hf-fcl[data-hf-layout][data-hf-deepest="2"] > [data-hf-col="2"] { --hf-w: 100%; }
+  .hf-fcl__sep { display: none; }
+}
+@container hf-fcl (min-width: 600px) and (max-width: 959.98px) {
+  .hf-fcl[data-hf-layout][data-hf-deepest="2"] > [data-hf-col="0"] { --hf-w: 0%; }
+  .hf-fcl[data-hf-layout][data-hf-deepest="2"] > [data-hf-col="1"] { --hf-w: 40%; }
+  .hf-fcl[data-hf-layout][data-hf-deepest="2"] > [data-hf-col="2"] { --hf-w: 60%; }
+  .hf-fcl[data-hf-layout][data-hf-deepest="2"] .hf-fcl__sep { display: none; }
+}
+
+@media (max-width: 599.98px) {
+  /* filter bar: one filter per row, the buttons below them */
+  .hf-filter { flex-basis: 100%; min-width: 0; }
+  .hf-filter-bar__actions { flex: 1 1 100%; justify-content: flex-end; }
+  /* toolbars and the anchor bar scroll sideways instead of squeezing (UI5's overflow toolbar collapses them into a menu) */
+  .hf-table-toolbar { overflow-x: auto; scrollbar-width: none; }
+  .hf-table-toolbar > * { flex-shrink: 0; }
+  .hf-anchor-bar__tabs { overflow-x: auto; scrollbar-width: none; }
+  /* dialogs fill the screen on a phone */
+  .hf-dialog, .hf-dialog--value-help { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; border-radius: 0; }
+}
+
+/* touch devices: targets of at least 2.75rem (UI5's cozy size) */
+@media (pointer: coarse) {
+  .fd-button, .hf-icon-button { min-height: 2.75rem; min-width: 2.75rem; }
+  .hf-tree-toggle { min-height: 2.75rem; min-width: 2.75rem; }
+  .hf-dialog__row { min-height: 2.75rem; }
+}
+
+/* the targets of a Common.SemanticObject link */
+.hf-semantic-popover {
+  position: fixed; z-index: 1000; min-width: 12rem; max-width: calc(100vw - 1rem); padding: .25rem 0;
+  background: var(--sapGroup_ContentBackground, #fff); border-radius: var(--sapElement_BorderCornerRadius, .75rem);
+  box-shadow: 0 0 0 1px rgba(34, 53, 72, .48), 0 .625rem 1.875rem rgba(34, 53, 72, .25);
+}
+.hf-semantic-popover .hf-popover__item { display: block; width: 100%; text-align: start; }
+.hf-semantic-popover__none { margin: 0; padding: .5rem 1rem; color: var(--sapContent_LabelColor, #556b82); }
+.hf-semantic-link { user-select: none; }
+
+/* fundamental-styles paints its own square backdrop on the message box (::before): the overlay already is the block layer, and the
+   square showed as gray corners around the rounded box */
+.hf-message-box::before, .hf-message-box::after { content: none; display: none; }
+
+/* a tree node in front of an input (the nodes of a tree table are edited in place in an Object Page draft) */
+.hf-cell-with-node { display: flex; align-items: center; gap: .25rem; }
+.hf-cell-with-node > .fd-input { flex: 1 1 auto; min-width: 0; }
+/* tree table: the node a dragged node would be dropped on (a row), or the table itself (the top level) */
+.hf-table tr.hf-drop-target > td { background: var(--sapList_SelectionBackgroundColor, #e5f0fa); outline: 1px dashed var(--sapContent_FocusColor, #0032a5); outline-offset: -1px; }
+.hf-table.hf-drop-target { outline: 2px dashed var(--sapContent_FocusColor, #0032a5); outline-offset: 2px; }
+.hf-table tr.hf-drop-before > td { box-shadow: inset 0 2px 0 var(--sapContent_FocusColor, #0032a5); }
+.hf-table tr.hf-drop-after > td { box-shadow: inset 0 -2px 0 var(--sapContent_FocusColor, #0032a5); }

@@ -12,9 +12,14 @@ const listReportRender = require('../render/list-report')
 const { cellText } = require('../render/table')
 const ids = require('../render/ids')
 const treeLib = require('../data/tree')
+const treeEdit = require('../data/tree-edit')
+const keysLib = require('../keys')
+const { canEdit, capabilityColumns } = require('../model/edit-capabilities')
 const { buildHierarchy } = require('../model/hierarchy')
 const csvLib = require('../data/csv')
 const { EXPORT_LIMIT, orderByFromTerms } = require('./support')
+
+const { SELECT } = cds.ql
 
 /** List Report routes: the page, its table rows, the tree and the CSV export.
  *  Mixed into `HtmxAdapter` (`Object.assign(HtmxAdapter.prototype, ...)`), so `this` is the adapter. */
@@ -43,7 +48,7 @@ module.exports = {
     const orderByTerms = queryLib.parseOrderBy(req.query, columns)
     const fixedFields = lrLayout.filterBar.fields.filter(field => field.fixedValues && field.valueList)
     const [{ rows: pageRows, hasMore, count }, ...options] = await Promise.all([
-      this.listRows(tx, entityType, lrLayout, { filters: parsedFilters, search, query: req.query, limit: threshold }),
+      this.listRows(tx, entityType, lrLayout, { filters: parsedFilters, search, query: req.query, limit: threshold, reveal: req.hfReveal }),
       ...fixedFields.map(field => valueListLib.fixedValueOptions(tx, field.valueList))
     ])
     const orderBy = orderByFromTerms(orderByTerms)
@@ -128,13 +133,46 @@ module.exports = {
     res.set('Content-Type', 'text/html').send(String(body))
   },
 
+  /** `POST /:Set/$move` with `keys` (the node's key) and `parent` (the node to move it below, empty for the top level): Paste of a
+   *  tree table (data/tree-edit.js). The node is updated on the active entity, like Fiori elements does; the List Report that comes
+   *  back has the path to the node open, so it shows where it went. */
+  async moveNode(req, res, tx) {
+    const entity = this.entitySet(req.params.Set)
+    if (!entity) return res.sendStatus(404)
+    const edit = this.editOf(req, entity.name)
+    const layout = cache.listReportFor(cds.model, this.service.name, this.odataServicePath(), entity.name, `/${req.params.Set}`, this.appOpts(req))
+    const hierarchy = layout.table.hierarchy
+    if (!treeLib.isUsable(cds.model, entity.name, hierarchy)) return res.sendStatus(404)
+    if (!canEdit(edit)) return this.reject(req, res, 405, 'NotAllowed')
+    const { keys: raw, parent } = req.body ?? {}
+    if (typeof raw !== 'string' || (parent != null && typeof parent !== 'string')) return res.sendStatus(400)
+    const keys = keysLib.parseKeys(raw)
+    if (keys[hierarchy.nodeProperty] == null) return res.sendStatus(400)
+    if (edit.mode === 'draft') keys.IsActiveEntity = true // a node is moved as it is saved: the active one
+    const current = await tx.run(SELECT.one.from(entity.name).columns(capabilityColumns(edit, entity.name)).where(keys))
+    if (!current) return res.sendStatus(404)
+    if (!canEdit(edit, current)) return this.reject(req, res, 405, 'NotAllowed')
+    // `next` (a sibling's id, empty for the last place) also orders the node among its siblings: Move Up / Move Down and a drop between nodes
+    const next = req.body?.next
+    try {
+      req.hfReveal = new Set(typeof next === 'string'
+        ? await treeEdit.place(tx, entity.name, hierarchy, keys, parent || null, next || null)
+        : await treeEdit.moveNode(tx, entity.name, hierarchy, keys, parent || null))
+    } catch (err) {
+      if (err instanceof treeEdit.MoveError) return this.reject(req, res, ...treeEdit.MOVE_ERRORS[err.code])
+      throw err
+    }
+    this.listChanged(res)
+    return this.listReport(req, res, tx)
+  },
+
   /** One page of the List Report's rows, with the total: a flat table's (`$skip` + `limit`), or a tree table's top-level
-   *  nodes (with their expanded descendants when a filter or search is active, `data/tree.js`). */
-  async listRows(tx, entityType, lrLayout, { filters, search, query, skip = 0, limit }) {
+   *  nodes (with their expanded descendants when a filter or search is active, `data/tree.js`). `reveal`: node ids a tree opens. */
+  async listRows(tx, entityType, lrLayout, { filters, search, query, skip = 0, limit, reveal }) {
     if (lrLayout.table.hierarchy) {
       return filters.length || search
         ? treeLib.matching(tx, cds.model, entityType, lrLayout, { filters, search, query, skip, limit })
-        : treeLib.topLevel(tx, cds.model, entityType, lrLayout, { query, skip, limit })
+        : treeLib.topLevel(tx, cds.model, entityType, lrLayout, { query, skip, limit, reveal })
     }
     const { rows, count } = await queryLib.pageAndCount(tx, entityType,
       queryLib.listReportQuery(cds.model, entityType, entityType, lrLayout, { filters, search, query, skip, limit }),

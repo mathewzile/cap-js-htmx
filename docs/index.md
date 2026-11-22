@@ -40,6 +40,7 @@ Open the sample pages (the SQLite database is in memory):
 | [Deploying to BTP and Work Zone](DEPLOY_BTP.md) | entitlements, MTA build, HTML5 app, tile in Work Zone |
 | [Frontend deployment and extensibility](FRONTEND_DEPLOYMENT_AND_EXTENSIBILITY.md) | the design of the shell, the app sources and the extension points |
 | [Known deviations from Fiori elements](deviations.md) | what differs or is missing on purpose |
+| [Annotation parity with Fiori elements](FE_ANNOTATION_PARITY.md) | every term of the FE-supported vocabularies and whether the plugin builds it |
 | [Open items and roadmap](OPEN_ITEMS_AND_ROADMAP.md) | gaps and future work |
 
 ## Tests

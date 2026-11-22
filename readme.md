@@ -42,4 +42,4 @@ npm run test:e2e    # browser tests (Playwright), light and dark theme, includin
 
 ## Known deviations
 
-The pages follow Fiori elements V4. Share and Related Apps, the analytical list page and sticky sessions are not planned; tree tables are display-only; personalization is browser-local. The full list is in [docs/deviations.md](docs/deviations.md).
+The pages follow Fiori elements V4. Share and Related Apps, the analytical list page and sticky sessions are not planned; tree tables lack copying a node and the extension points; personalization is browser-local. The full list is in [docs/deviations.md](docs/deviations.md).

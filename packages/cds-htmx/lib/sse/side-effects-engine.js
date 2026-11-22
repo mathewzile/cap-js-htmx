@@ -187,9 +187,9 @@ async function onSourceEvent(srv, { entityType, eventName, data }) {
   const isDraftRoot = !!entity.drafts
   const sameKeys = view => keyNames.every(n => String(view.keys?.[n]) === String(keys[n]))
 
-  for (const client of [...channels.all()]) {
-    const view = client.view
-    if (!view || view.entityType !== entityType) continue
+  // every column of a Flexible Column Layout is a view of its own: each one showing this object (or this entity's List Report) is pushed to
+  const targetsOf = client => [...(client.views?.values() ?? (client.view ? [client.view] : []))].filter(view => view.entityType === entityType).map(view => ({ client, view }))
+  for (const { client, view } of [...channels.all()].flatMap(targetsOf)) {
     try {
       await srv.tx({ user: client.user, locale: client.locale }, async tx => {
         const store = cache.storeFor(cds.model, srv.name, odata, { appRoot: appRoot(), locale: client.locale, app: view.app })

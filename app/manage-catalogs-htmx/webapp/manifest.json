@@ -1,0 +1,165 @@
+{
+  "_version": "1.89.0",
+  "sap.app": {
+    "id": "managecatalogs.htmx",
+    "type": "application",
+    "i18n": "i18n/i18n.properties",
+    "applicationVersion": {
+      "version": "1.0.0"
+    },
+    "title": "{{appTitle}}",
+    "description": "{{appDescription}}",
+    "dataSources": {
+      "mainService": {
+        "uri": "/admin/",
+        "type": "OData",
+        "settings": {
+          "annotations": [],
+          "odataVersion": "4.0"
+        }
+      }
+    },
+    "crossNavigation": {
+      "inbounds": {
+        "Catalogs-manageHtmx": {
+          "semanticObject": "Catalogs",
+          "action": "manageHtmx",
+          "title": "{{tileTitle}}",
+          "signature": {
+            "parameters": {},
+            "additionalParameters": "allowed"
+          }
+        }
+      }
+    }
+  },
+  "sap.ui": {
+    "technology": "UI5",
+    "deviceTypes": {
+      "desktop": true,
+      "tablet": true,
+      "phone": true
+    }
+  },
+  "sap.ui5": {
+    "dependencies": {
+      "minUI5Version": "1.120.0",
+      "libs": {
+        "sap.ui.core": {},
+        "sap.f": {}
+      }
+    },
+    "contentDensities": {
+      "compact": true,
+      "cozy": true
+    },
+    "resourceRoots": {
+      "cds.htmx.shell": "./shell"
+    },
+    "services": {
+      "ShellUIService": {
+        "factoryName": "sap.ushell.ui5service.ShellUIService",
+        "lazy": false
+      }
+    },
+    "models": {
+      "i18n": {
+        "type": "sap.ui.model.resource.ResourceModel",
+        "settings": {
+          "bundleName": "managecatalogs.htmx.i18n.i18n"
+        }
+      }
+    },
+    "rootView": {
+      "viewName": "sap.fe.templates.RootContainer.view.NavContainer",
+      "type": "XML",
+      "async": true,
+      "id": "appRootView"
+    },
+    "routing": {
+      "config": {
+        "async": true
+      },
+      "routes": [
+        {
+          "pattern": ":?query:",
+          "name": "CatalogsList",
+          "target": "CatalogsList"
+        },
+        {
+          "pattern": "Catalogs({key}):?query:",
+          "name": "CatalogsObjectPage",
+          "target": "CatalogsObjectPage"
+        },
+        {
+          "pattern": "Catalogs({key})/topics({key2}):?query:",
+          "name": "TopicsObjectPage",
+          "target": "TopicsObjectPage"
+        }
+      ],
+      "targets": {
+        "CatalogsList": {
+          "type": "Component",
+          "id": "CatalogsList",
+          "name": "sap.fe.templates.ListReport",
+          "options": {
+            "settings": {
+              "contextPath": "/Catalogs",
+              "navigation": {
+                "Catalogs": {
+                  "detail": {
+                    "route": "CatalogsObjectPage"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "CatalogsObjectPage": {
+          "type": "Component",
+          "id": "CatalogsObjectPage",
+          "name": "sap.fe.templates.ObjectPage",
+          "options": {
+            "settings": {
+              "contextPath": "/Catalogs",
+              "navigation": {
+                "topics": {
+                  "detail": {
+                    "route": "TopicsObjectPage"
+                  }
+                }
+              },
+              "controlConfiguration": {
+                "topics/@com.sap.vocabularies.UI.v1.LineItem": {
+                  "tableSettings": {
+                    "type": "TreeTable",
+                    "hierarchyQualifier": "TopicsHierarchy",
+                    "initialExpansionLevel": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "TopicsObjectPage": {
+          "type": "Component",
+          "id": "TopicsObjectPage",
+          "name": "sap.fe.templates.ObjectPage",
+          "options": {
+            "settings": {
+              "contextPath": "/Catalogs/topics"
+            }
+          }
+        }
+      }
+    }
+  },
+  "sap.htmx": {
+    "service": "/htmx/admin",
+    "entry": "/htmx/admin/Catalogs"
+  },
+  "sap.cloud": {
+    "public": true,
+    "service": "cap.htmx"
+  }
+}

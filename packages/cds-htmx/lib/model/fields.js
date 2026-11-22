@@ -25,6 +25,10 @@ function buildField(store, entityType, path, { label, withUnit = true } = {}) {
     numeric: NUMERIC_TYPES.has(element?.type), // numbers are shown and edited right-aligned
     label: label ?? bag['@Common.Label'] ?? humanize(path),
     quickInfo: bag['@Common.QuickInfo'],
+    // `Common.SemanticObject`: the value is a link that offers the launchpad's targets for that object (a popover, `getLinks`)
+    // (through a navigation, `author/name`, it is the one of the property of the target entity)
+    semanticObject: semanticObjectOf(store, bag, element),
+    semanticLink: semanticLinkOf(store, bag, element),
     text: bag['@Common.Text'],
     textArrangement: bag['@Common.Text@UI.TextArrangement'] ?? bag['@UI.TextArrangement'],
     hidden: bag['@UI.Hidden'],
@@ -49,6 +53,33 @@ function buildField(store, entityType, path, { label, withUnit = true } = {}) {
       allowedValues: bag['@Validation.AllowedValues']
     }
   }
+}
+
+/** The `Common.SemanticObject` of a field: its own, or for a path through a navigation the one of the target entity's property. */
+function semanticObjectOf(store, bag, element) {
+  return semanticBagOf(store, bag, element)?.['@Common.SemanticObject']
+}
+
+/** The annotations of a `Common.SemanticObject` property (its own bag, or the target entity's property for a path through a navigation). */
+function semanticBagOf(store, bag, element) {
+  if (typeof bag['@Common.SemanticObject'] === 'string') return bag
+  const there = element?.parent?.name && element.name ? store.raw(`${element.parent.name}/${element.name}`) : undefined
+  return typeof there?.['@Common.SemanticObject'] === 'string' ? there : undefined
+}
+
+/** `Common.SemanticObjectMapping` (`{ localProperty: semanticObjectProperty }`, the name the target expects a property under) and
+ *  `Common.SemanticObjectUnavailableActions` (the actions of the semantic object that are not offered) of a semantic-object property. */
+function semanticLinkOf(store, bag, element) {
+  const own = semanticBagOf(store, bag, element)
+  if (!own) return undefined
+  const pathOf = value => typeof value === 'string' ? value : value?.$PropertyPath
+  const mapping = {}
+  for (const entry of Array.isArray(own['@Common.SemanticObjectMapping']) ? own['@Common.SemanticObjectMapping'] : []) {
+    const local = pathOf(entry?.LocalProperty)
+    if (local && typeof entry?.SemanticObjectProperty === 'string') mapping[local] = entry.SemanticObjectProperty
+  }
+  const unavailable = own['@Common.SemanticObjectUnavailableActions']
+  return { mapping, unavailableActions: Array.isArray(unavailable) ? unavailable.filter(a => typeof a === 'string') : [] }
 }
 
 /** Fallback label from the property name when no `Common.Label`/`DataField.Label` exists:

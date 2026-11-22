@@ -1,0 +1,9 @@
+ID,parent_ID,name,descr,rank
+30aaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa,,Fiction,Made-up stories,1
+31aaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa,30aaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa,Drama,Plays and stage works,1
+32aaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa,30aaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa,Mystery,Whodunits and thrillers,2
+33aaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa,32aaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa,Cozy Mystery,Small-town detectives,1
+34aaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa,,Non-Fiction,Factual works,2
+35aaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa,34aaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa,Biography,Lives of people,1
+36aaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa,34aaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa,Science,Natural world,2
+37aaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa,,Reference,Dictionaries and atlases,3

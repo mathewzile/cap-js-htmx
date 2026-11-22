@@ -35,7 +35,7 @@ test('buildObjectPage(Books): sections cover form/dataPoint/table/XML-added-face
 
   const general = op.sections[0]
   assert.equal(general.content.kind, 'form')
-  assert.deepEqual(general.content.fields.map(f => f.field.path), ['title', 'descr', 'author_ID', 'genre_ID'])
+  assert.deepEqual(general.content.fields.map(f => f.field.path), ['title', 'descr', 'author_ID', 'author/name', 'genre_ID'])
   assert.equal(general.content.fields[1].field.multiline, true) // descr @UI.MultiLineText
 
   const rating = op.sections[2]

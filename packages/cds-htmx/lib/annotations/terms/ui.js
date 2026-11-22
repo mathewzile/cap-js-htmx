@@ -15,7 +15,7 @@ module.exports = {
   Identification: 'supported',
   ConnectedFields: 'supported',
   DataPoint: 'supported',
-  Chart: 'partial',
+  Chart: 'partial', // an Object Page facet `nav/@UI.Chart`: Column, Bar (stacked), Line, Area, Pie, Donut as inline SVG; not on the List Report
   Hidden: 'supported',
   TextArrangement: 'supported',
   MultiLineText: 'supported',

@@ -26,7 +26,9 @@ module.exports = {
   IsCalendarMonth: 'supported',
   Masked: 'supported',
   Timezone: 'supported',
-  SemanticObject: 'partial',
+  SemanticObject: 'supported', // a link on the value; the popover lists the launchpad's targets (`getLinks`)
+  SemanticObjectMapping: 'supported', // the name the property is passed under to the target
+  SemanticObjectUnavailableActions: 'supported', // actions of the object the popover does not offer
   SAPObjectNodeType: 'partial',
   // CAP-auto-injected, EntityContainer-level addressing hint; no layout effect.
   AddressViaNavigationPath: 'ignored'

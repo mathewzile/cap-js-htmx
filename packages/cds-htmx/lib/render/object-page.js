@@ -1,8 +1,9 @@
 const { html, raw } = require('./html')
 const ids = require('./ids')
+const { chartSvg } = require('./chart')
 const { evaluate, paths: pathsOf } = require('../annotations/expressions')
 const { formField, fieldLabel, isIntentAction, intentButton } = require('./field')
-const { rowsHtml, tableHead, columnVisibilityStyle, rowHref, treeAttributes, sectionGrowing } = require('./table')
+const { rowsHtml, tableHead, columnVisibilityStyle, rowHref, treeAttributes, treeMoveButtons, treeExpandButtons, sectionGrowing } = require('./table')
 const { exportSplitButton } = require('./list-report')
 const { formatCount } = require('../data/format')
 const { criticalityClass } = require('../data/format')
@@ -117,9 +118,10 @@ function tableBlock(facet, ctx) {
   const mode = sectionMode(facet, ctx)
   const { editing, selectable } = mode
   // A tree table (display mode): its rows and the children of an expanded node are the hierarchy entity's own set
-  const tree = !mode.draft && child?.tree
+  // (the tree of a composition is read within the object, in edit mode as well: its rows are edited in place)
+  const tree = child?.tree && (child.tree.scoped || !mode.draft) ? child.tree : undefined
   const miniLayout = { entityType: facet.content.targetEntityType, navigable: facet.content.navigable, table: { columns: facet.content.columns, hierarchy: tree ? facet.content.hierarchy : undefined } }
-  const rowSetPath = tree ? tree.set : entitySetPath
+  const rowSetPath = tree && !tree.scoped ? tree.set : entitySetPath
   const keyNames = child?.keyNames || []
   const bundle = ctx.bundle
   const t = key => ctx.t(bundle, key)
@@ -131,22 +133,24 @@ function tableBlock(facet, ctx) {
   const edit = editing ? { nav, rowPath: row => rowHref(ctx.basePath, entitySetPath, keyNames, row) } : undefined
   return html`
     <div class="hf-table-toolbar hf-table-toolbar--section">
-      <h2 class="hf-section__title">${facet.label}${tree ? html`` : html`<span id="${sectionId}-count"> (${paged ? formatCount(child.count, ctx.locale) : rows.length})</span><span class="hf-count-sel" data-hf-sel-a=" (${t('Selected')}: " data-hf-sel-b=", ${t('Rows')}: " data-hf-selected-count></span>`}</h2>
+      <h2 class="hf-section__title">${facet.label}${tree && !tree.scoped ? html`` : tree ? html`<span id="${sectionId}-count"> (${formatCount(child.treeCount, ctx.locale)})</span><span class="hf-count-sel" data-hf-sel-a=" (${t('Selected')}: " data-hf-sel-b=", ${t('Rows')}: " data-hf-selected-count></span>` : html`<span id="${sectionId}-count"> (${paged ? formatCount(child.count, ctx.locale) : rows.length})</span><span class="hf-count-sel" data-hf-sel-a=" (${t('Selected')}: " data-hf-sel-b=", ${t('Rows')}: " data-hf-selected-count></span>`}</h2>
       <div class="hf-spacer"></div>
       <div class="hf-input-group hf-section-search">
         <input type="search" class="fd-input" data-hf-table-search placeholder="${t('Search')}" aria-label="${t('Search')}">
         <span class="hf-input-group__addon"><span class="hf-input-icon"><i class="sap-icon--search" aria-hidden="true"></i></span></span>
       </div>
       ${mode.draft ? html`
-        ${mode.creatable ? html`<button class="fd-button fd-button--transparent" hx-post="${ctx.basePath}/${ctx.entitySetPath}/${nav}"
+        ${mode.creatable ? html`<button class="fd-button fd-button--transparent" hx-post="${ctx.basePath}/${ctx.entitySetPath}/${nav}"${tree ? html` hx-include="#${sectionId} tbody .hf-checkbox:checked" data-hf-selection-scope="#${sectionId}" data-hf-selection-max="1"` : html``}
           hx-target="#app" hx-push-url="false" hx-swap="innerHTML show:window:top">${t('Create')}</button>` : html``}
         ${selectable ? html`<button class="fd-button fd-button--transparent" disabled data-hf-needs-selection="#${sectionId}" aria-label="${t('Delete')}"
           hx-post="${ctx.basePath}/${entitySetPath}/$delete" hx-include="#${sectionId}" hx-target="#app" hx-push-url="false" hx-swap="innerHTML show:window:top"
           hx-confirm="${t('ConfirmDeleteSelected')}" data-hf-confirm-one="${t('ConfirmDeleteOne')}" data-hf-confirm-count="#${sectionId} tbody .hf-checkbox:checked"
           data-hf-confirm-title="${t('Delete')}" data-hf-confirm-ok="${t('Delete')}" data-hf-confirm-cancel="${t('Cancel')}" data-hf-confirm-critical>${t('Delete')}</button>` : html``}` : html``}
+      ${tree && editing ? treeMoveButtons(facet.content.hierarchy, { scope: `#${sectionId}`, moveUrl: `${ctx.basePath}/${entitySetPath}/$move`, label: t }) : html``}
       <span class="hf-toolbar-separator"></span>
       <button type="button" class="fd-button fd-button--transparent hf-icon-button" disabled data-hf-action="copy" data-hf-needs-selection="#${sectionId}" aria-label="${t('Copy')}" title="${t('Copy')}"><i class="sap-icon--copy" aria-hidden="true"></i></button>
-      ${editing && mode.creatable ? html`<button type="button" class="fd-button fd-button--transparent hf-icon-button" data-hf-action="paste" data-hf-paste-url="${ctx.basePath}/${entitySetPath}/$paste" aria-label="${t('Paste')}" title="${t('Paste')}"><i class="sap-icon--paste" aria-hidden="true"></i></button>` : html``}
+      ${editing && mode.creatable && !tree ? html`<button type="button" class="fd-button fd-button--transparent hf-icon-button" data-hf-action="paste" data-hf-paste-url="${ctx.basePath}/${entitySetPath}/$paste" aria-label="${t('Paste')}" title="${t('Paste')}"><i class="sap-icon--paste" aria-hidden="true"></i></button>` : html``}
+      ${tree ? treeExpandButtons(t) : html``}
       <span class="hf-toolbar-separator"></span>
       <button type="button" class="fd-button fd-button--transparent hf-icon-button" data-hf-action="settings" aria-label="${t('ViewSettings')}" title="${t('ViewSettings')}"><i class="sap-icon--action-settings" aria-hidden="true"></i></button>
       <span class="hf-toolbar-separator"></span>
@@ -188,6 +192,8 @@ function facetContent(facet, row, ctx) {
       return formLayout([valueBlock(facet, row, id)])
     case 'table':
       return tableBlock(facet, ctx)
+    case 'chart':
+      return html`<div class="hf-chart-block" id="${id}">${chartSvg({ ...content.chart, emptyText: ctx.t?.(ctx.bundle, 'NoDataFound') }, ctx.children?.[facet.id]?.rows ?? [])}</div>`
     default:
       return html``
   }
@@ -215,7 +221,7 @@ function facetBlock(facet, row, ctx, { asSection, hidden = false } = {}) {
   return html`
     <section id="${ids.opSection(facet.id)}" class="hf-section">
       <div class="hf-section__header">
-        <h2 class="hf-section__title">${facet.label}</h2>${intents.length ? html`<div class="hf-section__actions">${intents.map(intentButton)}</div>` : html``}
+        <h2 class="hf-section__title">${facet.label}</h2>${intents.length ? html`<div class="hf-section__actions">${intents.map(col => intentButton(col, ctx))}</div>` : html``}
       </div>
       <div class="hf-section__card">${body}</div>
     </section>`
@@ -237,7 +243,7 @@ function anchorBar(sections) {
  *  back to List Report); in draft (edit) mode neither applies -- Save/Discard live in the floating
  *  footer instead (§3.4: "floating footer ... Save ... Discard Draft"). Actions are now active buttons
  *  that POST to $action/:name (Phase 5d). */
-function headerActions(actions, bundle, t, { basePath, entitySetPath, editMode, canEdit, canDelete, draftExists, isDraftRoot } = {}) {
+function headerActions(actions, bundle, t, { basePath, entitySetPath, editMode, canEdit, canDelete, draftExists } = {}) {
   const opPath = `${basePath}/${entitySetPath}`
   const display = !editMode
   return html`
@@ -305,6 +311,11 @@ function draftIndicator(row, { basePath, entitySetPath, bundle, t, editMode }) {
   const onDraft = editMode === 'draft'
   const switchable = onDraft ? row.HasActiveEntity === true : row.HasDraftEntity === true
   if (!onDraft && !switchable) return html``
+  // the draft is somebody else's: there is nothing to switch to, the header says who holds it
+  if (!onDraft && row._draftOwn === false) {
+    const who = row._lockedBy ? t(bundle, 'LockedByUser').replace('{0}', row._lockedBy) : t(bundle, 'LockedByAnotherUser')
+    return html`<span class="hf-op-title__draft"><span class="fd-object-status fd-object-status--informative hf-draft-label">${who}</span></span>`
+  }
   const label = t(bundle, onDraft ? 'Draft' : 'SavedVersion')
   if (!switchable) return html`<span class="hf-op-title__draft" title="${t(bundle, 'DraftSaved')}"><span class="fd-button fd-button--compact fd-button--transparent hf-draft-label">${label}</span></span>`
   const item = (text, current, path) => html`<li>
@@ -382,7 +393,7 @@ function objectPageFragment(layout, row, ctx) {
             basePath: ctx.basePath, entitySetPath: ctx.entitySetPath, editMode,
             // in columns the draft belongs to the first page: its sub-object page has no Edit; standalone, the sub-object page's own `$edit` edits the root and stays
             canEdit: node ? !ctx.fcl && !!ctx.rootEdit?.canEdit : !layout.edit || canEdit(layout.edit, row), canDelete: (!layout.edit || canDelete(layout.edit, row)) && !subPage,
-            draftExists: node ? !!ctx.rootEdit?.draftExists : row.HasDraftEntity === true, isDraftRoot: layout.edit?.mode === 'draft'
+            draftExists: node ? !!ctx.rootEdit?.draftExists : row.HasDraftEntity === true
           })}
           ${ctx.fcl ? fclRender.columnButtons(ctx.fcl.column, { t: ctx.t, bundle: ctx.bundle, closeHref: ctx.fcl.closeHref, editing: !!editMode }) : html``}
         </div>
@@ -534,7 +545,8 @@ function sectionRowsHtml(facet, rows, keyNames, ctx) {
   const nav = facet.content.nav
   const entitySetPath = `${ctx.entitySetPath}/${nav}`
   const { editing, selectable } = sectionMode(facet, ctx)
-  const miniLayout = { entityType: facet.content.targetEntityType, navigable: facet.content.navigable, table: { columns: facet.content.columns } }
+  // (`ctx.tree`: the rows are the nodes of a tree of a composition, opened below a node: their level and state come with them)
+  const miniLayout = { entityType: facet.content.targetEntityType, navigable: facet.content.navigable, table: { columns: facet.content.columns, hierarchy: ctx.tree ? facet.content.hierarchy : undefined } }
   const edit = editing ? { nav, rowPath: row => rowHref(ctx.basePath, entitySetPath, keyNames, row) } : undefined
   return rowsHtml(miniLayout, rows, { basePath: ctx.basePath, entitySetPath, keyNames, bundle: ctx.bundle, t: ctx.t, selectable, edit, locale: ctx.locale })
 }

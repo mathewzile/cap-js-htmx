@@ -4,6 +4,7 @@ const { resolveElement, backlinkElement } = require('../annotations/edm')
 const keysLib = require('../keys')
 const queryLib = require('../data/query')
 const draftLib = require('../data/draft')
+const { tableFacets } = require('../data/page')
 const actionsLib = require('../data/actions')
 const draftMessages = require('../data/draft-messages')
 const { canCreate, canEdit, canDelete, capabilityColumns } = require('../model/edit-capabilities')
@@ -32,7 +33,12 @@ module.exports = {
     if (!entity) return res.sendStatus(404)
     const edit = this.editOf(req, entity.name)
     if (edit.mode !== 'draft' || !canCreate(edit)) return this.reject(req, res, 405, 'NotAllowed')
-    const pk = await draftLib.create(tx, entity.name, {})
+    // A tree table's Create with one node selected makes the new node its child, as in Fiori elements (`parent@odata.bind` of the
+    // selected row); nothing selected makes a node of the top level. The page sends the selected row's key as `keys`.
+    const hierarchy = cache.listReportFor(cds.model, this.service.name, this.odataServicePath(), entity.name, `/${req.params.Set}`, this.appOpts(req)).table.hierarchy
+    const selected = [].concat(req.body?.keys ?? [])
+    const parent = hierarchy && selected.length === 1 && typeof selected[0] === 'string' ? keysLib.parseKeys(selected[0])[hierarchy.nodeProperty] : undefined
+    const pk = await draftLib.create(tx, entity.name, parent == null ? {} : { [hierarchy.parentKey]: parent })
     const keys = { ...pk, IsActiveEntity: false }
     const raw = keysLib.formatKeys(keys)
     res.set('HX-Push-Url', `${this.basePath(req)}/${req.params.Set}(${raw})`)
@@ -57,6 +63,14 @@ module.exports = {
     const { IsActiveEntity: _active, ...plainParent } = parentKeys
     const assoc = backlinkElement(cds.model, element.target, parent.name)
     const defaults = assoc ? Object.fromEntries(Object.entries(plainParent).map(([k, v]) => [`${assoc}_${k}`, v])) : {}
+    // a tree table of the object: Create with one node selected makes the new node its child (FE: `parent@odata.bind`)
+    const selected = [].concat(req.body?.keys ?? [])
+    if (selected.length === 1 && typeof selected[0] === 'string') {
+      const layout = cache.objectPageFor(cds.model, this.service.name, this.odataServicePath(), parent.name, `/${set}`, this.appOpts(req))
+      const hierarchy = tableFacets(layout).find(f => f.content.nav === nav)?.content.hierarchy
+      const parentNode = hierarchy ? keysLib.parseKeys(selected[0])[hierarchy.nodeProperty] : undefined
+      if (parentNode != null) defaults[hierarchy.parentKey] = parentNode
+    }
     const childKeys = await draftLib.createChild(tx, parent.name, parentKeys, nav, defaults)
     const childRaw = keysLib.formatKeys(childKeys)
     res.set('HX-Push-Url', `${this.basePath(req)}/${set}(${parentRaw})/${nav}(${childRaw})`)
@@ -241,6 +255,7 @@ module.exports = {
   /** Deletes an object: a draft is discarded, anything else is DELETEd (through the service, so restrictions and handlers apply). */
   async removeObject(tx, entity, edit, keys) {
     if (edit.mode === 'draft' && keys.IsActiveEntity === false) return draftLib.discard(tx, entity.name, keys)
-    return tx.run(DELETE.from(entity.name).where(keys))
+    // (the keys in the path of `from`, as an OData DELETE has them: CAP's handler of a tree root reads them from there)
+    return tx.run(DELETE.from(entity.name, keys))
   }
 }

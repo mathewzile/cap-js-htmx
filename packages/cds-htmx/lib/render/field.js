@@ -96,8 +96,33 @@ function amountWithUnit(field, row, { basePath, entitySetPath, valueLists, input
  *  FieldGroup there) that asks the shell to navigate to the intent. The page script (`htmx-fiori.js`) handles the click; without a
  *  launchpad (an adapter with no `navigate`) it shows an error instead. */
 const isIntentAction = col => col.kind === 'UI.DataFieldForIntentBasedNavigation'
-function intentButton(col) {
-  return html`<button type="button" class="fd-button fd-button--transparent hf-intent" data-hf-intent-object="${col.semanticObject}" data-hf-intent-action="${col.action}">${col.label ?? `${col.semanticObject}-${col.action}`}</button>`
+/** The attributes the page script reads to navigate: the intent and where the click gets the parameters for the target (`path` is the
+ *  object the context comes from, a path with its keys: the page's own, or the row of a table). */
+function intentAttrs(col, { basePath, entitySetPath } = {}) {
+  // (a toolbar button of a table has no path yet: the click adds the selected row's)
+  const query = { so: col.semanticObject, action: col.action }
+  const context = basePath != null ? `${basePath}/$intent?${new URLSearchParams(entitySetPath ? { path: entitySetPath, ...query } : query)}` : ''
+  return raw(`data-hf-intent-object="${escapeAttr(col.semanticObject)}" data-hf-intent-action="${escapeAttr(col.action)}" data-hf-intent-context="${escapeAttr(context)}"`)
+}
+const escapeAttr = value => String(value ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
+
+/** A property with `Common.SemanticObject`: its value is a link that opens a popover of the targets the launchpad has for that object
+ *  (`getLinks`), the value passed as the parameter named like the property. The page script (`htmx-fiori.js`) does the rest. */
+const semanticLink = (field, text) => {
+  const name = String(field.path).split('/').pop()
+  const { mapping = {}, unavailableActions = [] } = field.semanticLink ?? {}
+  // `Common.SemanticObjectMapping` renames the property for the target; `SemanticObjectUnavailableActions` are not offered
+  return html`<a href="#" class="fd-link hf-semantic-link" data-hf-semantic-object="${field.semanticObject}" data-hf-semantic-param="${mapping[name] ?? mapping[field.path] ?? name}" data-hf-semantic-value="${text}"${unavailableActions.length ? html` data-hf-semantic-unavailable="${unavailableActions.join(' ')}"` : html``}>${text}</a>`
+}
+
+function intentButton(col, ctx = {}) {
+  return html`<button type="button" class="fd-button fd-button--transparent hf-intent" ${intentAttrs(col, ctx)}>${col.label ?? `${col.semanticObject}-${col.action}`}</button>`
+}
+
+/** A `DataFieldWithIntentBasedNavigation`: the value is a link to the intent (FE shows it as a link in a form and in a table cell). */
+const isIntentLink = col => col.kind === 'UI.DataFieldWithIntentBasedNavigation' && !!col.semanticObject
+function intentLink(col, text, ctx = {}) {
+  return html`<a href="#" class="fd-link hf-intent-link" ${intentAttrs(col, ctx)}>${text}</a>`
 }
 
 /** One label/value pair in an Object Page form section (§3.4: "label above value (Horizon),
@@ -133,11 +158,12 @@ function formField(col, row, { facetId, isDraft, editMode, basePath, entitySetPa
   }
   const text = fieldText(field, row)
   const display = text === '' ? '–' : text
+  const shown = isIntentLink(col) && text !== '' ? intentLink(col, text, { basePath, entitySetPath }) : field.semanticObject && text !== '' && !editing ? semanticLink(field, text) : display
   return html`
     <div class="fd-form-item hf-field${field.multiline ? ' hf-field--multiline' : ''}" id="${id}">
       ${fieldLabel(field.label)}
-      <span class="hf-field__value">${display}</span>
+      <span class="hf-field__value">${shown}</span>
     </div>`
 }
 
-module.exports = { fieldText, fieldLabel, formField, isIntentAction, intentButton, isMandatory, isReadOnly }
+module.exports = { fieldText, fieldLabel, formField, isIntentAction, isIntentLink, semanticLink, intentButton, intentLink, intentAttrs, isMandatory, isReadOnly }

@@ -177,7 +177,7 @@ authorisation, handlers and validations of the service apply exactly as for ODat
 lines rather than `[odata]`.
 
 Routes (`lib/HtmxAdapter.js`): `/:Set` (List Report or Object Page), `/:Set/$table`, `$children` (tree), `$export`,
-`$delete`, `$edit`, `$save`, `$discard`, `$effects`, `$field/:path`, `$vh/:path` (value help), `$action/:name`,
+`$delete`, `$move` (tree: Cut / Paste, drag and drop, Move Up / Down), `$intent` and `$startup` (intent-based navigation), `$edit`, `$save`, `$discard`, `$effects`, `$field/:path`, `$vh/:path` (value help), `$action/:name`,
 `/:Set/:nav` (create in a section), and the catch-all sub-object page, nested `PATCH` and `POST`. `GET $shell`, `$events`
 (SSE) and `$playground` are the service-level routes. Writes need the `HX-Request` header plus the CSRF token, so a form or
 image on another site cannot trigger them.
@@ -233,8 +233,9 @@ launchpad the theme and animation mode come from UI5.
 
 | Module | Routes |
 |---|---|
-| `routes/list.js` | List Report page, table rows (`$table`), tree children, CSV export |
+| `routes/list.js` | List Report page, table rows (`$table`), tree children and `$move`, CSV export |
 | `routes/object.js` | Object Page, sub-object page, table sections (`$table`, `$export` of a section) |
-| `routes/draft.js` | create, edit, save, discard, delete, bound actions |
+| `routes/draft.js` | create (a tree's Create below the selected node), edit, save, discard, delete, bound actions |
+| `routes/intent.js` | intent-based navigation: the parameters a click passes (`$intent`) and where a started app opens (`$startup`) |
 | `routes/fields.js` | field and cell PATCH, rows of a section (create, paste, delete), side effects flush, value help |
 | `routes/playground.js` | the development SSE playground |

@@ -1,0 +1,12 @@
+{
+  "sap.app": {
+    "id": "fixture.chartop",
+    "type": "application",
+    "applicationVersion": { "version": "1.0.0" },
+    "dataSources": {
+      "mainService": { "uri": "/admin/", "type": "OData", "settings": { "annotations": ["annotation"], "odataVersion": "4.0" } },
+      "annotation": { "type": "ODataAnnotation", "uri": "annotations/annotation.xml", "settings": { "localUri": "annotations/annotation.xml" } }
+    }
+  },
+  "sap.ui5": {}
+}

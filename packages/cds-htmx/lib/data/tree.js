@@ -18,17 +18,28 @@ const val = value => ({ val: value })
 const LIMIT = 1000
 const MAX_DEPTH = 50
 
-const topWhere = (hierarchy, rootParent) => rootParent == null ? [ref(hierarchy.parentKey), 'is', 'null'] : [ref(hierarchy.parentKey), '=', val(rootParent)]
+/** As in Fiori elements (observed), a tree lists the active nodes only: a draft (a new node, or a changed one) is not a row of it.
+ *  `where` gets `IsActiveEntity = true` for a draft-enabled entity. */
+const activeOnly = (entityType, where) => entityDef(cds.model, entityType)?.elements?.IsActiveEntity ? [...where, 'and', ref('IsActiveEntity'), '=', val(true)] : where
+
+/** A tree below an object (the Object Page table of a composition: the nodes of one catalog) is read within `layout.table.scope`, the
+ *  parent's filter (`parentFilter`: its foreign key and, in a draft, `IsActiveEntity = false` -- the nodes of the draft, as FE reads them).
+ *  Without a scope the tree is the whole entity set and lists its active nodes. */
+const within = (entityType, scope, where) => scope?.length ? [...where, 'and', ...scope] : activeOnly(entityType, where)
+
+const topWhere = (hierarchy, rootParent, entityType, scope) => within(entityType, scope, rootParent == null ? [ref(hierarchy.parentKey), 'is', 'null'] : [ref(hierarchy.parentKey), '=', val(rootParent)])
 
 /** The ids among `ids` that have at least one child. */
-async function withChildren(tx, entityType, hierarchy, ids) {
+async function withChildren(tx, entityType, hierarchy, ids, scope) {
   if (!ids.length) return new Set()
-  const rows = await tx.run(SELECT.from(entityType).columns(hierarchy.parentKey).where({ [hierarchy.parentKey]: { in: ids } }).groupBy(hierarchy.parentKey))
+  const q = SELECT.from(entityType).columns(hierarchy.parentKey).where(within(entityType, scope, [ref(hierarchy.parentKey), 'in', { list: ids.map(val) }]))
+  // (a draft-enabled entity does not take `$groupby`: its rows are read as they are and the parents collected here)
+  const rows = await tx.run(entityDef(cds.model, entityType)?.elements?.IsActiveEntity ? q : q.groupBy(hierarchy.parentKey))
   return new Set(rows.map(r => r[hierarchy.parentKey]))
 }
 
-async function markStates(tx, entityType, hierarchy, rows, level) {
-  const parents = await withChildren(tx, entityType, hierarchy, rows.map(r => r[hierarchy.nodeProperty]))
+async function markStates(tx, entityType, hierarchy, rows, level, scope) {
+  const parents = await withChildren(tx, entityType, hierarchy, rows.map(r => r[hierarchy.nodeProperty]), scope)
   for (const row of rows) {
     row._level = level
     row._state = parents.has(row[hierarchy.nodeProperty]) ? 'collapsed' : 'leaf'
@@ -38,35 +49,39 @@ async function markStates(tx, entityType, hierarchy, rows, level) {
 
 /** The top level, one page of it: `{ rows, hasMore, count }`. `rootParent` is the id of the object page row whose children
  *  form the table (the list report's top level has none). */
-async function topLevel(tx, model, entityType, layout, { query, rootParent, skip = 0, limit }) {
+async function topLevel(tx, model, entityType, layout, { query, rootParent, skip = 0, limit, reveal }) {
   const hierarchy = layout.table.hierarchy
-  const where = topWhere(hierarchy, rootParent)
+  const scope = layout.table.scope
+  const where = topWhere(hierarchy, rootParent, entityType, scope)
   const [found, counted] = await Promise.all([
     tx.run(queryLib.listReportQuery(model, entityType, entityType, layout, { filters: where, query, skip, limit })),
     tx.run(queryLib.listReportCountQuery(entityType, { filters: where }))
   ])
   const hasMore = found.length > limit
-  const tops = await markStates(tx, entityType, hierarchy, hasMore ? found.slice(0, limit) : found, 0)
-  const rows = await expandInitially(tx, model, entityType, layout, tops, query)
+  const tops = await markStates(tx, entityType, hierarchy, hasMore ? found.slice(0, limit) : found, 0, scope)
+  const rows = await expandInitially(tx, model, entityType, layout, tops, query, reveal)
   return { rows, hasMore, count: queryLib.countOf(counted) }
 }
 
 /** `initialExpansionLevel`: the nodes above that level come open, their children read now and listed below them (the client
- *  finds them loaded, like the result of a filter). At most LIMIT rows are read this way. */
-async function expandInitially(tx, model, entityType, layout, tops, query) {
+ *  finds them loaded, like the result of a filter). `reveal` (a Set of node ids) opens those nodes as well, whatever their level:
+ *  after a node was moved, the path to it is open so it shows where it went. At most LIMIT rows are read this way. */
+async function expandInitially(tx, model, entityType, layout, tops, query, reveal) {
   const hierarchy = layout.table.hierarchy
+  const scope = layout.table.scope
   const { nodeProperty, parentKey } = hierarchy
   const levels = hierarchy.initialExpansionLevel
-  if (!levels) return tops
+  const opens = row => row._level < levels || !!reveal?.has(String(row[nodeProperty]))
+  if (!levels && !reveal?.size) return tops
   // One read per level (the children of all its collapsed nodes together) instead of one per node
   const childrenByNode = new Map()
   let frontier = tops
   let read = tops.length
-  for (let level = 0; level < levels && read < LIMIT; level++) {
-    const open = frontier.filter(row => row._state === 'collapsed')
+  for (let level = 0; level < MAX_DEPTH && read < LIMIT; level++) {
+    const open = frontier.filter(row => row._state === 'collapsed' && opens(row))
     if (!open.length) break
-    const found = await tx.run(queryLib.listReportQuery(model, entityType, entityType, layout, { filters: [ref(parentKey), 'in', { list: open.map(row => val(row[nodeProperty])) }], query, limit: LIMIT }))
-    frontier = await markStates(tx, entityType, hierarchy, found.slice(0, LIMIT), level + 1)
+    const found = await tx.run(queryLib.listReportQuery(model, entityType, entityType, layout, { filters: within(entityType, scope, [ref(parentKey), 'in', { list: open.map(row => val(row[nodeProperty])) }]), query, limit: LIMIT }))
+    frontier = await markStates(tx, entityType, hierarchy, found.slice(0, LIMIT), level + 1, scope)
     for (const row of frontier) childrenByNode.set(row[parentKey], [...(childrenByNode.get(row[parentKey]) ?? []), row])
     read += frontier.length
   }
@@ -74,7 +89,7 @@ async function expandInitially(tx, model, entityType, layout, tops, query) {
   const walk = row => {
     rows.push(row)
     const children = childrenByNode.get(row[nodeProperty])
-    if (row._level >= levels || row._state !== 'collapsed' || rows.length >= LIMIT || !children) return
+    if (!opens(row) || row._state !== 'collapsed' || rows.length >= LIMIT || !children) return
     row._state = 'expanded'
     row._loaded = true
     for (const child of children) walk(child)
@@ -87,17 +102,18 @@ async function expandInitially(tx, model, entityType, layout, tops, query) {
  *  how many the table already has. */
 async function childrenOf(tx, model, entityType, layout, { node, level, query, skip = 0, limit = LIMIT }) {
   const hierarchy = layout.table.hierarchy
-  const found = await tx.run(queryLib.listReportQuery(model, entityType, entityType, layout, { filters: [ref(hierarchy.parentKey), '=', val(node)], query, skip, limit }))
+  const found = await tx.run(queryLib.listReportQuery(model, entityType, entityType, layout, { filters: within(entityType, layout.table.scope, [ref(hierarchy.parentKey), '=', val(node)]), query, skip, limit }))
   const hasMore = found.length > limit
-  return { rows: await markStates(tx, entityType, hierarchy, found.slice(0, limit), level), hasMore }
+  return { rows: await markStates(tx, entityType, hierarchy, found.slice(0, limit), level, layout.table.scope), hasMore }
 }
 
 /** What a filter or search leaves of the tree: the matching nodes with their ancestors, expanded down to the matches.
  *  Pages over the top-level nodes of that result like the unfiltered table does. */
 async function matching(tx, model, entityType, layout, { filters, search, query, skip = 0, limit }) {
   const hierarchy = layout.table.hierarchy
+  const scope = layout.table.scope
   const { nodeProperty, parentKey } = hierarchy
-  const found = (await tx.run(queryLib.listReportQuery(model, entityType, entityType, layout, { filters, search, query, limit: LIMIT }))).slice(0, LIMIT)
+  const found = (await tx.run(queryLib.listReportQuery(model, entityType, entityType, layout, { filters: scope?.length ? [...filters, ...(filters.length ? ['and'] : []), ...scope] : filters, search, query, limit: LIMIT }))).filter(row => scope?.length || row.IsActiveEntity !== false).slice(0, LIMIT)
   const byId = new Map(found.map(row => [row[nodeProperty], row]))
   const order = [...found]
   const missingParents = rows => [...new Set(rows.map(r => r[parentKey]).filter(id => id != null && !byId.has(id)))]
@@ -105,7 +121,7 @@ async function matching(tx, model, entityType, layout, { filters, search, query,
   // the ancestors that lead to the matches, level by level
   const columns = queryLib.selectColumns(model, entityType, layout)
   for (let missing = missingParents(found), depth = 0; missing.length && depth < MAX_DEPTH; depth++) {
-    const ancestors = await tx.run(SELECT.from(entityType).columns(columns).where({ [nodeProperty]: { in: missing } }))
+    const ancestors = await tx.run(SELECT.from(entityType).columns(columns).where(within(entityType, scope, [ref(nodeProperty), 'in', { list: missing.map(val) }])))
     for (const row of ancestors) { byId.set(row[nodeProperty], row); order.push(row) }
     missing = missingParents(ancestors)
   }
@@ -117,7 +133,7 @@ async function matching(tx, model, entityType, layout, { filters, search, query,
     if (parent != null && byId.has(parent)) children.set(parent, [...(children.get(parent) ?? []), row])
     else tops.push(row)
   }
-  const dbParents = await withChildren(tx, entityType, hierarchy, order.map(r => r[nodeProperty]))
+  const dbParents = await withChildren(tx, entityType, hierarchy, order.map(r => r[nodeProperty]), scope)
 
   const page = tops.slice(skip, skip + limit)
   const rows = []

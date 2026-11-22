@@ -16,6 +16,8 @@ const { loadObjectPage } = require('../data/page')
 const csvLib = require('../data/csv')
 const { EXPORT_LIMIT } = require('./support')
 const { canEdit, capabilityColumns } = require('../model/edit-capabilities')
+const queryLib = require('../data/query')
+const treeLib = require('../data/tree')
 
 /** Object Page routes: the page of an object, of a sub-object and of a table section.
  *  Mixed into `HtmxAdapter` (`Object.assign(HtmxAdapter.prototype, ...)`), so `this` is the adapter. */
@@ -41,22 +43,30 @@ module.exports = {
   async subObjectPage(req, res, tx) {
     const full = (req.params.splat || []).join('/')
     if (/\/\$table$/.test(full)) return this.sectionTable(req, res, tx, full.slice(0, -'/$table'.length))
+    if (/\/\$children$/.test(full)) return this.sectionTreeChildren(req, res, tx, full.slice(0, -'/$children'.length))
     if (/\/\$export$/.test(full)) return this.sectionTable(req, res, tx, full.slice(0, -'/$export'.length), { csv: true })
     const segments = keysLib.splitSegments(full)
     if (segments.length < 2) return res.sendStatus(404)
-    const top = this.entitySet(segments[0].set)
-    if (!top || segments[0].raw == null) return res.sendStatus(404)
+    const target = this.resolveObject(segments)
+    if (!target) return res.sendStatus(404)
+    return this.objectPage(req, res, tx, target)
+  },
+
+  /** The object an Object Page path points at: `Books(..)` or a nested `Books(..)/chapters(..)`, as `{ entityType, keys, segments,
+   *  contextPath }` for `objectPage`, or `undefined` when the set is unknown, a segment is no navigation or the last one has no keys. */
+  resolveObject(segments) {
+    const top = this.entitySet(segments[0]?.set)
+    if (!top || segments[0].raw == null) return undefined
     let entityType = top.name
     for (let i = 1; i < segments.length; i++) {
       const element = resolveElement(cds.model, entityType, segments[i].set)
-      if (!element?.target) return res.sendStatus(404)
+      if (!element?.target) return undefined
       entityType = element.target
     }
     const last = segments[segments.length - 1]
-    if (last.raw == null) return res.sendStatus(404)
-    const keys = keysLib.parseKeys(last.raw)
-    const contextPath = `/${segments[0].set}/${segments.slice(1).map(s => s.set).join('/')}`
-    return this.objectPage(req, res, tx, { entityType, keys, segments, contextPath })
+    if (last.raw == null) return undefined
+    const contextPath = segments.length > 1 ? `/${segments[0].set}/${segments.slice(1).map(s => s.set).join('/')}` : `/${segments[0].set}`
+    return { entityType, keys: keysLib.parseKeys(last.raw), segments, contextPath }
   },
 
   /** `GET <object>/<nav>/$table`: rows of a table section of an Object Page, the way `$table` serves the List Report's: the next
@@ -98,6 +108,31 @@ module.exports = {
     const rows = objectPageRender.sectionRowsHtml(facet, page.rows, keyNames, { basePath: base, entitySetPath, bundle, t: i18n.t, isDraft: parentKeys.IsActiveEntity === false })
     const growing = objectPageRender.sectionGrowing(sectionId, tableUrl, { skip: skip + page.rows.length, hasMore: page.hasMore, count: page.count, bundle, t: i18n.t, query, locale: cds.context.locale })
     res.set('Content-Type', 'text/html').send(String(html`${rows}<hx-partial hx-target="#${sectionId}-count" hx-swap="innerHTML"> (${formatCount(page.count, cds.context.locale)})</hx-partial><hx-partial hx-target="#${sectionId}-growing" hx-swap="outerHTML">${growing}</hx-partial>`))
+  },
+
+  /** `GET <object>/<nav>/$children?node=<id>&level=<n>`: the rows below an opened node of a tree table of an Object Page (a tree of
+   *  a composition: the nodes of this object, its draft while it is edited), inserted below the node's row. */
+  async sectionTreeChildren(req, res, tx, path) {
+    const segments = keysLib.splitSegments(path)
+    const node = req.query.node
+    if (segments.length < 2 || segments[0].raw == null || typeof node !== 'string' || !node) return res.sendStatus(404)
+    const nav = segments[segments.length - 1]
+    const parents = segments.slice(0, -1)
+    if (nav.raw != null || parents.some(s => s.raw == null)) return res.sendStatus(404)
+    const target = this.resolveObject(parents)
+    if (!target) return res.sendStatus(404)
+    const opts = this.appOpts(req)
+    const layout = cache.objectPageFor(cds.model, this.service.name, this.odataServicePath(), target.entityType, target.contextPath, opts)
+    const facet = tableFacets(layout).find(f => f.content.nav === nav.set)
+    const { hierarchy, targetEntityType } = facet?.content ?? {}
+    if (!treeLib.isUsable(cds.model, targetEntityType, hierarchy)) return res.sendStatus(404)
+    const scope = queryLib.parentFilter(cds.model, target.entityType, target.keys, targetEntityType)
+    const treeLayout = { table: { columns: facet.content.columns, hierarchy, scope, sortOrder: facet.content.sortOrder }, filterBar: { fields: [] } }
+    const level = Math.min(Math.max(Number(req.query.level) || 1, 1), 100)
+    const { rows } = await treeLib.childrenOf(tx, cds.model, targetEntityType, treeLayout, { node, level, query: req.query, limit: treeLib.LIMIT })
+    const keyNames = keyElements(entityDef(cds.model, targetEntityType)).map(k => k.name)
+    const entitySetPath = parents.map(s => `${s.set}(${s.raw})`).join('/')
+    res.set('Content-Type', 'text/html').send(String(objectPageRender.sectionRowsHtml(facet, rows, keyNames, { basePath: this.basePath(req), entitySetPath, bundle: cache.bundleFor(opts), t: i18n.t, isDraft: target.keys.IsActiveEntity === false, tree: true, locale: cds.context.locale })))
   },
 
   /** `GET <object>/<nav>/$export`: the whole table of a section (with its search and sort, the visible columns `cols`) as CSV. */

@@ -29,6 +29,14 @@ function parseNavigationLineItem(target) {
   return m ? { nav: m[1], qualifier: m[2] } : undefined
 }
 
+/** A `nav/@UI.Chart[#qualifier]` facet target: the chart is drawn from the rows of that navigation. */
+function parseNavigationChart(target) {
+  const m = typeof target === 'string' && /^(.+)\/@(?:UI|com\.sap\.vocabularies\.UI\.v1)\.Chart(?:#(.+))?$/.exec(target)
+  return m ? { nav: m[1], qualifier: m[2] } : undefined
+}
+
+const propertyPath = ref => typeof ref === 'string' ? ref : ref?.$PropertyPath
+
 /** What a table section may do with its rows, from the annotations FE reads: the target entity's own restrictions (`@readonly`,
  *  `Capabilities.Insert/Update/DeleteRestrictions`) and the parent's `Capabilities.NavigationRestrictions` for this navigation. A
  *  restriction that is a per-row expression is not one that switches the table off. */
@@ -78,6 +86,23 @@ function buildFacet(model, store, entityType, facet, pageSettings) {
     const presentationVariant = targetBag['@UI.PresentationVariant'] || targetBag['@UI.SelectionPresentationVariant']?.PresentationVariant
     const growingThreshold = Number(presentationVariant?.MaxItems) || tableSettings.growingThreshold || feDefaults.objectPage.table.growingThreshold
     return { ...base, kind: 'ReferenceFacet', content: { kind: 'table', nav, targetEntityType, columns, composition: element?.type === 'cds.Composition', hierarchy, navigable, growingThreshold, sortOrder: presentationVariant?.SortOrder, capabilities: sectionCapabilities(store, entityType, nav, targetEntityType) } }
+  }
+
+  const chartRef = parseNavigationChart(facet.Target)
+  if (chartRef) {
+    const element = resolveElement(model, entityType, chartRef.nav)
+    const targetEntityType = element?.target
+    const chart = targetEntityType ? store.get(targetEntityType, 'UI.Chart', chartRef.qualifier) : undefined
+    if (chart) {
+      // the data the chart draws is read like a table section's rows: the dimensions and measures are its columns
+      const paths = [...(chart.Dimensions || []), ...(chart.Measures || [])].map(propertyPath).filter(Boolean)
+      const columns = paths.map(path => buildColumn(store, targetEntityType, { $Type: 'UI.DataField', Value: { $Path: path } }))
+      const described = list => (list || []).map(propertyPath).filter(Boolean).map(path => ({ path, label: columns.find(c => c.field?.path === path)?.label ?? path }))
+      return { ...base, kind: 'ReferenceFacet', content: {
+        kind: 'chart', nav: chartRef.nav, targetEntityType, columns, growingThreshold: 100,
+        chart: { type: chart.ChartType, title: chart.Title, description: chart.Description, dimensions: described(chart.Dimensions), measures: described(chart.Measures) }
+      } }
+    }
   }
 
   const ref = parseAnnotationPathTarget(facet.Target)

@@ -39,7 +39,8 @@
   "sapux": [
     "app/manage-books",
     "app/browse-genres",
-    "app/manage-authors"
+    "app/manage-authors",
+    "app/manage-categories"
   ],
   "cds": {
     "requires": {

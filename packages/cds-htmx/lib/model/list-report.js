@@ -36,8 +36,13 @@ function buildColumn(store, entityType, record) {
       return { ...common, target: record.Target }
     case 'UI.DataFieldWithIntentBasedNavigation':
     case 'UI.DataFieldForIntentBasedNavigation':
-      // the click asks the shell to navigate through the launchpad's Navigation service; without a launchpad it reports that it cannot
-      return { ...common, field: valueField(store, entityType, record, common.label), semanticObject: record.SemanticObject, action: record.Action }
+      // the click asks the shell to navigate through the launchpad's Navigation service; without a launchpad it reports that it cannot.
+      // `mapping` (local property -> the parameter name the target expects), `requiredProperties` (always passed) and `requiresContext`
+      // are the record's own; they decide which parameters the click sends (lib/data/intent.js)
+      return {
+        ...common, field: valueField(store, entityType, record, common.label), semanticObject: record.SemanticObject, action: record.Action,
+        mapping: record.Mapping, requiredProperties: record.RequiredProperties, requiresContext: record.RequiresContext
+      }
     default: // UI.DataField
       return { ...common, field: valueField(store, entityType, record, common.label) }
   }
@@ -163,4 +168,4 @@ function buildListReport(store, entityType, { pageSettings } = {}) {
   }
 }
 
-module.exports = { buildListReport, buildColumn, buildFilterBar }
+module.exports = { buildListReport, buildColumn, buildFilterBar, TECHNICAL }

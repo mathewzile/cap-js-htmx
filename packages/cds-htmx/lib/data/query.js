@@ -12,26 +12,37 @@ function isDraftRoot(entity) {
   return !!entity?.drafts
 }
 
+/** The columns that say who holds a draft: the user id and, when the compiler added it (`draftUserDescription`), the name that
+ *  `InProcessByUserDescription` carries. FE shows the name when there is one and the id otherwise. */
+const lockColumns = () => cds.model.definitions['DRAFT.DraftAdministrativeData']?.elements?.InProcessByUserDescription ? ['InProcessByUser', 'InProcessByUserDescription'] : ['InProcessByUser']
+const holderOf = admin => admin?.InProcessByUserDescription || admin?.InProcessByUser || null
+
 /** Who is editing the draft of one object (`DraftAdministrativeData.InProcessByUser`). The service does not
  *  support the path inside a column list ("Navigation ... in expand is not supported"), so the draft's
  *  administrative record is read by its UUID. Null when there is no such draft. */
 async function draftLockUser(tx, entityType, where) {
   try {
-    const draft = await tx.run(SELECT.one.from(entityType).columns('DraftAdministrativeData_DraftUUID as uuid').where(where))
+    // the draft of another user is not readable through the service (it answers nothing), so its table is read directly
+    const { IsActiveEntity: _active, ...plain } = where
+    const drafts = cds.model.definitions[entityType]?.drafts
+    const draft = drafts
+      ? await cds.db.run(SELECT.one.from(drafts).columns('DraftAdministrativeData_DraftUUID as uuid').where(plain))
+      : await tx.run(SELECT.one.from(entityType).columns('DraftAdministrativeData_DraftUUID as uuid').where(where))
     if (!draft?.uuid) return null
-    const admin = await cds.db.run(SELECT.one.from('DRAFT.DraftAdministrativeData').columns('InProcessByUser').where({ DraftUUID: draft.uuid }))
-    return admin?.InProcessByUser ?? null
+    const admin = await cds.db.run(SELECT.one.from('DRAFT.DraftAdministrativeData').columns(...lockColumns()).where({ DraftUUID: draft.uuid }))
+    return holderOf(admin)
   } catch {
     return null
   }
 }
 
 /** Rows whose active version has a draft get `_draftOwn`: true when that draft is the current user's, else
- *  it is locked by somebody else (FE shows "Draft" for the former, "Locked" for the latter). Only needed
+ *  it is locked by somebody else (FE shows "Draft" for the former, "Locked by <name>" for the latter; `_lockedBy` is the name). Only needed
  *  when the table shows the indicator (a `Common.SemanticKey` column), so other tables pay nothing.
  *  The drafts of all rows are read in one statement and their administrative records in a second one. */
 async function markDraftOwners(tx, entityType, layout, rows, userId) {
-  if (!layout.semanticKey?.length || !isDraftRoot(entityDef(cds.model, entityType))) return
+  // (`layout` null: the Object Page header asks for its own row, which shows the indicator whatever its columns)
+  if ((layout && !layout.semanticKey?.length) || !isDraftRoot(entityDef(cds.model, entityType))) return
   const keyNames = keyElements(entityDef(cds.model, entityType)).map(k => k.name).filter(n => n !== 'IsActiveEntity')
   const drafted = rows.filter(r => r.IsActiveEntity !== false && r.HasDraftEntity === true)
   if (!drafted.length) return
@@ -39,18 +50,28 @@ async function markDraftOwners(tx, entityType, layout, rows, userId) {
     // compound keys: one lookup per row
     await Promise.all(drafted.map(async row => {
       const where = { IsActiveEntity: false, ...Object.fromEntries(keyNames.map(n => [n, row[n]])) }
-      row._draftOwn = (await draftLockUser(tx, entityType, where)) === userId
+      const holder = await draftLockUser(tx, entityType, where)
+      row._draftOwn = holder === userId
+      row._lockedBy = row._draftOwn ? null : holder
     }))
     return
   }
   const [key] = keyNames
   try {
-    const drafts = await tx.run(SELECT.from(entityType).columns(key, 'DraftAdministrativeData_DraftUUID as uuid').where({ IsActiveEntity: false, [key]: { in: drafted.map(r => r[key]) } }))
+    // (the draft of another user is not readable through the service, so the draft table is read directly)
+    const draftTable = cds.model.definitions[entityType]?.drafts
+    const drafts = draftTable
+      ? await cds.db.run(SELECT.from(draftTable).columns(key, 'DraftAdministrativeData_DraftUUID as uuid').where({ [key]: { in: drafted.map(r => r[key]) } }))
+      : await tx.run(SELECT.from(entityType).columns(key, 'DraftAdministrativeData_DraftUUID as uuid').where({ IsActiveEntity: false, [key]: { in: drafted.map(r => r[key]) } }))
     const uuidOf = new Map(drafts.map(d => [d[key], d.uuid]))
     const uuids = [...new Set(uuidOf.values())].filter(Boolean)
-    const admins = uuids.length ? await cds.db.run(SELECT.from('DRAFT.DraftAdministrativeData').columns('DraftUUID', 'InProcessByUser').where({ DraftUUID: { in: uuids } })) : []
-    const ownerOf = new Map(admins.map(a => [a.DraftUUID, a.InProcessByUser]))
-    for (const row of drafted) row._draftOwn = (ownerOf.get(uuidOf.get(row[key])) ?? null) === userId
+    const admins = uuids.length ? await cds.db.run(SELECT.from('DRAFT.DraftAdministrativeData').columns('DraftUUID', ...lockColumns()).where({ DraftUUID: { in: uuids } })) : []
+    const adminOf = new Map(admins.map(a => [a.DraftUUID, a]))
+    for (const row of drafted) {
+      const admin = adminOf.get(uuidOf.get(row[key]))
+      row._draftOwn = (admin?.InProcessByUser ?? null) === userId
+      row._lockedBy = row._draftOwn ? null : holderOf(admin)
+    }
   } catch {
     for (const row of drafted) row._draftOwn = false
   }

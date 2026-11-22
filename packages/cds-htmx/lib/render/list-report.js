@@ -1,9 +1,10 @@
 const { html, raw } = require('./html')
 const ids = require('./ids')
 const { filterBar } = require('./filter-bar')
-const { table, rowsHtml, isSelectable, growingButton } = require('./table')
+const { table, rowsHtml, isSelectable, growingButton, toolbarIntents, treeMoveButtons, treeExpandButtons } = require('./table')
+const { intentAttrs } = require('./field')
 const { formatCount } = require('../data/format')
-const { canCreate, canDelete } = require('../model/edit-capabilities')
+const { canCreate, canDelete, canEdit } = require('../model/edit-capabilities')
 
 /** FE's export control: the Excel button exports at once, its arrow opens the menu of export choices. */
 function exportSplitButton(exportUrl, { bundle, t, action = 'export', attrs = html`` }) {
@@ -24,23 +25,28 @@ function exportSplitButton(exportUrl, { bundle, t, action = 'export', attrs = ht
  *  Original notes: title "{TypeNamePlural} ({count})", spacer, Create (-> `POST`,
  *  navigates into the new draft's OP)/Delete (Delete disabled until the client-side selection
  *  script enables it, §5 `htmx-fiori.js`), and settings icon. */
-function toolbar({ typeNamePlural, count, basePath, entitySetPath, bundle, t, edit, locale, tree }) {
+function toolbar({ typeNamePlural, count, basePath, entitySetPath, bundle, t, edit, locale, tree, intents = [] }) {
   const create = !edit || canCreate(edit)
   const del = !edit || canDelete(edit)
+  // a tree table whose nodes can be edited moves them with Cut and Paste, as Fiori elements does
+  const move = !!tree && !!edit && canEdit(edit)
   return html`
     <div id="${ids.lrToolbar()}" class="hf-table-toolbar">
       <h2 class="hf-table-toolbar__title"${typeNamePlural ? html`` : raw(' hidden')}>${typeNamePlural || entitySetPath}${tree ? html`` : html` <span class="hf-count">(<span class="hf-count-selected" data-hf-sel-a="${t(bundle, 'Selected')}: " data-hf-sel-b=", ${t(bundle, 'Rows')}: " data-hf-selected-count></span><span id="${ids.lrCount()}">${formatCount(count, locale)}</span>)</span>`}</h2>
       <div class="hf-spacer"></div>
+      ${intents.map(col => intentToolbarButton(col, { basePath, entitySetPath, scope: `#${ids.lrTableBody()}` }))}
       ${create ? html`<button class="fd-button fd-button--transparent" aria-label="${t(bundle, 'Create')}"
-        hx-post="${basePath}/${entitySetPath}" hx-push-url="false"
+        hx-post="${basePath}/${entitySetPath}" hx-push-url="false"${tree ? html` hx-include="#${ids.lrTableBody()} .hf-checkbox:checked" data-hf-selection-scope="#${ids.lrTableBody()}" data-hf-selection-max="1"` : html``}
         hx-target="#app" hx-swap="innerHTML show:window:top">${t(bundle, 'Create')}</button>` : html``}
       ${del ? html`<button class="fd-button fd-button--transparent" disabled data-hf-needs-selection="#${ids.lrTableBody()}" aria-label="${t(bundle, 'Delete')}"
         hx-post="${basePath}/${entitySetPath}/$delete" hx-include="#${ids.lrTableBody()}" hx-target="#app" hx-swap="innerHTML show:window:top"
         hx-confirm="${t(bundle, 'ConfirmDeleteSelected')}" data-hf-confirm-one="${t(bundle, 'ConfirmDeleteOne')}" data-hf-confirm-count="#${ids.lrTableBody()} .hf-checkbox:checked"
         data-hf-confirm-title="${t(bundle, 'Delete')}" data-hf-confirm-ok="${t(bundle, 'Delete')}" data-hf-confirm-cancel="${t(bundle, 'Cancel')}" data-hf-confirm-critical>${t(bundle, 'Delete')}</button>` : html``}
+      ${move ? treeMoveButtons(tree, { scope: `#${ids.lrTableBody()}`, moveUrl: `${basePath}/${entitySetPath}/$move`, label: key => t(bundle, key) }) : html``}
       <span class="hf-toolbar-separator"></span>
       <button type="button" class="fd-button fd-button--transparent hf-icon-button" disabled data-hf-action="copy" data-hf-needs-selection="#${ids.lrTableBody()}"
         aria-label="${t(bundle, 'Copy')}" title="${t(bundle, 'Copy')}"><i class="sap-icon--copy" aria-hidden="true"></i></button>
+      ${tree ? treeExpandButtons(key => t(bundle, key)) : html``}
       <span class="hf-toolbar-separator"></span>
       <button type="button" class="fd-button fd-button--transparent hf-icon-button" data-hf-action="settings"
         aria-label="${t(bundle, 'ViewSettings')}" title="${t(bundle, 'ViewSettings')}"><i class="sap-icon--action-settings" aria-hidden="true"></i></button>
@@ -48,6 +54,14 @@ function toolbar({ typeNamePlural, count, basePath, entitySetPath, bundle, t, ed
       ${exportSplitButton(`${basePath}/${entitySetPath}/$export`, { bundle, t })}
     </div>
   `
+}
+
+/** A `DataFieldForIntentBasedNavigation` of the table: a toolbar button that navigates with the selected row as context. With
+ *  `RequiresContext` it needs one row selected; without, it is always on and passes no row (a selected row is passed all the same). */
+function intentToolbarButton(col, { basePath, entitySetPath, scope }) {
+  const needs = col.requiresContext === true
+  return html`<button type="button" class="fd-button fd-button--transparent hf-intent"${needs ? html` disabled data-hf-needs-selection="${scope}"` : html``} data-hf-selection-scope="${scope}" data-hf-selection-max="1"
+    data-hf-intent-selection="${scope}" data-hf-intent-set="${entitySetPath}" ${intentAttrs(col, { basePath })}>${col.label ?? `${col.semanticObject}-${col.action}`}</button>`
 }
 
 /** FE's dynamic-page header expand/collapse + pin buttons, centered on the header's bottom edge. */
@@ -83,7 +97,7 @@ function listReportFragment(layout, rows, { basePath, entitySetPath, keyNames, c
       </header>
       <div class="hf-page__content">
         <div class="hf-table-card" data-hf-view="lr:${entitySetPath}">
-          ${raw(toolbar({ typeNamePlural: layout.header.typeNamePlural, count, basePath, entitySetPath, bundle, t, edit: layout.edit, locale, tree: !!layout.table.hierarchy }).value)}
+          ${raw(toolbar({ typeNamePlural: layout.header.typeNamePlural, count, basePath, entitySetPath, bundle, t, edit: layout.edit, locale, tree: layout.table.hierarchy, intents: toolbarIntents(layout) }).value)}
           ${raw(table(layout, rows, ctx).value)}
         </div>
       </div>

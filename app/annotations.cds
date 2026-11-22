@@ -67,6 +67,7 @@ annotate service.Books with @(
       { Value : title },
       { Value : descr },
       { Value : author_ID },
+      { Value : author.name, Label : 'Author Name' },
       { Value : genre_ID }
     ]
   },
@@ -184,7 +185,8 @@ annotate service.Authors with @(
 );
 
 annotate service.Authors with {
-  name        @Common.Label : '{i18n>Name}';
+  // a link on the name wherever it is shown (e.g. as the author of a book): its popover lists the launchpad's targets for "Authors"
+  name        @Common.Label : '{i18n>Name}' @Common.SemanticObject : 'Authors';
   email       @Common.Label : '{i18n>Email}' @Communication.IsEmailAddress;
   phone       @Common.Label : '{i18n>Phone}' @Communication.IsPhoneNumber;
   dateOfBirth @Common.Label : '{i18n>DateOfBirth}';

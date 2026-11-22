@@ -9,7 +9,29 @@
       "semanticObject": "Books",
       "action": "manageHtmx",
       "rootPath": "/manage-books-htmx/webapp/"
-    }
+    },
+    {
+      "semanticObject": "Authors",
+      "action": "manage",
+      "rootPath": "/manage-authors/webapp/"
+    },
+    {
+      "semanticObject": "Books",
+      "action": "manage",
+      "rootPath": "/manage-books/webapp/"
+    },
+    {
+      "semanticObject": "Categories",
+      "action": "manage",
+      "rootPath": "/manage-categories/webapp/"
+    },
+    {
+      "semanticObject": "Categories",
+      "action": "manageHtmx",
+      "rootPath": "/manage-categories-htmx/webapp/"
+    },
+    { "semanticObject": "Catalogs", "action": "manage", "rootPath": "/manage-catalogs/webapp/" },
+    { "semanticObject": "Catalogs", "action": "manageHtmx", "rootPath": "/manage-catalogs-htmx/webapp/" }
   ],
   "rootIntent": "Shell-home"
 }

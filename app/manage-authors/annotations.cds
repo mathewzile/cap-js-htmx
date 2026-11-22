@@ -55,9 +55,40 @@ annotate service.Authors with @(
     ],
     UI.LineItem : [
         {
-            $Type : 'UI.DataField',
+            // a link on the value (DataFieldWithIntentBasedNavigation): the author's books, in the htmx Books app
+            $Type : 'UI.DataFieldWithIntentBasedNavigation',
             Label : 'name',
             Value : name,
+            SemanticObject : 'Books',
+            Action : 'manageHtmx',
+            Mapping : [{ $Type : 'Common.SemanticObjectMappingType', LocalProperty : ID, SemanticObjectProperty : 'author_ID' }],
+            RequiredProperties : [ID],
+        },
+        {
+            // a toolbar button (DataFieldForIntentBasedNavigation): needs one selected author
+            $Type : 'UI.DataFieldForIntentBasedNavigation',
+            Label : 'Show Books (HTMX)',
+            SemanticObject : 'Books',
+            Action : 'manageHtmx',
+            RequiresContext : true,
+            Mapping : [{ $Type : 'Common.SemanticObjectMappingType', LocalProperty : ID, SemanticObjectProperty : 'author_ID' }],
+            RequiredProperties : [ID],
+        },
+        {
+            $Type : 'UI.DataFieldForIntentBasedNavigation',
+            Label : 'Show Books',
+            SemanticObject : 'Books',
+            Action : 'manage',
+            RequiresContext : true,
+            Mapping : [{ $Type : 'Common.SemanticObjectMappingType', LocalProperty : ID, SemanticObjectProperty : 'author_ID' }],
+            RequiredProperties : [ID],
+        },
+        {
+            // no tile of the launchpad has this intent: both kinds of app hide the button (isNavigationSupported)
+            $Type : 'UI.DataFieldForIntentBasedNavigation',
+            Label : 'Show Reviews',
+            SemanticObject : 'Reviews',
+            Action : 'display',
         },
         {
             $Type : 'UI.DataField',
@@ -90,7 +121,9 @@ annotate service.Authors with @(
 );
 
 annotate service.Authors with {
-    dateOfBirth @Common.Label : 'dateOfBirth'
+    dateOfBirth @Common.Label : 'dateOfBirth';
+    // the name in the author's page is a link whose popover lists the launchpad's targets for "Authors" (Manage Authors, ... (HTMX))
+    name @Common.SemanticObject : 'Authors';
 };
 
 annotate service.Books with @(
@@ -143,9 +176,15 @@ annotate service.Books with @(
             },
             {
                 $Type : 'UI.DataFieldForIntentBasedNavigation',
-                Label : 'Open Manage Books App',
+                Label : 'Open Manage Books (HTMX)',
                 SemanticObject : 'Books',
                 Action : 'manageHtmx'
+            },
+            {
+                $Type : 'UI.DataFieldForIntentBasedNavigation',
+                Label : 'Open Manage Books',
+                SemanticObject : 'Books',
+                Action : 'manage'
             },
         ],
     },

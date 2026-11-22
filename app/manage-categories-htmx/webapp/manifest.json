@@ -1,0 +1,119 @@
+{
+  "_version": "1.89.0",
+  "sap.app": {
+    "id": "managecategories.htmx",
+    "type": "application",
+    "i18n": "i18n/i18n.properties",
+    "applicationVersion": {
+      "version": "1.0.0"
+    },
+    "title": "{{appTitle}}",
+    "description": "{{appDescription}}",
+    "dataSources": {
+      "mainService": {
+        "uri": "/admin/",
+        "type": "OData",
+        "settings": {
+          "annotations": [],
+          "odataVersion": "4.0"
+        }
+      }
+    },
+    "crossNavigation": {
+      "inbounds": {
+        "Categories-manageHtmx": {
+          "semanticObject": "Categories",
+          "action": "manageHtmx",
+          "title": "{{tileTitle}}",
+          "signature": {
+            "parameters": {},
+            "additionalParameters": "allowed"
+          }
+        }
+      }
+    }
+  },
+  "sap.ui": {
+    "technology": "UI5",
+    "deviceTypes": {
+      "desktop": true,
+      "tablet": true,
+      "phone": true
+    }
+  },
+  "sap.ui5": {
+    "dependencies": {
+      "minUI5Version": "1.120.0",
+      "libs": {
+        "sap.ui.core": {},
+        "sap.f": {}
+      }
+    },
+    "contentDensities": {
+      "compact": true,
+      "cozy": true
+    },
+    "resourceRoots": {
+      "cds.htmx.shell": "./shell"
+    },
+    "services": {
+      "ShellUIService": {
+        "factoryName": "sap.ushell.ui5service.ShellUIService",
+        "lazy": false
+      }
+    },
+    "models": {
+      "i18n": {
+        "type": "sap.ui.model.resource.ResourceModel",
+        "settings": {
+          "bundleName": "managecategories.htmx.i18n.i18n"
+        }
+      }
+    },
+    "rootView": {
+      "viewName": "sap.fe.templates.RootContainer.view.NavContainer",
+      "type": "XML",
+      "async": true,
+      "id": "appRootView"
+    },
+    "routing": {
+      "config": { "async": true },
+      "routes": [
+        { "pattern": ":?query:", "name": "CategoriesList", "target": "CategoriesList" },
+        { "pattern": "Categories({key}):?query:", "name": "CategoriesObjectPage", "target": "CategoriesObjectPage" }
+      ],
+      "targets": {
+        "CategoriesList": {
+          "type": "Component",
+          "id": "CategoriesList",
+          "name": "sap.fe.templates.ListReport",
+          "options": {
+            "settings": {
+              "contextPath": "/Categories",
+              "navigation": { "Categories": { "detail": { "route": "CategoriesObjectPage" } } },
+              "controlConfiguration": {
+                "@com.sap.vocabularies.UI.v1.LineItem": {
+                  "tableSettings": { "type": "TreeTable", "hierarchyQualifier": "CategoriesHierarchy", "initialExpansionLevel": 1 }
+                }
+              }
+            }
+          }
+        },
+        "CategoriesObjectPage": {
+          "type": "Component",
+          "id": "CategoriesObjectPage",
+          "name": "sap.fe.templates.ObjectPage",
+          "options": { "settings": { "contextPath": "/Categories" } }
+        }
+      }
+    }
+  },
+  "sap.htmx": {
+    "service": "/htmx/admin",
+    "entry": "/htmx/admin/Categories"
+  },
+  "sap.cloud": {
+    "public": true,
+    "service": "cap.htmx"
+  }
+}

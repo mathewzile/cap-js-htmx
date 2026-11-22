@@ -175,10 +175,24 @@ document.addEventListener('htmx:after:swap', () => hfClosePopovers())
 // ---------- row selection: Delete buttons are enabled while rows of their table are ticked ----------
 // A button names the container it works on (data-hf-needs-selection="#section"), so the List Report and the
 // Object Page sections each have their own.
+// `data-hf-selection-max="1"` adds an upper limit (a tree's Create and Cut work on one node at most; its scope is the same container,
+// named by data-hf-selection-scope when the button needs no selection). `data-hf-tree-paste` is also off until a node was cut.
 function hfSyncSelection() {
-  for (const button of document.querySelectorAll('[data-hf-needs-selection]')) {
-    const scope = document.querySelector(button.dataset.hfNeedsSelection) || document
-    button.disabled = !scope.querySelector('tbody .hf-checkbox:checked')
+  for (const button of document.querySelectorAll('[data-hf-needs-selection], [data-hf-selection-max]')) {
+    const scope = document.querySelector(button.dataset.hfNeedsSelection || button.dataset.hfSelectionScope) || document
+    const ticked = scope.querySelectorAll('tbody .hf-checkbox:checked').length
+    const max = button.dataset.hfSelectionMax
+    button.disabled = (button.hasAttribute('data-hf-needs-selection') && ticked === 0)
+      || (max !== undefined && ticked > Number(max))
+      || (button.hasAttribute('data-hf-tree-paste') && !hfCut)
+  }
+  // Move Up / Move Down need a sibling to pass (and the top level may be fixed: ChangeSiblingForRootsSupported = false)
+  for (const button of document.querySelectorAll('[data-hf-tree-sibling]')) {
+    if (button.disabled) continue
+    const row = document.querySelector(button.dataset.hfNeedsSelection)?.querySelector('tbody .hf-checkbox:checked')?.closest('tr')
+    if (!row?.dataset.hfNode) { button.disabled = true; continue }
+    const list = hfSiblings(row), at = list.indexOf(row)
+    button.disabled = (button.dataset.hfTreeSibling === 'up' ? at < 1 : at >= list.length - 1) || (!hfParentOf(row) && button.dataset.hfSiblingRoots === 'false')
   }
   // the table title counts what is ticked
   for (const toolbar of document.querySelectorAll('.hf-table-toolbar')) {
@@ -198,6 +212,159 @@ document.addEventListener('change', e => {
   hfSyncSelection()
 })
 document.addEventListener('htmx:after:swap', hfSyncSelection)
+
+// ---------- tree table: Cut and Paste move a node ----------
+// As in Fiori elements: Cut works on one selected node, clears the selection and starts paste mode (the node is shown dimmed); Paste then
+// puts it below the one selected node, or at the top level when none is selected (it is off when several are). The move itself is the
+// server's (`$move`), which answers with the List Report showing the node in its new place.
+let hfCut = null // { keys }: the key of the node that was cut, as its row's checkbox holds it
+function hfMarkCut() {
+  for (const row of document.querySelectorAll('tr.hf-row--cut')) row.classList.remove('hf-row--cut')
+  if (!hfCut) return
+  for (const box of document.querySelectorAll('tbody .hf-checkbox')) if (box.value === hfCut.keys) box.closest('tr')?.classList.add('hf-row--cut')
+}
+document.addEventListener('click', e => {
+  const cut = e.target.closest?.('[data-hf-tree-cut]')
+  if (cut && !cut.disabled) {
+    const ticked = document.querySelectorAll(`${cut.dataset.hfNeedsSelection} .hf-checkbox:checked`)
+    if (ticked.length !== 1) return
+    hfCut = { keys: ticked[0].value }
+    ticked[0].checked = false
+    hfMarkCut()
+    hfSyncSelection()
+    return
+  }
+  const paste = e.target.closest?.('[data-hf-tree-paste]')
+  if (paste && !paste.disabled && hfCut) {
+    const ticked = document.querySelectorAll(`${paste.dataset.hfSelectionScope} .hf-checkbox:checked`)
+    const parentRow = ticked.length === 1 ? ticked[0].closest('tr') : null
+    const parent = parentRow?.dataset.hfNode ?? ''
+    // FE does nothing when the node is pasted below itself or one of its own nodes: the rows of its subtree are the ones below it
+    // in the table, deeper than it (only loaded rows can be ticked)
+    const cutRow = [...document.querySelectorAll('tbody .hf-checkbox')].find(box => box.value === hfCut.keys)?.closest('tr')
+    if (parentRow && cutRow && hfInside(cutRow, parentRow)) { hfCut = null; hfMarkCut(); hfSyncSelection(); return }
+    paste.setAttribute('hx-vals', JSON.stringify({ keys: hfCut.keys, parent }))
+    hfCut = null
+    htmx.ajax('POST', paste.dataset.hfTreePaste, { source: paste, target: '#app', swap: 'innerHTML' })
+  }
+})
+// ---------- tree table: Move Up / Move Down order a node among its siblings (Hierarchy.RecursiveHierarchyActions) ----------
+/** The rows of the same parent as `row` (its level, between the rows of that parent's subtree), in order. */
+function hfSiblings(row) {
+  const level = Number(row.dataset.hfLevel)
+  const list = [row]
+  for (let p = row.previousElementSibling; p && Number(p.dataset.hfLevel) >= level; p = p.previousElementSibling) if (Number(p.dataset.hfLevel) === level && p.dataset.hfNode) list.unshift(p)
+  for (let n = row.nextElementSibling; n && Number(n.dataset.hfLevel) >= level; n = n.nextElementSibling) if (Number(n.dataset.hfLevel) === level && n.dataset.hfNode) list.push(n)
+  return list
+}
+/** The node id of the row's parent, empty for a top-level row. */
+function hfParentOf(row) {
+  const level = Number(row.dataset.hfLevel)
+  for (let p = row.previousElementSibling; p; p = p.previousElementSibling) if (p.dataset.hfNode && Number(p.dataset.hfLevel) < level) return p.dataset.hfNode
+  return ''
+}
+document.addEventListener('click', e => {
+  const button = e.target.closest?.('[data-hf-tree-sibling]')
+  if (!button || button.disabled) return
+  const box = document.querySelector(button.dataset.hfNeedsSelection)?.querySelector('tbody .hf-checkbox:checked')
+  const row = box?.closest('tr')
+  if (!row) return
+  const list = hfSiblings(row), at = list.indexOf(row)
+  const next = button.dataset.hfTreeSibling === 'up' ? list[at - 1]?.dataset.hfNode : (list[at + 2]?.dataset.hfNode ?? '')
+  if (next == null) return
+  htmx.ajax('POST', button.dataset.hfSiblingUrl, { source: button, target: '#app', swap: 'innerHTML', values: { keys: box.value, parent: hfParentOf(row), next } })
+})
+
+// ---------- tree table: drag and drop moves a node ----------
+// As in Fiori elements: a node is dragged onto another one to move it below that one, or onto the empty area of the table to make it a
+// top-level node. A node cannot be dropped on itself or one of its own nodes. The move is the same `$move` request Paste sends.
+let hfDrag = null // { keys, row }
+const hfMoveUrl = row => row.closest('.hf-page--lr, .hf-section--table')?.querySelector('[data-hf-tree-paste]')?.dataset.hfTreePaste
+function hfMarkDraggable() {
+  for (const row of document.querySelectorAll('table[data-hf-tree] tbody tr[data-hf-node]')) {
+    const on = !!hfMoveUrl(row) && !!row.querySelector('.hf-checkbox')
+    if (row.draggable !== on) row.draggable = on
+  }
+}
+function hfInside(cutRow, target) {
+  const level = Number(cutRow.dataset.hfLevel)
+  if (target === cutRow) return true
+  for (let next = cutRow.nextElementSibling; next && Number(next.dataset.hfLevel) > level; next = next.nextElementSibling) if (next === target) return true
+  return false
+}
+function hfClearDrop() { for (const el of document.querySelectorAll('.hf-drop-target, .hf-drop-before, .hf-drop-after')) el.classList.remove('hf-drop-target', 'hf-drop-before', 'hf-drop-after') }
+document.addEventListener('dragstart', e => {
+  const row = e.target.closest?.('tr[data-hf-node]')
+  const keys = row?.querySelector('.hf-checkbox')?.value
+  if (!row || !keys || !hfMoveUrl(row)) return
+  hfDrag = { keys, row }
+  e.dataTransfer.effectAllowed = 'move'
+  e.dataTransfer.setData('text/plain', row.dataset.hfNode)
+  row.classList.add('hf-row--cut')
+})
+document.addEventListener('dragover', e => {
+  if (!hfDrag) return
+  const scope = e.target.closest?.('.hf-page--lr, .hf-section--table')
+  if (!scope || scope !== hfDrag.row.closest('.hf-page--lr, .hf-section--table')) return
+  const row = e.target.closest('tr[data-hf-node]')
+  hfClearDrop()
+  if (row) {
+    const zone = hfZone(e, row)
+    if (!hfDropAllowed(row, zone)) return
+    row.classList.add(zone === 'into' ? 'hf-drop-target' : zone === 'before' ? 'hf-drop-before' : 'hf-drop-after')
+  } else scope.querySelector('table[data-hf-tree]')?.classList.add('hf-drop-target')
+  e.preventDefault()
+  e.dataTransfer.dropEffect = 'move'
+})
+/** Where on a row a node is dropped: the upper or lower quarter puts it before or after that row (when the hierarchy orders siblings and
+ *  the position is allowed), anywhere else makes it a child of the row. */
+function hfZone(e, row) {
+  const scope = row.closest('.hf-page--lr, .hf-section--table')
+  const sibling = scope?.querySelector('[data-hf-tree-sibling]')
+  if (!sibling || (!hfParentOf(row) && sibling.dataset.hfSiblingRoots === 'false')) return 'into'
+  const box = row.getBoundingClientRect()
+  const y = (e.clientY - box.top) / box.height
+  return y < 0.25 ? 'before' : y > 0.75 ? 'after' : 'into'
+}
+/** A node can go onto/between rows unless that would make it its own parent or put it below one of its own nodes. */
+function hfDropAllowed(row, zone) {
+  if (row === hfDrag.row) return false
+  const newParent = zone === 'into' ? row : hfParentRow(row)
+  return !(newParent && hfInside(hfDrag.row, newParent))
+}
+function hfParentRow(row) {
+  const id = hfParentOf(row)
+  return id ? [...row.closest('tbody').querySelectorAll('tr[data-hf-node]')].find(r => r.dataset.hfNode === id) : null
+}
+document.addEventListener('drop', e => {
+  if (!hfDrag) return
+  const scope = e.target.closest?.('.hf-page--lr, .hf-section--table')
+  if (!scope || scope !== hfDrag.row.closest('.hf-page--lr, .hf-section--table')) return
+  const row = e.target.closest('tr[data-hf-node]')
+  const zone = row ? hfZone(e, row) : 'into'
+  if (row && !hfDropAllowed(row, zone)) return
+  e.preventDefault()
+  const { keys, row: dragged } = hfDrag
+  hfClearDrop()
+  hfDrag = null
+  const values = { keys, parent: row?.dataset.hfNode ?? '' }
+  if (row && zone !== 'into') {
+    // between two siblings: below the row's own parent, before the row (or before the one after it)
+    values.parent = hfParentOf(row)
+    const list = hfSiblings(row)
+    values.next = zone === 'before' ? row.dataset.hfNode : (list[list.indexOf(row) + 1]?.dataset.hfNode ?? '')
+  }
+  htmx.ajax('POST', hfMoveUrl(dragged), { source: dragged, target: '#app', swap: 'innerHTML', values })
+})
+document.addEventListener('dragend', () => { hfClearDrop(); hfDrag?.row.classList.remove('hf-row--cut'); hfDrag = null; hfMarkCut() })
+document.addEventListener('htmx:after:swap', hfMarkDraggable)
+document.addEventListener('DOMContentLoaded', hfMarkDraggable)
+// the cut node stays marked while the tree loads more rows; leaving the tree (another page in #app) ends the paste mode
+document.addEventListener('htmx:after:swap', () => {
+  if (hfCut && !document.querySelector('[data-hf-tree]')) hfCut = null
+  hfMarkCut()
+  hfSyncSelection()
+})
 
 // ---------- toast: shown for a few seconds, then removed ----------
 let hfToastTimer
@@ -784,11 +951,116 @@ document.addEventListener('click', async e => {
   const link = e.target.closest?.('[data-hf-intent-object]')
   if (!link) return
   e.preventDefault()
+  e.stopPropagation() // a link in a table row does not open the row
   const unavailable = () => hfShowError('NavigationUnavailable', 'Navigation to another app is only possible in an SAP Fiori launchpad.')
   const adapter = window.HtmxShell?.adapter
   if (!adapter?.navigate) return unavailable()
-  try { await adapter.navigate({ semanticObject: link.dataset.hfIntentObject, action: link.dataset.hfIntentAction }) } catch { unavailable() }
-})
+  try {
+    // the target gets the page's context as parameters, as in Fiori elements; without them it opens on its own start page
+    const params = await hfIntentParameters(link)
+    await adapter.navigate({ semanticObject: link.dataset.hfIntentObject, action: link.dataset.hfIntentAction, params })
+  } catch { unavailable() }
+}, true) // capture: before the row's own click (it would open the row)
+
+// A property with Common.SemanticObject: its value is a link that opens a popover of the targets the launchpad has for that object. A
+// page without a launchpad (no `getLinks`) has no targets: the popover says so.
+document.addEventListener('click', async e => {
+  const link = e.target.closest?.('[data-hf-semantic-object]')
+  if (!link) return
+  e.preventDefault()
+  e.stopPropagation() // in a table row the click does not open the row
+  hfClosePopovers()
+  for (const old of document.querySelectorAll('.hf-semantic-popover')) old.remove()
+  const adapter = window.HtmxShell?.adapter
+  const params = { [link.dataset.hfSemanticParam]: link.dataset.hfSemanticValue }
+  // the popover is there at once (the launchpad's first answer can take a moment), and filled when the targets arrive
+  const box = document.createElement('div')
+  box.className = 'hf-semantic-popover'
+  box.setAttribute('role', 'menu')
+  box.setAttribute('aria-busy', 'true')
+  const note = text => { const p = document.createElement('p'); p.className = 'hf-semantic-popover__none'; p.textContent = text; return p }
+  box.append(note(link.dataset.hfLoading || 'Loading…'))
+  document.body.append(box)
+  const place = () => {
+    const at = link.getBoundingClientRect()
+    box.style.left = `${Math.max(8, Math.min(at.left, innerWidth - box.offsetWidth - 8))}px`
+    box.style.top = `${at.bottom + 4}px`
+  }
+  place()
+  const close = ev => { if (!box.contains(ev.target)) { box.remove(); document.removeEventListener('click', close, true); document.removeEventListener('keydown', esc, true) } }
+  const esc = ev => { if (ev.key === 'Escape') { box.remove(); document.removeEventListener('click', close, true); document.removeEventListener('keydown', esc, true) } }
+  setTimeout(() => { document.addEventListener('click', close, true); document.addEventListener('keydown', esc, true) })
+  let links = []
+  try { links = adapter?.getLinks ? await adapter.getLinks({ semanticObject: link.dataset.hfSemanticObject, params }) : [] } catch { links = [] }
+  // Common.SemanticObjectUnavailableActions: the actions of the object that are not offered (a link is `#Object-action?…` or `#Object-action~context`)
+  const unavailable = new Set((link.dataset.hfSemanticUnavailable || '').split(' ').filter(Boolean))
+  if (unavailable.size) links = links.filter(target => !unavailable.has((String(target.intent).match(/^#[^-?~&]*-([^?~&]*)/) || [])[1]))
+  if (!box.isConnected) return // closed meanwhile
+  // one target left (the open app was dropped): the link goes there at once, as in Fiori elements
+  if (links.length === 1) { box.remove(); document.removeEventListener('click', close, true); document.removeEventListener('keydown', esc, true); adapter.navigateTo(links[0].intent).catch(() => hfShowError('NavigationUnavailable', 'Navigation to another app is only possible in an SAP Fiori launchpad.')); return }
+  box.removeAttribute('aria-busy')
+  box.replaceChildren()
+  if (links.length) {
+    for (const target of links) {
+      const item = document.createElement('button')
+      item.type = 'button'; item.className = 'hf-popover__item'; item.setAttribute('role', 'menuitem'); item.textContent = target.text
+      item.addEventListener('click', () => { box.remove(); adapter.navigateTo(target.intent).catch(() => hfShowError('NavigationUnavailable', 'Navigation to another app is only possible in an SAP Fiori launchpad.')) })
+      box.append(item)
+    }
+  } else box.append(note(link.dataset.hfNoLinks || 'No navigation targets are available.'))
+  place()
+}, true)
+
+document.addEventListener('htmx:after:swap', () => { for (const box of document.querySelectorAll('.hf-semantic-popover')) box.remove() })
+
+// Fiori elements shows an intent only when the launchpad has a target for it (`isNavigationSupported`): the button is hidden, the link is
+// plain text. Without a launchpad adapter nothing is known and the click reports it (above).
+const hfIntentSupport = new Map() // 'Object-action' -> boolean
+async function hfCheckIntents() {
+  const adapter = window.HtmxShell?.adapter
+  if (!adapter?.isSupported) return
+  const elements = [...document.querySelectorAll('[data-hf-intent-object]:not([data-hf-intent-checked])')]
+  for (const element of elements) element.dataset.hfIntentChecked = '1'
+  const keyOf = element => `${element.dataset.hfIntentObject}-${element.dataset.hfIntentAction}`
+  const unknown = [...new Set(elements.map(keyOf))].filter(key => !hfIntentSupport.has(key))
+  if (unknown.length) {
+    try {
+      const answer = await adapter.isSupported(unknown.map(key => ({ semanticObject: key.slice(0, key.indexOf('-')), action: key.slice(key.indexOf('-') + 1) })))
+      unknown.forEach((key, i) => hfIntentSupport.set(key, answer[i] !== false))
+    } catch { return }
+  }
+  for (const element of elements) {
+    if (hfIntentSupport.get(keyOf(element)) !== false || !element.isConnected) continue
+    if (element.tagName === 'A') { const text = document.createElement('span'); text.textContent = element.textContent; element.replaceWith(text) } else element.hidden = true
+  }
+}
+document.addEventListener('htmx:after:swap', () => { hfCheckIntents() })
+document.addEventListener('hf:ready', () => { hfCheckIntents() }) // the first page is in before the shell has set its adapter
+document.addEventListener('DOMContentLoaded', () => { hfCheckIntents() })
+
+/** The parameters the server works out for an intent button (`$intent`), asked with the headers the page's own requests carry (the
+ *  app and its base path, the client id), which sit in `hx-headers:inherited` attributes up the tree. `{}` when it cannot be asked: the
+ *  navigation still happens, only without a context. */
+async function hfIntentParameters(link) {
+  let url = link.dataset.hfIntentContext
+  if (!url) return {}
+  // a toolbar button of a table: the context is the selected row (none selected: no context)
+  if (link.dataset.hfIntentSelection) {
+    const ticked = document.querySelectorAll(`${link.dataset.hfIntentSelection} .hf-checkbox:checked`)
+    if (ticked.length !== 1) return {}
+    url += `&path=${encodeURIComponent(`${link.dataset.hfIntentSet}(${ticked[0].value})`)}`
+  }
+  const headers = {}
+  for (let el = link; el; el = el.parentElement) {
+    const inherited = el.getAttribute('hx-headers:inherited')
+    if (!inherited) continue
+    try { for (const [name, value] of Object.entries(JSON.parse(inherited))) if (!(name in headers)) headers[name] = value } catch { /* not JSON: not ours */ }
+  }
+  try {
+    const res = await fetch(url, { headers, credentials: 'same-origin' })
+    return res.ok ? (await res.json()).params ?? {} : {}
+  } catch { return {} }
+}
 document.addEventListener('htmx:after:request', e => {
   if ((e.detail?.ctx?.response?.status ?? 0) < 500) return
   e.preventDefault()

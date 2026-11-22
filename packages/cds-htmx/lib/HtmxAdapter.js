@@ -38,6 +38,8 @@ class HtmxAdapter extends HttpAdapter {
     router.get('/', this.handle(this.home))
     router.get('/$events', this.handle(this.events))
     router.get('/$shell', this.handle(this.shellInfo))
+    router.get('/$intent', this.handle(this.intentParameters))
+    router.get('/$startup', this.handle(this.startupTarget))
     router.get('/$playground', this.handle(this.playground))
     router.get('/$playground/clients', this.handle(this.playgroundClients))
     router.post('/$playground/watch', this.handle(this.playgroundWatch))
@@ -46,6 +48,7 @@ class HtmxAdapter extends HttpAdapter {
     router.get('/:Set/$table', this.handle(this.tablePartial))
     router.get('/:Set/$children', this.handle(this.treeChildren))
     router.post('/:Set/$delete', this.handle(this.deleteSelected))
+    router.post('/:Set/$move', this.handle(this.moveNode))
     router.post('/:Set/$edit', this.handle(this.editDraft))
     router.post('/:Set/$save', this.handle(this.saveDraft))
     router.post('/:Set/$discard', this.handle(this.discardDraft))
@@ -367,13 +370,13 @@ class HtmxAdapter extends HttpAdapter {
     const clientId = req.query.client
     if (!clientId) return res.sendStatus(400)
     openSse(res)
-    channels.add(clientId, { res, user: cds.context.user, locale: cds.context.locale, app: req.htmxApp?.ref ?? null, view: channels.takePending(clientId) })
+    channels.add(clientId, { res, user: cds.context.user, locale: cds.context.locale, app: req.htmxApp?.ref ?? null, ...channels.takePending(clientId) })
     writeSse(res, { event: 'connected', data: clientId })
     req.on('close', () => channels.remove(clientId, res))
   }
 }
 
 // the routes, grouped by what they do (lib/routes/*.js); they are methods of the adapter
-Object.assign(HtmxAdapter.prototype, require('./routes/object'), require('./routes/draft'), require('./routes/fields'), require('./routes/list'), require('./routes/playground'))
+Object.assign(HtmxAdapter.prototype, require('./routes/object'), require('./routes/draft'), require('./routes/fields'), require('./routes/list'), require('./routes/intent'), require('./routes/playground'))
 
 module.exports = HtmxAdapter

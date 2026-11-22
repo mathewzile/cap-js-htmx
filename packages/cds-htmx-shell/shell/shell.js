@@ -68,7 +68,7 @@
   }
 
   async function start(options) {
-    const { root, base = '', app, appTitle, service, entry, adapter, csrf = true } = options
+    const { root, base = '', app, appTitle, service, entry, adapter, csrf = true, startup } = options
     const abort = new AbortController() // every document listener of this start; destroy() removes them, so a second start does not stack them
     const { signal } = abort
     const language = options.language || navigator.language || 'en'
@@ -182,11 +182,22 @@
       adapter.setTitle(document.title)
     }, { signal })
 
+    // Started by another app's intent with parameters (`startup`): on a first visit without a route the server says where to open, the
+    // object's page or the List Report with the parameters as filters (`$startup`), and that route is kept in the hash like any other
+    const startupRoute = async () => {
+      try {
+        const set = entry.split('?')[0].split('/').pop()
+        const res = await fetch(`${shellUrl.replace(/\$shell$/, '$startup')}?${new URLSearchParams({ set, params: JSON.stringify(startup) })}`, { headers, credentials: 'same-origin' })
+        return res.ok ? (await res.json()).route || null : null
+      } catch { return null }
+    }
     // a first visit without a route gets the entry page's route, so a reload or a copied link opens the same page
-    const first = adapter.current() ?? ''
+    let first = adapter.current() ?? ''
+    const fromStartup = !first && startup && Object.keys(startup).length ? await startupRoute() : null
+    if (fromStartup) first = fromStartup
     await show(first)
     const short = toHash(fromHash(first)) // a link in the long form is shown in the short one
-    if (short !== first) adapter.replace(short)
+    if (short !== first || fromStartup) adapter.replace(short)
     global.HtmxShell.adapter = adapter // the page script reaches the launchpad through it (intent-based navigation)
     document.dispatchEvent(new CustomEvent('hf:ready'))
     return { info, clientId: id, show, destroy() { if (global.HtmxShell.adapter === adapter) global.HtmxShell.adapter = null; abort.abort(); adapter.detach?.(); document.getElementById('sse')?.remove(); root.replaceChildren() } }

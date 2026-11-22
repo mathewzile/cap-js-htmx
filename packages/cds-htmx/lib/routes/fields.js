@@ -15,6 +15,8 @@ const draftMessages = require('../data/draft-messages')
 const ids = require('../render/ids')
 const valueHelpRender = require('../render/value-help')
 const engine = require('../sse/side-effects-engine')
+const treeEdit = require('../data/tree-edit')
+const queryLib = require('../data/query')
 
 /** Field-level routes of a draft: PATCH of a field or a cell, rows of a section, value help.
  *  Mixed into `HtmxAdapter` (`Object.assign(HtmxAdapter.prototype, ...)`), so `this` is the adapter. */
@@ -71,7 +73,7 @@ module.exports = {
     let action = null
     let property = null
     const field = /\/\$field\/(\w+)$/.exec(full)
-    if (field) { action = 'field'; property = field[1]; full = full.slice(0, field.index) } else if (/\/\$delete$/.test(full)) { action = 'delete'; full = full.slice(0, -'/$delete'.length) } else if (/\/\$paste$/.test(full)) { action = 'paste'; full = full.slice(0, -'/$paste'.length) } else if (/\/\$edit$/.test(full)) { action = 'edit'; full = full.slice(0, -'/$edit'.length) }
+    if (field) { action = 'field'; property = field[1]; full = full.slice(0, field.index) } else if (/\/\$delete$/.test(full)) { action = 'delete'; full = full.slice(0, -'/$delete'.length) } else if (/\/\$paste$/.test(full)) { action = 'paste'; full = full.slice(0, -'/$paste'.length) } else if (/\/\$edit$/.test(full)) { action = 'edit'; full = full.slice(0, -'/$edit'.length) } else if (/\/\$move$/.test(full)) { action = 'move'; full = full.slice(0, -'/$move'.length) } else if (/\/\$effects$/.test(full)) { action = 'effects'; full = full.slice(0, -'/$effects'.length) }
     const segments = keysLib.splitSegments(full)
     if (segments.length < 2 || segments[0].raw == null) return null
     const top = this.entitySet(segments[0].set)
@@ -176,6 +178,9 @@ module.exports = {
     const n = this.parseNested(req)
     if (n?.action === 'paste') return this.pasteRows(req, res, tx, n)
     if (n?.action === 'edit') return this.editNested(req, res, tx, n)
+    if (n?.action === 'move') return this.moveNested(req, res, tx, n)
+    // a child page applies its side effects with each change (nothing is held back for it), so there is nothing to flush
+    if (n?.action === 'effects') return res.sendStatus(204)
     if (!n || n.action !== 'delete') return res.sendStatus(404)
     if (this.editOf(req, n.root.entityType).mode !== 'draft') return this.reject(req, res, 405, 'NotAllowed')
     if (this.editOf(req, n.entityType).deletable === false || (n.segments.length === 2 && this.sectionCaps(req, n.root.entityType, n.root.set, n.nav).deletable === false)) return this.reject(req, res, 405, 'NotAllowed')
@@ -183,10 +188,33 @@ module.exports = {
     for (const raw of [].concat(req.body?.keys ?? []).slice(0, 200)) {
       const keys = keysLib.parseKeys(raw)
       if (draftNode) await draftLib.discard(tx, n.entityType, keys)
-      else await tx.run(DELETE.from(n.entityType).where(keys))
+      else await tx.run(DELETE.from(n.entityType, keys))
     }
     // the segment list of the section is the parent's own
     return this.objectPage(req, res, tx, { entityType: n.parent.entityType, keys: n.parent.keys, segments: n.parent.segments, contextPath: n.parent.contextPath })
+  },
+
+  /** `POST …/topics/$move` with `keys` (the node) and `parent` (the node to move it below, empty: the top level): Paste of a tree table of an
+   *  Object Page. In the draft of the object the node's parent is changed (a PATCH of the node's own draft, as FE does), the page comes back. */
+  async moveNested(req, res, tx, n) {
+    if (n.segments.length !== 2 || n.raw != null) return res.sendStatus(404)
+    if (this.editOf(req, n.root.entityType).mode !== 'draft' || n.root.keys.IsActiveEntity !== false) return this.reject(req, res, 405, 'NotAllowed')
+    if (this.sectionCaps(req, n.root.entityType, n.root.set, n.nav).updatable === false) return this.reject(req, res, 405, 'NotAllowed')
+    const layout = cache.objectPageFor(cds.model, this.service.name, this.odataServicePath(), n.root.entityType, `/${n.root.set}`, this.appOpts(req))
+    const hierarchy = tableFacets(layout).find(f => f.content.nav === n.nav)?.content.hierarchy
+    const { keys: raw, parent } = req.body ?? {}
+    if (!hierarchy || typeof raw !== 'string' || (parent != null && typeof parent !== 'string')) return res.sendStatus(400)
+    const keys = keysLib.parseKeys(raw)
+    const scope = queryLib.parentFilter(cds.model, n.root.entityType, n.root.keys, n.entityType)
+    const next = req.body?.next
+    try {
+      if (typeof next === 'string') await treeEdit.place(tx, n.entityType, hierarchy, keys, parent || null, next || null, { scope })
+      else await treeEdit.moveNode(tx, n.entityType, hierarchy, keys, parent || null, { scope })
+    } catch (err) {
+      if (err instanceof treeEdit.MoveError) return this.reject(req, res, ...treeEdit.MOVE_ERRORS[err.code])
+      throw err
+    }
+    return this.parentPage(req, res, tx, n, { push: false })
   },
 
   /** `POST …/chapters/$paste` (FE: paste rows from a spreadsheet into a table of the draft). `cols` names the

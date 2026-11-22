@@ -18,7 +18,7 @@ A term the registry has no opinion about is reported as `unknown`: it is dropped
 | Status | Terms |
 |---|---|
 | supported | `HeaderInfo`, `LineItem`, `SelectionFields`, `HiddenFilter`, `ExcludeFromNavigationContext`, `PresentationVariant`, `SelectionVariant`, `SelectionPresentationVariant`, `Facets`, `HeaderFacets`, `FieldGroup`, `Identification`, `ConnectedFields`, `DataPoint`, `Hidden`, `TextArrangement`, `MultiLineText`, `Placeholder`, `IsImageURL`, `CreateHidden`, `UpdateHidden`, `DeleteHidden`, `Criticality`, `CriticalityRepresentation`, `IconUrl`, `Importance`, `PartOfPreview`, `IsCopyAction`, `DoNotCheckScaleOfMeasureQuantity` |
-| partial | `Chart` (micro charts as inline SVG; a chart in an Object Page section is a simple column or bar chart) |
+| partial | `Chart`: an Object Page facet `<navigation>/@UI.Chart` is drawn as inline SVG from the navigation's rows (Column, Bar, their stacked forms, Line, Area, Pie, Donut; any other `ChartType` as columns). Not on the List Report, no micro charts, no drill-down, no `sap.viz` set |
 | ignored | `Badge`, `Note`, `Recommendations`, `QuickViewFacets`, `QuickCreateFacets`, `KPI`, `Spreadsheet` |
 
 `LineItem` records: `DataField`, `DataFieldWithUrl`, `DataFieldWithNavigationPath`, `DataFieldWithAction`, `DataFieldForAction` (toolbar, inline in the row, or determining in the footer) and `DataFieldForAnnotation`. Intent-based navigation (`DataFieldWithIntentBasedNavigation`) is rendered disabled.
@@ -27,8 +27,8 @@ A term the registry has no opinion about is reported as `unknown`: it is dropped
 
 | Status | Terms |
 |---|---|
-| supported | `Label`, `Heading`, `QuickInfo`, `Text`, `TextFor`, `SemanticKey`, `FieldControl`, `ValueList`, `ValueListWithFixedValues`, `ValueListRelevantQualifiers`, `ValueListForValidation`, `SideEffects`, `Messages`, `IsActionCritical`, `DefaultValuesFunction`, `FilterDefaultValue`, `FilterExpressionRestrictions`, `DraftRoot`, `DraftNode`, `IsUpperCase`, `IsDigitSequence`, `IsCalendarDate`, `IsCalendarYear`, `IsCalendarMonth`, `Masked`, `Timezone` |
-| partial | `SemanticObject` (the link is disabled, there is no launchpad navigation), `SAPObjectNodeType` |
+| supported | `Label`, `Heading`, `QuickInfo`, `Text`, `TextFor`, `SemanticKey`, `SemanticObject`, `SemanticObjectMapping`, `SemanticObjectUnavailableActions`, `FieldControl`, `ValueList`, `ValueListWithFixedValues`, `ValueListRelevantQualifiers`, `ValueListForValidation`, `SideEffects`, `Messages`, `IsActionCritical`, `DefaultValuesFunction`, `FilterDefaultValue`, `FilterExpressionRestrictions`, `DraftRoot`, `DraftNode`, `IsUpperCase`, `IsDigitSequence`, `IsCalendarDate`, `IsCalendarYear`, `IsCalendarMonth`, `Masked`, `Timezone` |
+| partial | `SAPObjectNodeType` |
 | ignored | `AddressViaNavigationPath` |
 
 ## Other vocabularies
@@ -43,7 +43,7 @@ A term the registry has no opinion about is reported as `unknown`: it is dropped
 | Validation | supported | `Minimum`, `Maximum`, `AllowedValues`, `Pattern` |
 | HTML5 | supported | `CssDefaults` (column width) |
 | Aggregation | supported | `RecursiveHierarchy` (tree table). The analytical terms are ignored |
-| Hierarchy | supported | `RecursiveHierarchy` |
+| Hierarchy | supported | `RecursiveHierarchy`. `RecursiveHierarchyActions` is partial: `ChangeNextSiblingAction` (Move Up / Down, drop between nodes) and `ChangeSiblingForRootsSupported`; `CopyAction` is not built |
 | Analytics, Session | ignored | the whole vocabularies (analytical list page, analytical tables, sticky sessions) |
 
 ## How terms become pages

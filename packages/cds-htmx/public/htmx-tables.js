@@ -768,6 +768,32 @@
     for (const child of descendantsOf(row)) child.hidden = true
   }
 
+  /** Expands the nodes and everything below them, level by level (each level's children are fetched when first opened). */
+  async function expandEntire(roots) {
+    for (let guard = 0; guard < 50; guard++) {
+      const todo = roots.flatMap(row => [row, ...descendantsOf(row)]).filter(row => row.dataset.hfState === 'collapsed')
+      if (!todo.length) return
+      for (const row of todo) await expandNode(row)
+    }
+  }
+
+  /** Collapses a node and every node below it, so opening it again shows its first level only. */
+  function collapseEntire(row) {
+    for (const child of descendantsOf(row)) if (child.dataset.hfState === 'expanded') setTreeState(child, 'collapsed')
+    collapseNode(row)
+  }
+
+  document.addEventListener('click', e => {
+    const button = e.target.closest?.('[data-hf-tree-expand-all], [data-hf-tree-collapse-all]')
+    if (!button) return
+    const table = button.closest('.hf-page--lr, .hf-section--table')?.querySelector('table[data-hf-tree]')
+    if (!table) return
+    const rows = [...table.querySelectorAll('tbody tr[data-hf-level]')]
+    const top = Math.min(...rows.map(levelOf))
+    const roots = rows.filter(row => levelOf(row) === top)
+    if (button.hasAttribute('data-hf-tree-expand-all')) expandEntire(roots); else for (const row of roots) collapseEntire(row)
+  })
+
   document.addEventListener('click', e => {
     const toggle = e.target.closest?.('.hf-tree-toggle')
     if (!toggle) return
@@ -879,7 +905,12 @@
       { text: T('HideColumn'), icon: 'hide', disabled: visibleColumns(container).length <= 1, run: () => updateView(container, { hidden: [...new Set([...hiddenCols(container), index])] }) },
       { text: T('ColumnSettings'), icon: 'action-settings', run: () => openViewSettings(container) }
     ].filter(Boolean)
+    mountMenu(entries, th.dataset.hfLabel || th.textContent.trim(), x, y)
+  }
 
+  /** Shows a menu of `{ text, icon, run, disabled, selected }` entries (and 'separator's) at the pointer. */
+  function mountMenu(entries, label, x, y) {
+    closeColumnMenu()
     const list = el('ul', { class: 'hf-popover__list', role: 'menu' }, entries.map(entry => {
       if (entry === 'separator') return el('li', { class: 'hf-colmenu__separator', role: 'separator' })
       const button = el('button', { type: 'button', role: 'menuitem', class: 'hf-popover__item hf-colmenu__item', disabled: !!entry.disabled, 'aria-current': entry.selected ? 'true' : false },
@@ -887,7 +918,7 @@
       button.addEventListener('click', () => { closeColumnMenu(); entry.run() })
       return el('li', { role: 'none' }, button)
     }))
-    columnMenu = el('div', { class: 'hf-colmenu', 'aria-label': th.dataset.hfLabel || th.textContent.trim() }, list)
+    columnMenu = el('div', { class: 'hf-colmenu', 'aria-label': label }, list)
     document.body.append(columnMenu)
     const box = columnMenu.getBoundingClientRect()
     columnMenu.style.left = `${Math.max(4, Math.min(x, innerWidth - box.width - 4))}px`
@@ -895,6 +926,39 @@
     columnMenu.querySelector('button:not([disabled])')?.focus({ preventScroll: true })
     columnMenuOpenedAt = performance.now()
   }
+
+  // ---------------------------------------------------------------- row context menu
+  // A right click on a row opens FE's context menu: the table toolbar's actions for that row (the row is selected alone first, so
+  // they act on it), a tree's expand/collapse entire node, and Open in New Tab. A field being edited keeps the browser's own menu.
+  document.addEventListener('contextmenu', e => {
+    const row = e.target.closest?.('tbody tr.fd-table__row')
+    if (!row || e.target.closest('input, textarea, select, [contenteditable]')) return
+    const scope = row.closest('.hf-page--lr, .hf-section--table')
+    const toolbar = scope?.querySelector('.hf-table-toolbar')
+    const box = row.querySelector('.hf-checkbox')
+    if (!scope || !toolbar) return
+    e.preventDefault()
+    if (box && !(box.checked && scope.querySelectorAll('tbody .hf-checkbox:checked').length === 1)) {
+      for (const other of scope.querySelectorAll('tbody .hf-checkbox:checked')) other.checked = false
+      box.checked = true
+      box.dispatchEvent(new Event('change', { bubbles: true }))
+    }
+    const actions = [...toolbar.querySelectorAll(':scope > button.fd-button:not(.hf-icon-button)')].map(button => ({
+      text: button.textContent.trim(), icon: button.hasAttribute('data-hf-tree-cut') ? 'scissors' : button.hasAttribute('data-hf-tree-paste') ? 'paste' : button.hasAttribute('data-hf-needs-selection') ? 'delete' : 'add', disabled: button.disabled, run: () => button.click()
+    })).filter(a => a.text)
+    const entries = [...actions]
+    if (row.dataset.hfLevel != null) {
+      const leaf = row.dataset.hfState === 'leaf'
+      entries.push('separator',
+        { text: T('ExpandEntireNode'), icon: 'expand-all', disabled: leaf, run: () => expandEntire([row]) },
+        { text: T('CollapseEntireNode'), icon: 'collapse-all', disabled: leaf, run: () => collapseEntire(row) })
+    }
+    const href = row.getAttribute('hx-get')
+    if (href) entries.push('separator', { text: T('OpenInNewTab'), icon: 'action', run: () => window.open(href, '_blank', 'noopener') })
+    const keyboard = e.clientX === 0 && e.clientY === 0
+    const rect = row.getBoundingClientRect()
+    mountMenu(entries, T('ContextMenu'), keyboard ? rect.left : e.clientX, keyboard ? rect.bottom : e.clientY)
+  })
 
   document.addEventListener('contextmenu', e => {
     const th = e.target.closest?.('thead th.hf-th')
