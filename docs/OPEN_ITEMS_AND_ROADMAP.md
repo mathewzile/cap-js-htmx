@@ -19,7 +19,7 @@ Built: the source passes the page's (or the selected row's) properties as parame
 
 ### Out of scope
 
-Fiori elements features that are not planned. They are listed as known deviations in the README.
+Fiori elements features that are not planned (the full list is under [Known deviations](fiori-elements-parity.md#known-deviations)).
 
 - **Share / header action menu**: the share menu of the page header (send e-mail, save as tile, Microsoft Teams, ...).
 - **Related apps**: the "Related Apps" action of the header.

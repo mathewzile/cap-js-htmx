@@ -29,7 +29,7 @@ npm run watch
 
 ## Documentation
 
-[Getting started](docs/index.md) · [Architecture](docs/ARCHITECTURE.md) · [Supported annotations](docs/annotations.md) · [Configuration](docs/configuration.md) · [Deploying to BTP](docs/DEPLOY_BTP.md) · [Known deviations from Fiori elements](docs/deviations.md) · [Open items and roadmap](docs/OPEN_ITEMS_AND_ROADMAP.md)
+[Getting started](docs/index.md) · [Architecture](docs/ARCHITECTURE.md) · [Fiori elements parity](docs/fiori-elements-parity.md) · [Configuration](docs/configuration.md) · [Deploying to BTP](docs/DEPLOY_BTP.md) · [Open items and roadmap](docs/OPEN_ITEMS_AND_ROADMAP.md)
 
 The same pages are published as a GitHub Pages site from `docs/` on every push to `main`.
 
@@ -42,4 +42,4 @@ npm run test:e2e    # browser tests (Playwright), light and dark theme, includin
 
 ## Known deviations
 
-The pages follow Fiori elements V4. Share and Related Apps, the analytical list page and sticky sessions are not planned; tree tables lack copying a node and the extension points; personalization is browser-local. The full list is in [docs/deviations.md](docs/deviations.md).
+The pages follow Fiori elements V4. Share and Related Apps, the analytical list page and sticky sessions are not planned; tree tables lack copying a node and the extension points; personalization is browser-local. The supported annotations and the full list of deviations are in [docs/fiori-elements-parity.md](docs/fiori-elements-parity.md).

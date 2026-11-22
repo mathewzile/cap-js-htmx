@@ -27,7 +27,7 @@ Open the sample pages (the SQLite database is in memory):
 
 1. Install the plugin: `npm add cds-htmx`. CAP loads it as a plugin and registers the protocol `@htmx` beside OData.
 2. Serve a service over it: `service CatalogService @odata @htmx { ... }`.
-3. Open `/htmx/<service>/<EntitySet>`. The List Report is built from `@UI.LineItem`, `@UI.SelectionFields`, `@UI.HeaderInfo`, `@UI.Facets` and the other annotations in the [coverage matrix](annotations.md).
+3. Open `/htmx/<service>/<EntitySet>`. The List Report is built from `@UI.LineItem`, `@UI.SelectionFields`, `@UI.HeaderInfo`, `@UI.Facets` and the other annotations in the [supported annotations](fiori-elements-parity.md#supported-annotations).
 4. To change what a page looks like without touching the model, put an `annotation.xml` and a `manifest.json` in `app/<name>/webapp`. Its annotations are layered on top of the service's, as in Fiori elements.
 
 ## Where to go next
@@ -35,12 +35,10 @@ Open the sample pages (the SQLite database is in memory):
 | Page | Content |
 |---|---|
 | [Architecture](ARCHITECTURE.md) | what runs where, how an app is loaded, how annotations are merged |
-| [Supported annotations](annotations.md) | the coverage matrix: supported, partial, ignored |
+| [Fiori elements parity](fiori-elements-parity.md) | the supported annotations, the terms not supported, the known deviations |
 | [Configuration](configuration.md) | every `cds.htmx` option and the app manifest settings |
 | [Deploying to BTP and Work Zone](DEPLOY_BTP.md) | entitlements, MTA build, HTML5 app, tile in Work Zone |
 | [Frontend deployment and extensibility](FRONTEND_DEPLOYMENT_AND_EXTENSIBILITY.md) | the design of the shell, the app sources and the extension points |
-| [Known deviations from Fiori elements](deviations.md) | what differs or is missing on purpose |
-| [Annotation parity with Fiori elements](FE_ANNOTATION_PARITY.md) | every term of the FE-supported vocabularies and whether the plugin builds it |
 | [Open items and roadmap](OPEN_ITEMS_AND_ROADMAP.md) | gaps and future work |
 
 ## Tests
