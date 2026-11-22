@@ -1,5 +1,6 @@
-const cds = require('@sap/cds')
 const path = require('node:path')
+const genres = require('../support/genres-tree') // (before cds: the Genres list is a tree through a fixture app)
+const cds = require('@sap/cds')
 const assert = require('node:assert/strict')
 const api = require('../support/hx-writes')(cds.test(path.join(__dirname, '..', '..', '..', '..')))
 
@@ -13,9 +14,10 @@ const HX = { 'HX-Request': 'true' }
 const root = path.join(__dirname, '..', '..', '..', '..', 'app')
 const ADMIN = '/admin/'
 const storeOf = () => cache.storeFor(cds.model, 'AdminService', ADMIN, { appRoot: root })
-const layoutOf = (set, entity = set) => cache.listReportFor(cds.model, 'AdminService', ADMIN, `AdminService.${entity}`, `/${set}`, { appRoot: root })
+const layoutOf = (set, entity = set) => cache.listReportFor(cds.model, 'AdminService', ADMIN, `AdminService.${entity}`, `/${set}`, { appRoot: set === 'Genres' ? genres.APPS : root })
 
-const get = async url => (await api.GET(url, { headers: HX })).data
+const forGenres = url => url.startsWith('/htmx/admin/Genres') ? genres.withApp(HX) : HX
+const get = async url => (await api.GET(url, { headers: forGenres(url) })).data
 const rowsOf = html => [...html.matchAll(/<tr id="lr-row--[^>]*data-hf-level="(\d+)" data-hf-state="(\w+)" data-hf-node="([^"]+)"/g)].map(m => ({ level: Number(m[1]), state: m[2], node: m[3] }))
 const FICTION = '10aaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
 const FANTASY = '13aaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
@@ -23,7 +25,7 @@ const FANTASY = '13aaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
 describe('round 5: tree table, paging, date filters', () => {
 
   describe('model', () => {
-    test('the manifest of browse-genres makes the Genres list a tree on the declared hierarchy', () => {
+    test('the manifest of the genres-tree fixture app makes the Genres list a tree on the declared hierarchy', () => {
       const lr = layoutOf('Genres')
       assert.equal(lr.table.type, 'TreeTable')
       assert.deepEqual(lr.table.hierarchy, { qualifier: 'GenresHierarchy', nodeProperty: 'ID', parentNavigation: 'parent', parentKey: 'parent_ID', initialExpansionLevel: 0 })
@@ -74,7 +76,7 @@ describe('round 5: tree table, paging, date filters', () => {
     })
 
     test('$children needs a node and a declared hierarchy', async () => {
-      assert.equal((await api.GET('/htmx/admin/Genres/$children', { headers: HX, validateStatus: () => true })).status, 404)
+      assert.equal((await api.GET('/htmx/admin/Genres/$children', { headers: forGenres('/htmx/admin/Genres'), validateStatus: () => true })).status, 404)
       assert.equal((await api.GET(`/htmx/admin/Authors/$children?node=${FICTION}&hq=Nope`, { headers: HX, validateStatus: () => true })).status, 404)
     })
 

@@ -1,4 +1,5 @@
 // Tree tables: `initialExpansionLevel` (levels that come open) and the paging of a node's children (a "More" row).
+const genres = require('../support/genres-tree') // (before cds: the Genres list is a tree through a fixture app)
 const cds = require('@sap/cds')
 const path = require('node:path')
 const assert = require('node:assert/strict')
@@ -8,7 +9,7 @@ const treeLib = require('../../lib/data/tree')
 
 const root = path.join(__dirname, '..', '..', '..', '..', 'app')
 const FICTION = '10aaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
-const layoutOf = () => cache.listReportFor(cds.model, 'AdminService', '/admin/', 'AdminService.Genres', '/Genres', { appRoot: root })
+const layoutOf = () => cache.listReportFor(cds.model, 'AdminService', '/admin/', 'AdminService.Genres', '/Genres', { appRoot: genres.APPS })
 const withLevels = n => { const layout = layoutOf(); return { ...layout, table: { ...layout.table, hierarchy: { ...layout.table.hierarchy, initialExpansionLevel: n } } } }
 const topRows = (layout, limit = 20) => cds.services.AdminService.tx(tx => treeLib.topLevel(tx, cds.model, 'AdminService.Genres', layout, { limit }))
 
@@ -48,7 +49,7 @@ describe('tree table: children are paged', () => {
   const page = async (skip, size) => {
     const before = cds.env.htmx
     cds.env.htmx = { ...before, treeChildrenPage: size }
-    try { return String((await api.GET(`/htmx/admin/Genres/$children?node=${FICTION}&level=1&hq=GenresHierarchy&$skip=${skip}`, { headers: HX })).data) } finally { cds.env.htmx = before }
+    try { return String((await api.GET(`/htmx/admin/Genres/$children?node=${FICTION}&level=1&hq=GenresHierarchy&$skip=${skip}`, { headers: genres.withApp(HX) })).data) } finally { cds.env.htmx = before }
   }
   const idsOf = html => [...html.matchAll(/<tr id="lr-row--([^"]+)"/g)].map(m => m[1])
 

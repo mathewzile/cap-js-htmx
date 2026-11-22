@@ -96,35 +96,37 @@ test.describe('column menu', () => {
   })
 })
 
-test.describe('tree table (browse-genres)', () => {
-  test('top level first; expanding loads children once; collapsing hides them again', async ({ page }) => {
-    await page.goto('/htmx/admin/Genres')
+// the standalone Manage Categories list: a tree with initialExpansionLevel 1, so the first two levels are open and the third one is read with them
+// (the lazy reading of  from a browser is checked in catalog-tree.spec.js, which opens a collapsed node of the Catalogs tree)
+test.describe('tree table (Manage Categories)', () => {
+  const MYSTERY = 'tr[data-hf-node^="32aaaaaa"]'
+
+  test('the open levels first; collapsing hides everything below a node and opening it shows it again, without a request', async ({ page }) => {
+    await page.goto('/htmx/admin/Categories')
     await expect(page.locator('#lr-table')).toHaveAttribute('role', 'treegrid')
-    await expect(rows(page)).toHaveCount(2)
-    const fiction = page.locator('tr[data-hf-node^="10aaaaaa"]')
+    await expect(rows(page)).toHaveCount(8) // Fiction, Drama, Mystery, Cozy Mystery, Non-Fiction, Biography, Science, Reference
+    const fiction = page.locator('tr[data-hf-node^="30aaaaaa"]')
     const requests = []
     page.on('request', r => { if (r.url().includes('$children')) requests.push(r.url()) })
+    await page.locator(MYSTERY + ' .hf-tree-toggle').click()
+    await expect(rows(page)).toHaveCount(7)
+    await expect(page.locator(MYSTERY)).toHaveAttribute('data-hf-state', 'collapsed')
+    // collapse Fiction: everything below goes, Mystery stays collapsed inside
     await fiction.locator('.hf-tree-toggle').click()
-    await expect(rows(page)).toHaveCount(2 + 9)
-    await expect(fiction).toHaveAttribute('data-hf-state', 'expanded')
-    // Fantasy (level 1) expands one level further
-    await page.locator('tr[data-hf-node^="13aaaaaa"] .hf-tree-toggle').click()
-    await expect(rows(page)).toHaveCount(2 + 9 + 4)
-    await page.screenshot({ path: 'test-results/round5/tree.png' })
-    // collapse Fiction: everything below goes, Fantasy stays expanded inside
+    await expect(rows(page)).toHaveCount(5)
     await fiction.locator('.hf-tree-toggle').click()
-    await expect(rows(page)).toHaveCount(2)
-    await fiction.locator('.hf-tree-toggle').click()
-    await expect(rows(page)).toHaveCount(2 + 9 + 4)
-    expect(requests).toHaveLength(2) // nothing is fetched twice
+    await expect(rows(page)).toHaveCount(7)
+    await page.locator(MYSTERY + ' .hf-tree-toggle').click()
+    await expect(rows(page)).toHaveCount(8)
+    expect(requests).toHaveLength(0) // all of it was read with the page
   })
 
   test('search shows the matches with the ancestors that lead to them', async ({ page }) => {
-    await page.goto('/htmx/admin/Genres')
-    await page.locator('#lr-search').fill('Noir')
+    await page.goto('/htmx/admin/Categories')
+    await page.locator('#lr-search').fill('Cozy')
     await page.locator('#lr-search').press('Enter')
-    await expect(rows(page)).toHaveCount(7)
-    await expect(page.locator('tr[data-hf-node^="1621aaaa"]')).toHaveAttribute('data-hf-level', '3')
+    await expect(rows(page)).toHaveCount(3) // Fiction > Mystery > Cozy Mystery
+    await expect(page.locator('tr[data-hf-node^="33aaaaaa"]')).toHaveAttribute('data-hf-level', '2')
   })
 })
 
@@ -233,14 +235,12 @@ test.describe('busy state and failures', () => {
   })
 })
 
-test('expanding tree nodes does not change the column widths', async ({ page }) => {
-  await page.goto('/htmx/admin/Genres')
+test('collapsing and opening tree nodes does not change the column widths', async ({ page }) => {
+  await page.goto('/htmx/admin/Categories')
   const widths = () => page.locator('#lr-table thead th').evaluateAll(ths => ths.map(th => Math.round(th.getBoundingClientRect().width)))
   const before = await widths()
-  await page.locator('tr[data-hf-node^="10aaaaaa"] .hf-tree-toggle').click()
-  await page.locator('tr[data-hf-node^="13aaaaaa"] .hf-tree-toggle').click()
-  await expect(rows(page)).toHaveCount(15)
-  await page.locator('tr[data-hf-node^="134aaaaa"]').waitFor()
+  await page.locator('tr[data-hf-node^="30aaaaaa"] .hf-tree-toggle').click()
+  await expect(rows(page)).toHaveCount(5)
   expect(await widths()).toEqual(before)
   await page.screenshot({ path: 'test-results/round5/tree-fixed.png' })
 })

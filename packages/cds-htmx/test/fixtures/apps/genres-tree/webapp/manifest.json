@@ -1,0 +1,41 @@
+{
+  "sap.app": {
+    "id": "fixture.genrestree",
+    "type": "application",
+    "title": "Genres",
+    "applicationVersion": { "version": "1.0.0" },
+    "dataSources": {
+      "mainService": { "uri": "/admin/", "type": "OData", "settings": { "odataVersion": "4.0" } }
+    }
+  },
+  "sap.ui5": {
+    "routing": {
+      "routes": [
+        { "pattern": ":?query:", "name": "GenresList", "target": "GenresList" },
+        { "pattern": "Genres({key}):?query:", "name": "GenresObjectPage", "target": "GenresObjectPage" }
+      ],
+      "targets": {
+        "GenresList": {
+          "type": "Component",
+          "id": "GenresList",
+          "name": "sap.fe.templates.ListReport",
+          "options": {
+            "settings": {
+              "contextPath": "/Genres",
+              "navigation": { "Genres": { "detail": { "route": "GenresObjectPage" } } },
+              "controlConfiguration": {
+                "@com.sap.vocabularies.UI.v1.LineItem": {
+                  "tableSettings": { "type": "TreeTable", "hierarchyQualifier": "GenresHierarchy" }
+                }
+              }
+            }
+          }
+        },
+        "GenresObjectPage": {
+          "name": "sap.fe.templates.ObjectPage",
+          "options": { "settings": { "contextPath": "/Genres" } }
+        }
+      }
+    }
+  }
+}

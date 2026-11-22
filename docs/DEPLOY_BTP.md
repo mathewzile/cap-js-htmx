@@ -45,7 +45,7 @@ npm i -g mbt            # once
 mbt build -t ./ --mtar cap-htmx_1.0.0.mtar      # same as: npm run build:mta
 ```
 
-The build runs `npm ci`, builds the HTML5 zips (`app/manage-books-htmx`, and `app/manage-authors-htmx`, the same shell with a Flexible Column Layout), `cds build --production`, and `scripts/prepare-srv.mjs`, which packs the `cds-htmx` workspace package into `gen/srv/vendor` (it is not on a registry) and copies the app manifests and annotation files the plugin reads at run time.
+The build runs `npm ci`, builds the HTML5 zips of the htmx apps (`npm run build:htmx-app`: `app/manage-books-htmx`, `app/manage-authors-htmx` with a Flexible Column Layout, `app/manage-catalogs-htmx` and `app/manage-categories-htmx` for the trees; the Fiori elements apps `manage-authors`, `manage-books`, `manage-catalogs` and `manage-categories` are zipped by `ui5 build` in their own module), `cds build --production`, and `scripts/prepare-srv.mjs`, which packs the `cds-htmx` workspace package into `gen/srv/vendor` (it is not on a registry) and copies the app manifests and annotation files the plugin reads at run time.
 
 ## 3. Make the app appear in Work Zone
 
@@ -54,7 +54,7 @@ The build runs `npm ci`, builds the HTML5 zips (`app/manage-books-htmx`, and `ap
 3. Create a **Role** and a **Group**, add the app to both, add the role to your site (*Site Directory*).
 4. Open the site. The tile starts the app: `/htmx/catalog/Books` is requested through the approuter.
 
-The app's inbound is `Books-manageHtmx`. Its first page and service come from `sap.htmx` in `app/manage-books-htmx/webapp/manifest.json`. The authors app's inbound is `Authors-manageHtmx` (`app/manage-authors-htmx/webapp/manifest.json`); its manifest declares the `sap.f` router and three routes, which is what opens List Report, Author and Book in columns.
+All nine apps are modules of `mta.yaml` and are uploaded together; each htmx app has its own inbound (`<Object>-manageHtmx`, the Fiori elements one `<Object>-manage`). The books app's inbound is `Books-manageHtmx`. Its first page and service come from `sap.htmx` in `app/manage-books-htmx/webapp/manifest.json`. The authors app's inbound is `Authors-manageHtmx` (`app/manage-authors-htmx/webapp/manifest.json`); its manifest declares the `sap.f` router and three routes, which is what opens List Report, Author and Book in columns.
 
 The theme follows the Work Zone user's setting (Settings > Appearance): the shell asks the launchpad's UI5 for the theme and updates when it changes. Standalone, `cds.htmx.theme` (`sap_horizon`, `sap_horizon_dark`, `sap_horizon_hcb`, `sap_horizon_hcw`, or `auto` for the browser's preference) decides.
 

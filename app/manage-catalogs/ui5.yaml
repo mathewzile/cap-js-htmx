@@ -2,7 +2,7 @@
 
 specVersion: "4.0"
 metadata:
-  name: browsegenres
+  name: managecatalogs
 type: application
 server:
   customMiddleware:
@@ -35,7 +35,7 @@ builder:
     - name: ui5-task-zipper
       afterTask: generateVersionInfo
       configuration:
-        archiveName: browse-genres
+        archiveName: manage-catalogs
         relativePaths: true
         additionalFiles:
           - xs-app.json

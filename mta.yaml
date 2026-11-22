@@ -11,7 +11,7 @@ build-parameters:
     - builder: custom
       commands:
         - npm ci
-        # the HTML5 app zips (webapp + generic htmx shell + xs-app.json), see app/manage-books-htmx and app/manage-authors-htmx
+        # the HTML5 app zips (webapp + generic htmx shell + xs-app.json), see the app/*-htmx folders
         - npm run build:htmx-app
         # the CAP service (gen/srv) and the HANA artifacts (gen/db) ...
         - npx cds build --production
@@ -73,17 +73,25 @@ modules:
       build-result: dist
       supported-platforms: []
 
-  # ---- the Fiori elements apps (ui5 build zips the app with its xs-app.json, see ui5-task-zipper in their ui5.yaml) ----------
-  - name: cap-htmx-fe-browsegenres
+  - name: cap-htmx-managecatalogs
     type: html5
-    path: app/browse-genres
+    path: app/manage-catalogs-htmx
     build-parameters:
       builder: custom
-      commands:
-        - npm run build
+      commands: []
       build-result: dist
       supported-platforms: []
 
+  - name: cap-htmx-managecategories
+    type: html5
+    path: app/manage-categories-htmx
+    build-parameters:
+      builder: custom
+      commands: []
+      build-result: dist
+      supported-platforms: []
+
+  # ---- the Fiori elements apps (ui5 build zips the app with its xs-app.json, see ui5-task-zipper in their ui5.yaml) ----------
   - name: cap-htmx-fe-manageauthors
     type: html5
     path: app/manage-authors
@@ -97,6 +105,26 @@ modules:
   - name: cap-htmx-fe-managebooks
     type: html5
     path: app/manage-books
+    build-parameters:
+      builder: custom
+      commands:
+        - npm run build
+      build-result: dist
+      supported-platforms: []
+
+  - name: cap-htmx-fe-managecatalogs
+    type: html5
+    path: app/manage-catalogs
+    build-parameters:
+      builder: custom
+      commands:
+        - npm run build
+      build-result: dist
+      supported-platforms: []
+
+  - name: cap-htmx-fe-managecategories
+    type: html5
+    path: app/manage-categories
     build-parameters:
       builder: custom
       commands:
@@ -123,9 +151,13 @@ modules:
           artifacts:
             - manageauthorshtmx.zip
           target-path: gen/app
-        - name: cap-htmx-fe-browsegenres
+        - name: cap-htmx-managecatalogs
           artifacts:
-            - browse-genres.zip
+            - managecatalogshtmx.zip
+          target-path: gen/app
+        - name: cap-htmx-managecategories
+          artifacts:
+            - managecategorieshtmx.zip
           target-path: gen/app
         - name: cap-htmx-fe-manageauthors
           artifacts:
@@ -134,6 +166,14 @@ modules:
         - name: cap-htmx-fe-managebooks
           artifacts:
             - manage-books.zip
+          target-path: gen/app
+        - name: cap-htmx-fe-managecatalogs
+          artifacts:
+            - manage-catalogs.zip
+          target-path: gen/app
+        - name: cap-htmx-fe-managecategories
+          artifacts:
+            - manage-categories.zip
           target-path: gen/app
 
   # ---- the destination the approuter route sends /htmx/** to: the URL of the CAP service -------------------------------------

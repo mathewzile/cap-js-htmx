@@ -209,3 +209,65 @@ annotate service.Genres with @(
   UI.HeaderInfo : { TypeName : '{i18n>Genre}', TypeNamePlural : '{i18n>Genres}', Title : { Value : name } },
   UI.LineItem   : [ { Value : name, Label : '{i18n>Name}' } ]
 );
+
+// the Genres of the AdminService (a tree table in a List Report, see the genres-tree test app): columns and a form
+annotate AdminService.Genres with @(
+    UI.FieldGroup #GeneratedGroup : {
+        $Type : 'UI.FieldGroupType',
+        Data : [
+            {
+                $Type : 'UI.DataField',
+                Value : name,
+            },
+            {
+                $Type : 'UI.DataField',
+                Value : descr,
+            },
+            {
+                $Type : 'UI.DataField',
+                Label : 'ID',
+                Value : ID,
+            },
+            {
+                $Type : 'UI.DataField',
+                Label : 'parent_ID',
+                Value : parent_ID,
+            },
+        ],
+    },
+    UI.Facets : [
+        {
+            $Type : 'UI.ReferenceFacet',
+            ID : 'GeneratedFacet1',
+            Label : 'General Information',
+            Target : '@UI.FieldGroup#GeneratedGroup',
+        },
+    ],
+    UI.LineItem : [
+        {
+            $Type : 'UI.DataField',
+            Label : 'ID',
+            Value : ID,
+        },
+        {
+            $Type : 'UI.DataField',
+            Value : name,
+        },
+        {
+            $Type : 'UI.DataField',
+            Value : descr,
+        },
+        {
+            $Type : 'UI.DataField',
+            Label : 'parent_ID',
+            Value : parent_ID,
+        },
+    ],
+);
+
+// Genres is a hierarchy in the AdminService (a tree table in a List Report), and the genre value help of a book opens it as a tree
+annotate AdminService.Genres with @hierarchy;
+annotate AdminService.Books:genre with @Common.ValueList.PresentationVariantQualifier: 'VH';
+annotate AdminService.Genres with @UI.PresentationVariant #VH: {
+  RecursiveHierarchyQualifier : 'GenresHierarchy',
+};

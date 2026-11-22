@@ -56,10 +56,9 @@ test.describe('light', () => {
   })
 
   test('tree table', async ({ page }) => {
-    await page.goto('/htmx/admin/Genres')
+    await page.goto('/htmx/admin/Categories')
     await expect(page.locator('#lr-table')).toHaveAttribute('role', 'treegrid')
-    await page.locator('tr[data-hf-node^="10aaaaaa"] .hf-tree-toggle').click()
-    await expect(page.locator('#lr-table-body > tr:not([hidden])')).toHaveCount(11)
+    await expect(page.locator('#lr-table-body > tr:not([hidden])')).toHaveCount(8)
     await shot(page, 'tree-table')
   })
 

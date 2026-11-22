@@ -31,15 +31,14 @@
     "docs:screenshots": "playwright test -c packages/cds-htmx/test/e2e/docs.config.js",
     "lint": "eslint packages/cds-htmx/lib packages/cds-htmx-shell",
     "watch-manage-books": "cds watch --open managebooks/index.html?sap-ui-xx-viewCache=false --livereload false",
-    "watch-browse-genres": "cds watch --open browsegenres/index.html?sap-ui-xx-viewCache=false --livereload false",
     "watch-manage-authors": "cds watch --open manageauthors/index.html?sap-ui-xx-viewCache=false --livereload false",
-    "build:htmx-app": "npm run build --workspace=managebooks-htmx --workspace=manageauthors-htmx",
+    "build:htmx-app": "npm run build --workspace=managebooks-htmx --workspace=manageauthors-htmx --workspace=managecatalogs-htmx --workspace=managecategories-htmx",
     "build:mta": "mbt build -t ./"
   },
   "sapux": [
     "app/manage-books",
-    "app/browse-genres",
     "app/manage-authors",
+    "app/manage-catalogs",
     "app/manage-categories"
   ],
   "cds": {
