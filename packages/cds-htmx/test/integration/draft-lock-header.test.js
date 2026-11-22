@@ -1,4 +1,4 @@
-// A draft that somebody else holds, seen by a second user: the saved version's Object Page header says who ("Locked by <user>", as Fiori
+// A draft that somebody else holds, seen by a second user: the saved version's Object Page header says who (an icon with a popover: "This object has unsaved changes made by <user>", as Fiori
 // elements does) and offers no switch to a draft that is not theirs; the holder sees "Saved Version" with the popover to get back to it.
 // Edit on that object is refused with the holder's name.
 const cds = require('@sap/cds')
@@ -19,7 +19,7 @@ describe('a draft held by another user', () => {
 
   test("bob sees the saved version with who holds the draft, and no switch to alice's draft", async () => {
     const page = String((await api.GET(active, as('bob'))).data)
-    assert.match(page, /Locked by alice/)
+    assert.match(page, /unsaved changes made by alice/)
     assert.doesNotMatch(page, /data-hf-popover-toggle[^>]*>\s*Saved Version/)
   })
 
@@ -36,7 +36,7 @@ describe('a draft held by another user', () => {
 
   test('alice sees her own draft marker with the way back to the saved version', async () => {
     const page = String((await api.GET(active, as('alice'))).data)
-    assert.doesNotMatch(page, /Locked by/)
+    assert.doesNotMatch(page, /unsaved changes made by/)
     assert.match(page, /Saved Version/)
   })
 

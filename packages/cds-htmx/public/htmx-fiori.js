@@ -161,14 +161,21 @@ function hfClosePopovers(except) {
   }
 }
 
-document.addEventListener('click', e => {
+function hfTogglePopover(e) {
   const toggle = e.target.closest('[data-hf-popover-toggle]')
   const popover = toggle?.closest('.hf-popover')
   hfClosePopovers(popover)
   if (!popover) return
   const open = popover.classList.toggle('is-open')
   toggle.setAttribute('aria-expanded', String(open))
-})
+}
+document.addEventListener('click', hfTogglePopover)
+// the "unsaved changes" marker of a table row: its click opens the popover and does not open the row (the capture phase gets there first)
+document.addEventListener('click', e => {
+  if (!e.target.closest('.hf-draft-lock')) return
+  e.stopPropagation()
+  hfTogglePopover(e)
+}, true)
 document.addEventListener('keydown', e => { if (e.key === 'Escape') hfClosePopovers() })
 document.addEventListener('htmx:after:swap', () => hfClosePopovers())
 

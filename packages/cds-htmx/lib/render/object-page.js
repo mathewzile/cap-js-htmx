@@ -3,6 +3,7 @@ const ids = require('./ids')
 const { chartSvg } = require('./chart')
 const { evaluate, paths: pathsOf } = require('../annotations/expressions')
 const { formField, fieldLabel, isIntentAction, intentButton } = require('./field')
+const { lockMarker } = require('./draft-lock')
 const { rowsHtml, tableHead, columnVisibilityStyle, rowHref, treeAttributes, treeMoveButtons, treeExpandButtons, sectionGrowing } = require('./table')
 const { exportSplitButton } = require('./list-report')
 const { formatCount } = require('../data/format')
@@ -307,15 +308,12 @@ const switchedPath = (path, active) => path.replace(/IsActiveEntity=(true|false)
  *   - editing a draft that has a saved version: "Draft" with a popover to switch to the Saved Version
  *   - viewing the saved version while a draft exists: "Saved Version" with a popover to switch to the Draft
  *   - a brand-new draft (nothing to switch to) is a plain "Draft" label */
-function draftIndicator(row, { basePath, entitySetPath, bundle, t, editMode }) {
+function draftIndicator(row, { basePath, entitySetPath, bundle, t, editMode, locale }) {
   const onDraft = editMode === 'draft'
   const switchable = onDraft ? row.HasActiveEntity === true : row.HasDraftEntity === true
   if (!onDraft && !switchable) return html``
-  // the draft is somebody else's: there is nothing to switch to, the header says who holds it
-  if (!onDraft && row._draftOwn === false) {
-    const who = row._lockedBy ? t(bundle, 'LockedByUser').replace('{0}', row._lockedBy) : t(bundle, 'LockedByAnotherUser')
-    return html`<span class="hf-op-title__draft"><span class="fd-object-status fd-object-status--informative hf-draft-label">${who}</span></span>`
-  }
+  // the draft is somebody else's: there is nothing to switch to; the icon (as in FE) opens who holds it and when they last changed it
+  if (!onDraft && row._draftOwn === false) return html`<span class="hf-op-title__draft">${lockMarker(row, { bundle, t, locale })}</span>`
   const label = t(bundle, onDraft ? 'Draft' : 'SavedVersion')
   if (!switchable) return html`<span class="hf-op-title__draft" title="${t(bundle, 'DraftSaved')}"><span class="fd-button fd-button--compact fd-button--transparent hf-draft-label">${label}</span></span>`
   const item = (text, current, path) => html`<li>
@@ -387,7 +385,7 @@ function objectPageFragment(layout, row, ctx) {
         <div class="hf-op-title">
           ${headerAvatar(layout.header, row)}
           ${titleText(title, description)}
-          ${layout.edit?.mode === 'node' ? html`` : draftIndicator(row, { basePath: ctx.basePath, entitySetPath: ctx.entitySetPath, bundle: ctx.bundle, t: ctx.t, editMode })}
+          ${layout.edit?.mode === 'node' ? html`` : draftIndicator(row, { basePath: ctx.basePath, entitySetPath: ctx.entitySetPath, bundle: ctx.bundle, t: ctx.t, locale: ctx.locale, editMode })}
           <div class="hf-spacer"></div>
           ${headerActions(layout.headerActions || [], ctx.bundle, ctx.t, {
             basePath: ctx.basePath, entitySetPath: ctx.entitySetPath, editMode,

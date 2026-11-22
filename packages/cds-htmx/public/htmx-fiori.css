@@ -425,6 +425,13 @@ html:has(body.htmx-fiori), body.htmx-fiori {
 
 .hf-draft-indicator { margin-top: .125rem; font-size: .75rem; }
 
+/* the marker of somebody else's unsaved changes: an icon (and its text in a table) that opens a popover with who and when */
+.hf-draft-lock__button { gap: .25rem; padding: 0 .25rem; min-width: 0; height: 1.5rem; font-size: .75rem; color: var(--sapContent_MarkerTextColor, #1d2d3e); }
+.hf-draft-lock__button i { font-size: .875rem; color: var(--sapContent_MarkerIconColor, #1d2d3e); }
+.hf-draft-lock .fd-popover__body { width: max-content; min-width: 15rem; max-width: 20rem; padding: .75rem 1rem; white-space: normal; text-align: left; cursor: default; font-size: .875rem; }
+.hf-draft-lock .fd-popover__body p { margin: .5rem 0 0; }
+.hf-op-title__draft .hf-draft-lock .fd-popover__body { left: 0; transform: none; }
+
 .htmx-fiori .hf-table .fd-object-status,
 .hf-field__value .fd-object-status {
   display: inline-flex;

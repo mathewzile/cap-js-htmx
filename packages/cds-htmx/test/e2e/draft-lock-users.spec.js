@@ -9,7 +9,7 @@ const START = { timeout: 60000 }
 // (the mocked auth never challenges, so the credentials go with every request instead of waiting for a 401)
 const session = async (browser, username) => (await browser.newContext({ extraHTTPHeaders: { Authorization: 'Basic ' + Buffer.from(username + ':').toString('base64') } })).newPage()
 
-test('while alice edits a book, bob sees "Locked by alice" in the list and on the book page', async ({ browser }) => {
+test('while alice edits a book, bob sees "Unsaved changes by alice" in the list and an icon with a popover on the book page', async ({ browser }) => {
   test.setTimeout(120000)
   const alice = await session(browser, 'alice')
   const bob = await session(browser, 'bob')
@@ -20,12 +20,24 @@ test('while alice edits a book, bob sees "Locked by alice" in the list and on th
   await expect(alice.getByRole('button', { name: 'Save', exact: true })).toBeVisible(START)
 
   await bob.goto('/htmx/catalog/Books')
-  await expect(bob.locator('.hf-table tbody tr', { hasText: 'Jane Eyre' })).toContainText('Locked by alice', START)
+  await expect(bob.locator('.hf-table tbody tr', { hasText: 'Jane Eyre' })).toContainText('Unsaved changes by alice', START)
+  // the marker opens its popover and does not open the row
+  await bob.locator('.hf-table tbody tr', { hasText: 'Jane Eyre' }).locator('.hf-draft-lock__button').click()
+  await expect(bob.locator('.hf-draft-lock__body')).toContainText('This object has unsaved changes made by alice.')
+  await expect(bob.locator('.hf-draft-lock__body')).toContainText('Last changed on')
+  await expect(bob.locator('.hf-table')).toBeVisible()
   await bob.goto(book)
-  await expect(bob.locator('.hf-page--op')).toContainText('Locked by alice', START)
+  // the header has the icon alone; its popover says the same
+  const icon = bob.locator('.hf-page--op .hf-draft-lock__button')
+  await expect(icon).toBeVisible(START)
+  await expect(icon).toHaveText('')
+  await icon.click()
+  await expect(bob.locator('.hf-page--op .hf-draft-lock__body')).toContainText('Unsaved Changes')
+  await expect(bob.locator('.hf-page--op .hf-draft-lock__body')).toContainText('made by alice')
 
   // alice discards: the lock is gone for bob
   await alice.getByRole('button', { name: 'Discard Draft' }).click()
   await bob.reload()
-  await expect(bob.locator('.hf-page--op')).not.toContainText('Locked by', START)
+  await expect(bob.locator('.hf-page--op')).not.toContainText('made by alice', START)
+  await expect(bob.locator('.hf-draft-lock__button')).toHaveCount(0)
 })

@@ -4,6 +4,7 @@ const { criticalityClass, criticalityIcon, formatAmount, formatNumber, formatBoo
 const { formatKeys } = require('../keys')
 const ids = require('./ids')
 const { widthSpec } = require('./column-width')
+const { lockMarker } = require('./draft-lock')
 const { resolveElement } = require('../annotations/edm')
 const { canDelete } = require('../model/edit-capabilities')
 
@@ -203,7 +204,7 @@ function dataCell(col, row, { bundle, t, isSemanticKey, numeric, index, edit, ro
     if (!isReadOnly(col.field, row, 'draft')) return editCell(col, row, { rowPath: edit.rowPath(row), rowKey, cls, numeric, node: tree && index === 0 ? treeNode(tree, { bundle, t }) : html`` })
   }
   const { text, unit } = cellParts(col, row, { type, locale })
-  const badge = isSemanticKey ? draftStatusBadge(row, bundle, t) : html``
+  const badge = isSemanticKey ? draftStatusBadge(row, bundle, t, locale) : html``
   const crit = col.criticality ? criticalityClass(evaluate(col.criticality, row)) : ''
   // an amount and its currency or unit sit side by side, the unit in a slot of its own so the amounts of all rows line up
   // a DataFieldWithIntentBasedNavigation: the value is a link to the intent, the row is its context (the click must not open the row)
@@ -216,17 +217,17 @@ function dataCell(col, row, { bundle, t, isSemanticKey, numeric, index, edit, ro
 
 /** A draft-root row's "Draft" (own draft shown in place of the active row, FE's "All" default view)
  *  or "Locked" (another draft exists on this active row) status, under the first column (§3.4 List
- *  Report checklist). "Locked by <name>": the holder's `InProcessByUserDescription`, else the user id (as FE);
- *  "Locked by Another User" only when the holder cannot be read. */
-function draftStatusBadge(row, bundle, t) {
+ *  Report checklist). Another user's draft is "Unsaved changes by <name>" (the holder's `InProcessByUserDescription`, else the user id, as FE),
+ *  "Unsaved Changes by Another User" only when the holder cannot be read; the marker opens a popover (`draft-lock.js`). */
+function draftStatusBadge(row, bundle, t, locale) {
   if (!bundle) return html``
   if (row.IsActiveEntity === false) {
     return html`<div class="hf-draft-indicator"><span class="fd-object-status fd-object-status--informative">${t(bundle, 'Draft')}</span></div>`
   }
   if (row.HasDraftEntity === true) {
     // your own draft is "Draft" (the active row stands in for it), somebody else's locks the object
-    const own = row._draftOwn === true
-    return html`<div class="hf-draft-indicator"><span class="fd-object-status fd-object-status--informative">${own ? t(bundle, 'Draft') : row._lockedBy ? t(bundle, 'LockedByUser').replace('{0}', row._lockedBy) : t(bundle, 'LockedByAnotherUser')}</span></div>`
+    if (row._draftOwn !== true) return html`<div class="hf-draft-indicator">${lockMarker(row, { bundle, t, locale, withText: true })}</div>`
+    return html`<div class="hf-draft-indicator"><span class="fd-object-status fd-object-status--informative">${t(bundle, 'Draft')}</span></div>`
   }
   return html``
 }

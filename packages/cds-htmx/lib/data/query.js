@@ -14,7 +14,7 @@ function isDraftRoot(entity) {
 
 /** The columns that say who holds a draft: the user id and, when the compiler added it (`draftUserDescription`), the name that
  *  `InProcessByUserDescription` carries. FE shows the name when there is one and the id otherwise. */
-const lockColumns = () => cds.model.definitions['DRAFT.DraftAdministrativeData']?.elements?.InProcessByUserDescription ? ['InProcessByUser', 'InProcessByUserDescription'] : ['InProcessByUser']
+const lockColumns = () => cds.model.definitions['DRAFT.DraftAdministrativeData']?.elements?.InProcessByUserDescription ? ['InProcessByUser', 'InProcessByUserDescription', 'LastChangeDateTime'] : ['InProcessByUser', 'LastChangeDateTime']
 const holderOf = admin => admin?.InProcessByUserDescription || admin?.InProcessByUser || null
 
 /** Who is editing the draft of one object (`DraftAdministrativeData.InProcessByUser`). The service does not
@@ -37,7 +37,8 @@ async function draftLockUser(tx, entityType, where) {
 }
 
 /** Rows whose active version has a draft get `_draftOwn`: true when that draft is the current user's, else
- *  it is locked by somebody else (FE shows "Draft" for the former, "Locked by <name>" for the latter; `_lockedBy` is the name). Only needed
+ *  somebody else has unsaved changes on it (FE shows "Draft" for the former, "Unsaved changes by <name>" for the latter; `_lockedBy` is the
+ *  name, `_lockedAt` the time of their last change). Only needed
  *  when the table shows the indicator (a `Common.SemanticKey` column), so other tables pay nothing.
  *  The drafts of all rows are read in one statement and their administrative records in a second one. */
 async function markDraftOwners(tx, entityType, layout, rows, userId) {
@@ -71,6 +72,7 @@ async function markDraftOwners(tx, entityType, layout, rows, userId) {
       const admin = adminOf.get(uuidOf.get(row[key]))
       row._draftOwn = (admin?.InProcessByUser ?? null) === userId
       row._lockedBy = row._draftOwn ? null : holderOf(admin)
+      row._lockedAt = row._draftOwn ? null : admin?.LastChangeDateTime ?? null
     }
   } catch {
     for (const row of drafted) row._draftOwn = false
